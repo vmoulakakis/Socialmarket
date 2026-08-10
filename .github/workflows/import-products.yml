@@ -24,6 +24,12 @@ jobs:
         run: gdown --id "$DRIVE_FILE_ID" -O linkwise-products.json
       - name: Stream and shard
         run: python workers/market_intelligence/stream_feed.py linkwise-products.json --out shards --size ${{ inputs.shard_size }}
+      - name: Profile hard gates
+        run: python workers/market_intelligence/profile_shards.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feed-profile
+          path: feed-profile.json
       - name: Import to Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
