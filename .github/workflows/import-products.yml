@@ -1,0 +1,31 @@
+name: Import Product Feed
+on:
+  workflow_dispatch:
+    inputs:
+      shard_size:
+        description: Products per gzip shard
+        required: false
+        default: '25000'
+permissions:
+  contents: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r workers/market_intelligence/requirements.txt
+      - name: Download Drive feed
+        env:
+          DRIVE_FILE_ID: ${{ secrets.DRIVE_FILE_ID }}
+        run: gdown --id "$DRIVE_FILE_ID" -O linkwise-products.json
+      - name: Stream and shard
+        run: python workers/market_intelligence/stream_feed.py linkwise-products.json --out shards --size ${{ inputs.shard_size }}
+      - name: Import to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python workers/market_intelligence/import_shards.py
