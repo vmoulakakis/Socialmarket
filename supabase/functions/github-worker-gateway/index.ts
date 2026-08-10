@@ -4,10 +4,11 @@ const ISSUER="https://token.actions.githubusercontent.com",AUDIENCE="socialmarke
 const ALLOWED_WORKFLOWS=new Set([
 "vmoulakakis/Socialmarket/.github/workflows/import-products.yml@refs/heads/main",
 "vmoulakakis/Socialmarket/.github/workflows/merchant-resolution.yml@refs/heads/main",
+"vmoulakakis/Socialmarket/.github/workflows/merchant-trust-research.yml@refs/heads/main",
 "vmoulakakis/Socialmarket/.github/workflows/niche-discovery.yml@refs/heads/main",
 "vmoulakakis/Socialmarket/.github/workflows/market-intelligence.yml@refs/heads/main"]);
-const ALLOWED_TABLES=new Set(["sources","import_jobs","products","product_media","taxonomy","product_classifications","product_embeddings","market_research_runs","market_signals","forecast_runs","forecasts","opportunity_scores","evidence_audits","creative_jobs","creative_assets","approvals","agent_runs","app_settings","merchant_profiles","product_identity_groups","niche_runs","niche_candidates","niche_product_memberships"]);
-const ALLOWED_RPCS=new Set(["category_universe","eligible_products_for_niche_discovery","apply_product_identity_updates"]);
+const ALLOWED_TABLES=new Set(["sources","import_jobs","products","product_media","taxonomy","product_classifications","product_embeddings","market_research_runs","market_signals","forecast_runs","forecasts","opportunity_scores","evidence_audits","creative_jobs","creative_assets","approvals","agent_runs","app_settings","merchant_profiles","product_identity_groups","merchant_research_runs","merchant_reputation_evidence","niche_runs","niche_candidates","niche_product_memberships"]);
+const ALLOWED_RPCS=new Set(["category_universe","eligible_products_for_niche_discovery","apply_product_identity_updates","apply_final_offer_updates"]);
 const JWKS=createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks`));
 function json(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json"}})}
 async function authorize(req:Request){const auth=req.headers.get("authorization")||"";if(!auth.startsWith("Bearer "))throw new Error("missing_bearer_token");const{payload}=await jwtVerify(auth.slice(7),JWKS,{issuer:ISSUER,audience:AUDIENCE});if(String(payload.repository_id||"")!==REPOSITORY_ID)throw new Error("repository_id_not_allowed");if(String(payload.repository||"")!==REPOSITORY)throw new Error("repository_not_allowed");if(String(payload.ref||"")!=="refs/heads/main")throw new Error("ref_not_allowed");if(!ALLOWED_WORKFLOWS.has(String(payload.workflow_ref||"")))throw new Error("workflow_not_allowed");return payload}
