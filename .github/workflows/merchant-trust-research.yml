@@ -1,0 +1,53 @@
+name: Merchant Trust Research
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Merchant Resolution']
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  research:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: workers/market_intelligence
+    env:
+      SUPABASE_WORKER_GATEWAY: https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway
+      SEARXNG_BASE_URL: http://127.0.0.1:8080
+      MERCHANT_RESEARCH_LIMIT: '250'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Start ephemeral SearXNG
+        run: |
+          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker logs socialmarket-searxng || true
+          exit 1
+      - name: Research external merchant reputation
+        run: python research_merchants.py | tee merchant-trust-output.json
+      - name: Optional DeepSeek evidence review
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: python merchant_ai_review.py | tee merchant-ai-review-output.json
+      - name: Re-rank preferred offers using final merchant trust
+        run: python finalize_preferred_offers.py | tee preferred-offer-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: merchant-trust-output
+          path: |
+            workers/market_intelligence/merchant-trust-output.json
+            workers/market_intelligence/merchant-ai-review-output.json
+            workers/market_intelligence/preferred-offer-output.json
