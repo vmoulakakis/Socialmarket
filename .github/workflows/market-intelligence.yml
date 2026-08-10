@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '17 3 * * *'
   workflow_run:
-    workflows: ['Import Product Feed']
+    workflows: ['Niche Discovery']
     types: [completed]
     branches: [main]
 permissions:
@@ -14,7 +14,7 @@ jobs:
   research:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     defaults:
       run:
         working-directory: workers/market_intelligence
@@ -22,6 +22,7 @@ jobs:
       SUPABASE_WORKER_GATEWAY: https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway
       MAX_CATEGORIES: '40'
       MAX_PRODUCTS_PER_CATEGORY: '60'
+      MAX_NICHES: '120'
       FORECAST_WEEKS: '8'
       MIN_VALIDITY_DAYS: '20'
       SELLER_COMPETITION_KILL: '82'
@@ -33,12 +34,21 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
-      - name: Run Greece market intelligence
+      - name: Run category-level Greece market intelligence
         env:
           SEARXNG_BASE_URL: ${{ secrets.SEARXNG_BASE_URL }}
         run: python run_oidc.py | tee market-output.json
+      - name: Run semantic micro-niche market intelligence
+        env:
+          SEARXNG_BASE_URL: ${{ secrets.SEARXNG_BASE_URL }}
+        run: python run_niche_market.py | tee niche-market-output.json
+      - name: Refine HIGO with merchant trust and niche evidence
+        run: python post_rank_refinement.py | tee higo-refinement-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: market-output
-          path: workers/market_intelligence/market-output.json
+          path: |
+            workers/market_intelligence/market-output.json
+            workers/market_intelligence/niche-market-output.json
+            workers/market_intelligence/higo-refinement-output.json
