@@ -23,6 +23,10 @@ jobs:
       MAX_CATEGORIES: '40'
       MAX_PRODUCTS_PER_CATEGORY: '60'
       FORECAST_WEEKS: '8'
+      MIN_VALIDITY_DAYS: '20'
+      SELLER_COMPETITION_KILL: '82'
+      AD_PRESSURE_PROXY_KILL: '92'
+      AD_PRESSURE_MIN_CONFIDENCE: '0.65'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
