@@ -1,20 +1,18 @@
-import ijson, json, gzip, unicodedata
+import ijson, json, gzip, unicodedata, os
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 KNOWN_FIELDS={'product_id','model_name','product_name','description','category','brand_name','tracking_url','thumb_url','image_url','in_stock','availability','valid_from','valid_to','on_sale','currency','price','full_price','discount','city','times_bought','longitude','latitude','address','size','colour','program_name','custom','extra_images'}
-ATHENS=ZoneInfo('Europe/Athens')
-MIN_PRICE=150.0
-MIN_VALIDITY_DAYS=20
+ATHENS=ZoneInfo(os.getenv('MARKET_TIMEZONE','Europe/Athens'))
+MIN_PRICE=float(os.getenv('MIN_PRICE_EUR','150'))
+MIN_VALIDITY_DAYS=int(os.getenv('MIN_VALIDITY_DAYS','20'))
 
 TRAVEL_STRONG_TERMS=(
  'travel','travelling','traveler','traveller','tourism','tourist','luggage','suitcase','carry on','carry-on','cabin bag','cabin luggage','duffel','packing cube','passport holder','travel pillow','luggage scale','travel adapter','toiletry travel',
  'ταξιδ','τουρισ','βαλιτσ','βαλίτσ','αποσκευ','χειραποσκευ','σακ βουαγιαζ','σακβουαγιαζ','θηκη διαβατηρι','θήκη διαβατηρί','μαξιλαρι ταξιδ','μαξιλάρι ταξιδ','νεσεσερ ταξιδ','νεσεσέρ ταξιδ'
 )
-TRAVEL_CATEGORY_TERMS=(
- 'travel','tourism','luggage','suitcases','baggage','travel accessories','ταξιδ','τουρισ','αποσκευ','βαλιτσ','βαλίτσ','ειδη ταξιδ','είδη ταξιδ'
-)
+TRAVEL_CATEGORY_TERMS=('travel','tourism','luggage','suitcases','baggage','travel accessories','ταξιδ','τουρισ','αποσκευ','βαλιτσ','βαλίτσ','ειδη ταξιδ','είδη ταξιδ')
 
 def _first_non_ws(path):
     with open(path,'rb') as f:
@@ -70,11 +68,8 @@ def as_bool(v):
 def parse_datetime(v):
     s=clean(v)
     if not s:return None
-    candidates=[s,s.replace('Z','+00:00')]
-    for c in candidates:
-        try:
-            dt=datetime.fromisoformat(c)
-            return dt
+    for c in (s,s.replace('Z','+00:00')):
+        try:return datetime.fromisoformat(c)
         except:pass
     for fmt in ('%d/%m/%Y','%Y/%m/%d','%d-%m-%Y','%Y-%m-%d %H:%M:%S'):
         try:return datetime.strptime(s,fmt)
@@ -102,8 +97,7 @@ def is_travel_related(category,name,description):
 def validity_days(v):
     dt=parse_datetime(v)
     if not dt:return None
-    if dt.tzinfo is not None:date_value=dt.astimezone(ATHENS).date()
-    else:date_value=dt.date()
+    date_value=dt.astimezone(ATHENS).date() if dt.tzinfo is not None else dt.date()
     return (date_value-datetime.now(ATHENS).date()).days
 
 def validity_runway_score(days):
@@ -122,17 +116,15 @@ def normalize(r):
         except:extra=[x.strip() for x in extra.split(',') if x.strip()]
     if not isinstance(extra,list):extra=[]
     image=valid_url(r.get('image_url'));thumb=valid_url(r.get('thumb_url'));tracking=valid_url(r.get('tracking_url'))
-    stock=as_bool(r.get('in_stock'))
-    availability=clean(r.get('availability'))
+    stock=as_bool(r.get('in_stock'));availability=clean(r.get('availability'))
     if stock is None and availability:
         low=fold_text(availability)
         if any(x in low for x in ('available','in stock','διαθε')):stock=True
         elif any(x in low for x in ('unavailable','out of stock','μη διαθε')):stock=False
-    program=clean(r.get('program_name'))
-    category=clean(r.get('category'));name=clean(r.get('product_name') or r.get('name')) or 'Unnamed product';description=clean(r.get('description'))
+    program=clean(r.get('program_name'));category=clean(r.get('category'));name=clean(r.get('product_name') or r.get('name')) or 'Unnamed product';description=clean(r.get('description'))
     days=validity_days(r.get('valid_to'));runway=validity_runway_score(days);travel=is_travel_related(category,name,description)
     reasons=[]
-    if price is None or price<MIN_PRICE:reasons.append('price_below_150')
+    if price is None or price<MIN_PRICE:reasons.append('price_below_minimum')
     if days is None:reasons.append('valid_to_missing_or_unparseable')
     elif days<=MIN_VALIDITY_DAYS:reasons.append('valid_to_20_days_or_less')
     if travel:reasons.append('travel_or_travel_goods')
@@ -142,18 +134,7 @@ def normalize(r):
     hard_gate=not reasons
     unknown={k:r.get(k) for k in r.keys() if k not in KNOWN_FIELDS}
     if r.get('custom') is not None:unknown['custom']=r.get('custom')
-    return {
-      'external_product_id':str(r.get('product_id') or r.get('id') or ''),
-      'product_name':name,'model_name':clean(r.get('model_name')),'description':description,'brand_name':clean(r.get('brand_name')),
-      'program_name':program,'merchant_name':program,'category_raw':category,'price':price,'full_price':full,
-      'discount_pct':discount,'currency':clean(r.get('currency')) or 'EUR','in_stock':stock,'availability':availability,
-      'valid_from':iso_date(r.get('valid_from')),'valid_to':iso_date(r.get('valid_to')),'validity_days_remaining':days,'validity_runway_score':runway,
-      'travel_related':travel,'eligibility_reason':{'eligible':hard_gate,'reasons':reasons,'policy':'selection-v2'},
-      'on_sale':as_bool(r.get('on_sale')),'times_bought':as_int(r.get('times_bought')),'tracking_url':tracking,'image_url':image,'thumb_url':thumb,'extra_images':extra,
-      'city':clean(r.get('city')),'longitude':as_float(r.get('longitude')),'latitude':as_float(r.get('latitude')),'address':clean(r.get('address')),
-      'colour':clean(r.get('colour')),'size':clean(r.get('size')),'extra_json':unknown,'is_active':bool(days is not None and days>0 and stock is not False),
-      'hard_gate_pass':hard_gate,'market_eligible':hard_gate,'market_exclusion_reason':None
-    }
+    return {'external_product_id':str(r.get('product_id') or r.get('id') or ''),'product_name':name,'model_name':clean(r.get('model_name')),'description':description,'brand_name':clean(r.get('brand_name')),'program_name':program,'merchant_name':program,'category_raw':category,'price':price,'full_price':full,'discount_pct':discount,'currency':clean(r.get('currency')) or 'EUR','in_stock':stock,'availability':availability,'valid_from':iso_date(r.get('valid_from')),'valid_to':iso_date(r.get('valid_to')),'validity_days_remaining':days,'validity_runway_score':runway,'travel_related':travel,'eligibility_reason':{'eligible':hard_gate,'reasons':reasons,'policy':'selection-v2','min_price_eur':MIN_PRICE,'min_validity_days':MIN_VALIDITY_DAYS,'timezone':str(ATHENS)},'on_sale':as_bool(r.get('on_sale')),'times_bought':as_int(r.get('times_bought')),'tracking_url':tracking,'image_url':image,'thumb_url':thumb,'extra_images':extra,'city':clean(r.get('city')),'longitude':as_float(r.get('longitude')),'latitude':as_float(r.get('latitude')),'address':clean(r.get('address')),'colour':clean(r.get('colour')),'size':clean(r.get('size')),'extra_json':unknown,'is_active':bool(days is not None and days>0 and stock is not False),'hard_gate_pass':hard_gate,'market_eligible':hard_gate,'market_exclusion_reason':None}
 
 def shard(path,out_dir,shard_size=25000):
     out=Path(out_dir);out.mkdir(parents=True,exist_ok=True);fh=None;count=0;shard_no=0
