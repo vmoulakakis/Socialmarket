@@ -1,0 +1,2 @@
+import {NextResponse} from 'next/server';import {agentCompletion} from '@/lib/model-router';
+export async function POST(req){try{const {question,context}=await req.json();const r=await agentCompletion({json:true,messages:[{role:'system',content:'You are the Greek Market Opportunity Analyst. Never invent demand. Separate evidence, inference and unknowns. Return JSON.'},{role:'user',content:JSON.stringify({question,context})}]});return NextResponse.json(r)}catch(e){return NextResponse.json({error:String(e)},{status:500})}}
