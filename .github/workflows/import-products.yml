@@ -6,6 +6,10 @@ on:
         description: Products per gzip shard
         required: false
         default: '25000'
+  push:
+    branches: [main]
+    paths:
+      - '.github/import-trigger'
 permissions:
   contents: read
   id-token: write
@@ -18,6 +22,7 @@ jobs:
       SOURCE_NAME: Linkwise Products
       SOURCE_URL: https://drive.google.com/file/d/1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT/view?usp=drive_link
       SUPABASE_WORKER_GATEWAY: https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway
+      SHARD_SIZE: ${{ inputs.shard_size || '25000' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,12 +32,12 @@ jobs:
       - name: Download Drive feed
         run: gdown --id "$DRIVE_FILE_ID" -O linkwise-products.json
       - name: Stream and shard
-        run: python workers/market_intelligence/stream_feed.py linkwise-products.json --out shards --size ${{ inputs.shard_size }}
+        run: python workers/market_intelligence/stream_feed.py linkwise-products.json --out shards --size "$SHARD_SIZE"
       - name: Profile hard gates
         run: python workers/market_intelligence/profile_shards.py
       - uses: actions/upload-artifact@v4
         with:
           name: feed-profile
           path: feed-profile.json
-      - name: Import to Supabase through OIDC gateway
+      - name: Import eligible high-ticket products through OIDC gateway
         run: python workers/market_intelligence/import_shards.py
