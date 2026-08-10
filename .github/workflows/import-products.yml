@@ -8,15 +8,16 @@ on:
         default: '25000'
 permissions:
   contents: read
+  id-token: write
 jobs:
   import:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
       DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
-      SUPABASE_URL: https://prrehmcvpyhupvlhtbzg.supabase.co
       SOURCE_NAME: Linkwise Products
       SOURCE_URL: https://drive.google.com/file/d/1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT/view?usp=drive_link
+      SUPABASE_WORKER_GATEWAY: https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,7 +34,5 @@ jobs:
         with:
           name: feed-profile
           path: feed-profile.json
-      - name: Import to Supabase
-        env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Import to Supabase through OIDC gateway
         run: python workers/market_intelligence/import_shards.py
