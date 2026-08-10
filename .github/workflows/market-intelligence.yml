@@ -3,11 +3,16 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '17 3 * * *'
+  workflow_run:
+    workflows: ['Import Product Feed']
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
   id-token: write
 jobs:
   research:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     defaults:
