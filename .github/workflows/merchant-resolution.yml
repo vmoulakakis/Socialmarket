@@ -1,0 +1,33 @@
+name: Merchant Resolution
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Import Product Feed']
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  resolve:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: workers/market_intelligence
+    env:
+      SUPABASE_WORKER_GATEWAY: https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt rapidfuzz
+      - name: Resolve duplicate offers and rank merchants
+        run: python resolve_merchants.py | tee merchant-resolution-output.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: merchant-resolution-output
+          path: workers/market_intelligence/merchant-resolution-output.txt
