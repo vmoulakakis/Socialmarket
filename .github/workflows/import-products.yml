@@ -23,6 +23,9 @@ jobs:
       SOURCE_URL: https://drive.google.com/file/d/1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT/view?usp=drive_link
       SUPABASE_WORKER_GATEWAY: https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway
       SHARD_SIZE: ${{ inputs.shard_size || '25000' }}
+      MIN_PRICE_EUR: '150'
+      MIN_VALIDITY_DAYS: '20'
+      MARKET_TIMEZONE: Europe/Athens
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,5 +42,5 @@ jobs:
         with:
           name: feed-profile
           path: feed-profile.json
-      - name: Import eligible high-ticket products through OIDC gateway
+      - name: Import eligible non-travel products through OIDC gateway
         run: python workers/market_intelligence/import_shards.py
