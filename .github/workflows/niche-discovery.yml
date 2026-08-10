@@ -27,8 +27,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install semantic clustering dependencies
-        run: pip install -r requirements.txt bertopic sentence-transformers scikit-learn
+      - name: Install core clustering dependencies
+        run: pip install -r requirements.txt scikit-learn
+      - name: Install optional semantic stack
+        continue-on-error: true
+        run: pip install bertopic sentence-transformers
       - name: Discover semantic micro-niches
         run: python discover_niches.py | tee niche-output.json
       - uses: actions/upload-artifact@v4
