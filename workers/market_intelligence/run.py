@@ -1,5 +1,6 @@
 import os,json,datetime,requests,math,re,time,hashlib
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 from statsforecast import StatsForecast
@@ -12,13 +13,21 @@ SEARXNG=os.getenv('SEARXNG_BASE_URL','').rstrip('/')
 MAX_CATEGORIES=int(os.getenv('MAX_CATEGORIES','40'))
 MAX_PRODUCTS_PER_CATEGORY=int(os.getenv('MAX_PRODUCTS_PER_CATEGORY','60'))
 HORIZON_WEEKS=int(os.getenv('FORECAST_WEEKS','8'))
+MIN_VALIDITY_DAYS=int(os.getenv('MIN_VALIDITY_DAYS','20'))
+SELLER_KILL=float(os.getenv('SELLER_COMPETITION_KILL','82'))
+AD_PROXY_KILL=float(os.getenv('AD_PRESSURE_PROXY_KILL','92'))
+AD_PROXY_MIN_CONF=float(os.getenv('AD_PRESSURE_MIN_CONFIDENCE','.65'))
+ATHENS=ZoneInfo('Europe/Athens')
 HEADERS={'apikey':SERVICE_KEY,'Authorization':f'Bearer {SERVICE_KEY}','Content-Type':'application/json'} if SERVICE_KEY else {}
 COMMERCIAL_HINTS=('skroutz','bestprice','shop','store','public.gr','kotsovolos','plaisio','e-shop','market','price','αγορά','τιμή','προσφορά','€')
+PRICE_COMPARE_HINTS=('skroutz','bestprice','price comparison','σύγκριση τιμών','συγκριση τιμων','shopping')
 HIGH_FRICTION=('παπου','shoe','ρούχ','ρουχ','dress','φόρε','φορε','jean','jacket','κοστού','κοστου','δαχτυλ','ring','κόσμη','κοσμη','γυαλ','sunglass','άρωμα','αρωμα','perfume')
 MEDIUM_FRICTION=('στρώμα','στρωμα','mattress','καναπ','sofa','πολυθρό','πολυθρο','armchair','καρέκ','καρεκ','chair','κράνος','κρανος','helmet','ποδήλα','ποδηλα','bike')
 
 def clamp(v,lo=0,hi=100):return max(lo,min(hi,float(v)))
 def now_iso():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+def athens_today():return datetime.datetime.now(ATHENS).date()
+def validity_cutoff_iso():return datetime.datetime.combine(athens_today()+datetime.timedelta(days=MIN_VALIDITY_DAYS),datetime.time.min,tzinfo=ATHENS).isoformat()
 def api(method,path,params=None,data=None,prefer=None):
     if not SERVICE_KEY:raise RuntimeError('SUPABASE_SERVICE_ROLE_KEY is required')
     h=dict(HEADERS)
@@ -54,16 +63,28 @@ def search(query,limit=20):
 
 def serp_density(results):
     if not results:return None
-    commercial=0;domains=set();evidence=[]
+    commercial=0;price_compare=0;domains=set();evidence=[]
     for x in results:
         title=(x.get('title') or '').lower();url=x.get('url') or '';host=urlparse(url).netloc.lower();domains.add(host)
         text=f'{title} {url.lower()}'
         is_commercial=any(h in text for h in COMMERCIAL_HINTS)
-        commercial+=1 if is_commercial else 0
-        if len(evidence)<8:evidence.append({'title':x.get('title'),'url':url,'commercial':is_commercial})
-    density=100*commercial/max(1,len(results))
-    diversity=100*len(domains)/max(1,len(results))
-    return {'score':clamp(density*.8+diversity*.2),'commercial_density':density,'domain_diversity':diversity,'evidence':evidence}
+        is_compare=any(h in text for h in PRICE_COMPARE_HINTS)
+        commercial+=1 if is_commercial else 0;price_compare+=1 if is_compare else 0
+        if len(evidence)<10:evidence.append({'title':x.get('title'),'url':url,'commercial':is_commercial,'price_compare':is_compare})
+    n=max(1,len(results));density=100*commercial/n;diversity=100*len(domains)/n;compare_share=100*price_compare/n
+    organic_saturation=clamp(density*.65+diversity*.35)
+    # This is intentionally a proxy, not a claim of observed paid ad impressions.
+    ad_pressure_proxy=clamp(density*.70+compare_share*.20+diversity*.10)
+    confidence=clamp(len(results)/20,0,1)*.70
+    return {'score':organic_saturation,'commercial_density':density,'domain_diversity':diversity,'price_compare_share':compare_share,'ad_pressure_proxy':ad_pressure_proxy,'ad_proxy_confidence':confidence,'evidence':evidence}
+
+def seller_pressure(category_row,serp=None):
+    merchants=float(category_row.get('merchant_count') or 0);products=float(category_row.get('product_count') or 0);brands=float(category_row.get('brand_count') or 0)
+    merchant_score=100*(1-math.exp(-merchants/7.0));product_score=100*(1-math.exp(-products/45.0));brand_score=100*(1-math.exp(-brands/12.0))
+    feed_score=clamp(merchant_score*.50+product_score*.30+brand_score*.20)
+    external_score=(serp['commercial_density']*.60+serp['domain_diversity']*.40) if serp else None
+    final=clamp(feed_score*.70+external_score*.30) if external_score is not None else feed_score
+    return {'score':final,'feed_score':feed_score,'external_score':external_score,'merchants':merchants,'products':products,'brands':brands}
 
 def trend_weekly(term):
     tr=Trends()
@@ -111,11 +132,26 @@ def friction_allowed(friction,discount):
     limit=.75 if discount>=45 else .60 if discount>=30 else .40
     return friction<=limit,limit
 
-def relative(v,maxv):
-    return clamp(100*math.log1p(max(0,float(v or 0)))/max(1e-9,math.log1p(max(0,float(maxv or 0))))) if maxv else 0
+def relative(v,maxv):return clamp(100*math.log1p(max(0,float(v or 0)))/max(1e-9,math.log1p(max(0,float(maxv or 0))))) if maxv else 0
+
+def product_validity_days(p):
+    s=p.get('valid_to')
+    if not s:return None
+    try:
+        dt=datetime.datetime.fromisoformat(str(s).replace('Z','+00:00'))
+        d=dt.astimezone(ATHENS).date() if dt.tzinfo else dt.date()
+        return (d-athens_today()).days
+    except:return p.get('validity_days_remaining')
+
+def validity_runway_score(days):
+    if days is None or days<=MIN_VALIDITY_DAYS:return 0.0
+    if days<=30:return 40.0
+    if days<=60:return 65.0
+    if days<=90:return 85.0
+    return 100.0
 
 def create_research_run(category_count):
-    rows=api('POST','market_research_runs',data={'scope_type':'daily_market','scope_key':'GR','country_code':'GR','status':'running','query_plan':{'categories':category_count,'providers':['feed','google_trends','searxng_optional'],'forecast':'statsforecast'},'started_at':now_iso()},prefer='return=representation')
+    rows=api('POST','market_research_runs',data={'scope_type':'daily_market','scope_key':'GR','country_code':'GR','status':'running','query_plan':{'categories':category_count,'providers':['feed','google_trends','searxng_optional'],'forecast':'statsforecast','selection_policy':'v2-validity-travel-competition'},'started_at':now_iso()},prefer='return=representation')
     return rows[0]['id']
 
 def create_forecast_run():
@@ -126,43 +162,36 @@ def save_signal(run_id,taxonomy_id,signal_type,source_name,score,confidence,evid
     api('POST','market_signals',data={'research_run_id':run_id,'taxonomy_id':taxonomy_id,'signal_type':signal_type,'source_name':source_name,'normalized_score':round(clamp(score),2),'confidence':round(clamp(confidence,0,1),4),'evidence':evidence,'direction':direction,'raw_value':raw})
 
 def category_products(category,limit):
-    return api('GET','products',params={'category_raw':f'eq.{category}','hard_gate_pass':'eq.true','is_active':'eq.true','select':'id,product_name,price,full_price,discount_pct,times_bought,tracking_url,image_url,thumb_url,extra_images,in_stock,valid_to,program_name,merchant_name,category_raw','order':'times_bought.desc.nullslast,discount_pct.desc.nullslast','limit':str(limit)}) or []
+    return api('GET','products',params={'category_raw':f'eq.{category}','hard_gate_pass':'eq.true','is_active':'eq.true','travel_related':'eq.false','valid_to':f'gt.{validity_cutoff_iso()}','select':'id,product_name,price,full_price,discount_pct,times_bought,tracking_url,image_url,thumb_url,extra_images,in_stock,valid_to,validity_days_remaining,validity_runway_score,program_name,merchant_name,category_raw','order':'times_bought.desc.nullslast,discount_pct.desc.nullslast','limit':str(limit)}) or []
 
 def score_product(p,cm):
-    friction,friction_reason=purchase_friction(p.get('category_raw'))
-    discount=float(p.get('discount_pct') or 0);allowed,friction_limit=friction_allowed(friction,discount)
-    purchase_ease=clamp((1-friction)*100)
-    times=relative(p.get('times_bought'),cm['max_product_times'])
-    demand=clamp(cm['combined_demand']*.75+times*.25)
-    forecast_score=clamp(50+cm['forecast_growth']*1.5)
-    attention_gap=clamp(demand*.6+(100-cm['competition'])*.4)
-    median=max(1,float(cm['median_price'] or p.get('price') or 1));price=float(p.get('price') or 0)
-    relative_price=clamp(50+(median-price)/median*80)
-    offer=clamp(min(100,discount*2)*.7+relative_price*.3)
-    merchant=80 if p.get('tracking_url') and p.get('in_stock') is not False else 50
-    creative=82 if p.get('image_url') and p.get('extra_images') else 72 if p.get('image_url') or p.get('thumb_url') else 20
-    evidence=clamp(35+(25 if cm['trend_ok'] else 0)+(15 if cm['serp_ok'] else 0)+15+(10 if p.get('times_bought') is not None else 0))
-    confidence=clamp(evidence/100*.85+0.10,0,1)
-    raw=clamp(demand*.25+forecast_score*.20+attention_gap*.20+purchase_ease*.10+offer*.10+evidence*.05+merchant*.05+creative*.05)
-    adjusted=clamp(raw-(1-confidence)*20)
+    friction,friction_reason=purchase_friction(p.get('category_raw'));discount=float(p.get('discount_pct') or 0);allowed,friction_limit=friction_allowed(friction,discount)
+    days=product_validity_days(p);runway=validity_runway_score(days);validity_ok=days is not None and days>MIN_VALIDITY_DAYS
+    purchase_ease=clamp((1-friction)*100);times=relative(p.get('times_bought'),cm['max_product_times'])
+    demand=clamp(cm['combined_demand']*.75+times*.25);forecast_score=clamp(50+cm['forecast_growth']*1.5);attention_gap=clamp(demand*.6+(100-cm['competition'])*.4)
+    median=max(1,float(cm['median_price'] or p.get('price') or 1));price=float(p.get('price') or 0);relative_price=clamp(50+(median-price)/median*80);offer=clamp(min(100,discount*2)*.7+relative_price*.3)
+    merchant=80 if p.get('tracking_url') and p.get('in_stock') is not False else 50;creative=82 if p.get('image_url') and p.get('extra_images') else 72 if p.get('image_url') or p.get('thumb_url') else 20
+    evidence=clamp(35+(25 if cm['trend_ok'] else 0)+(15 if cm['serp_ok'] else 0)+15+(10 if p.get('times_bought') is not None else 0));confidence=clamp(evidence/100*.85+0.10,0,1)
+    raw=clamp(demand*.24+forecast_score*.18+attention_gap*.20+purchase_ease*.10+offer*.08+runway*.08+evidence*.05+merchant*.04+creative*.03);adjusted=clamp(raw-(1-confidence)*20)
     risks=[]
+    if not validity_ok:risks.append('valid_to_20_days_or_less')
     if not allowed:risks.append(f'purchase_friction>{friction_limit:.2f}')
-    if cm['competition']>=85:risks.append('very_high_competition')
+    if cm['competition_kill']:risks.append(cm['competition_kill_reason'])
     if cm['trend_ok'] and cm['trend_growth']>80 and cm['forecast_growth']<0:risks.append('possible_temporary_spike')
     if evidence<55:risks.append('weak_evidence')
-    if not allowed:decision='DROP'
+    if not validity_ok or not allowed or cm['competition_kill']:decision='DROP'
     elif raw>=92 and confidence>=.78 and not risks:decision='PRIORITY'
-    elif raw>=85 and confidence>=.70 and not any(r in risks for r in ('very_high_competition','possible_temporary_spike')):decision='CREATE_CREATIVE'
+    elif raw>=85 and confidence>=.70 and not any(r in risks for r in ('possible_temporary_spike',)):decision='CREATE_CREATIVE'
     elif raw>=75:decision='WATCHLIST'
     elif raw>=60:decision='MONITOR'
     else:decision='DROP'
-    return {'friction':friction,'friction_reason':friction_reason,'demand':demand,'forecast':forecast_score,'gap':attention_gap,'ease':purchase_ease,'offer':offer,'evidence':evidence,'merchant':merchant,'creative':creative,'raw':raw,'confidence':confidence,'adjusted':adjusted,'decision':decision,'risks':risks}
+    return {'friction':friction,'friction_reason':friction_reason,'validity_days':days,'runway':runway,'demand':demand,'forecast':forecast_score,'gap':attention_gap,'ease':purchase_ease,'offer':offer,'evidence':evidence,'merchant':merchant,'creative':creative,'raw':raw,'confidence':confidence,'adjusted':adjusted,'decision':decision,'risks':risks}
 
 def main():
     categories=rpc('category_universe',{'min_price':150,'min_products':3,'result_limit':MAX_CATEGORIES}) or []
     if not categories:
-        print(json.dumps({'generated_at':now_iso(),'status':'no_categories','message':'Import product feed first'},ensure_ascii=False));return
-    max_products=max(float(c.get('product_count') or 0) for c in categories);max_merchants=max(float(c.get('merchant_count') or 0) for c in categories);max_brands=max(float(c.get('brand_count') or 0) for c in categories);max_times=max(float(c.get('total_times_bought') or 0) for c in categories)
+        print(json.dumps({'generated_at':now_iso(),'status':'no_categories','message':'Import product feed first or no products satisfy rolling validity/travel gates'},ensure_ascii=False));return
+    max_times=max(float(c.get('total_times_bought') or 0) for c in categories)
     research_run=create_research_run(len(categories));forecast_run=create_forecast_run();summary=[]
     try:
         for idx,c in enumerate(categories,1):
@@ -170,42 +199,38 @@ def main():
             trend_ok=False;series=None;tm={'demand':0,'growth_pct':0,'slope':0,'latest':0,'last_12':[]};fc={'dates':[],'points':[],'growth_pct':0,'direction':'flat'}
             try:
                 series=trend_weekly(term)
-                if series is not None:
-                    tm=trend_metrics(series);fc=forecast_series(series,HORIZON_WEEKS);trend_ok=True
-            except Exception as e:
-                tm['error']=str(e)[:300]
+                if series is not None:tm=trend_metrics(series);fc=forecast_series(series,HORIZON_WEEKS);trend_ok=True
+            except Exception as e:tm['error']=str(e)[:300]
             feed_purchase=relative(c.get('total_times_bought'),max_times)
-            catalog_comp=clamp(relative(c.get('product_count'),max_products)*.5+relative(c.get('merchant_count'),max_merchants)*.3+relative(c.get('brand_count'),max_brands)*.2)
-            serp=serp_density(search(f'{term} Ελλάδα αγορά τιμή',20));serp_ok=serp is not None
-            competition=clamp(catalog_comp*.7+(serp['score'] if serp else catalog_comp)*.3)
+            serp=serp_density(search(f'{term} Ελλάδα αγορά τιμή προσφορά',20));serp_ok=serp is not None
+            seller=seller_pressure(c,serp);ad_proxy=(serp.get('ad_pressure_proxy') if serp else 0);ad_conf=(serp.get('ad_proxy_confidence') if serp else 0)
+            competition=clamp(seller['score']*.75+(serp['score'] if serp else seller['score'])*.25)
+            seller_kill=seller['score']>=SELLER_KILL;ad_kill=bool(serp and ad_proxy>=AD_PROXY_KILL and ad_conf>=AD_PROXY_MIN_CONF)
+            competition_kill=seller_kill or ad_kill;kill_reason='seller_competition_kill' if seller_kill else 'ad_pressure_proxy_kill' if ad_kill else None
             combined_demand=clamp((tm['demand']*.7+feed_purchase*.3) if trend_ok else feed_purchase)
             save_signal(research_run,taxonomy_id,'google_trends_demand','Google Trends via trendspy',tm['demand'],.80 if trend_ok else .0,{'term':term,'growth_pct':tm['growth_pct'],'slope':tm['slope'],'last_12':tm['last_12'],'available':trend_ok},'up' if tm['growth_pct']>3 else 'down' if tm['growth_pct']<-3 else 'flat',tm['latest'] if trend_ok else None)
             save_signal(research_run,taxonomy_id,'feed_purchase_demand','Linkwise feed',feed_purchase,.85,{'total_times_bought':c.get('total_times_bought'),'product_count':c.get('product_count')})
-            save_signal(research_run,taxonomy_id,'catalog_competition','Linkwise feed',catalog_comp,.80,{'products':c.get('product_count'),'merchants':c.get('merchant_count'),'brands':c.get('brand_count')})
-            if serp:save_signal(research_run,taxonomy_id,'serp_saturation','SearXNG',serp['score'],.65,serp,'flat')
+            save_signal(research_run,taxonomy_id,'seller_competition','Feed + SERP seller pressure',seller['score'],.82 if serp_ok else .72,seller,'flat')
+            if serp:
+                save_signal(research_run,taxonomy_id,'serp_saturation','SearXNG',serp['score'],.65,serp,'flat')
+                save_signal(research_run,taxonomy_id,'ad_pressure_proxy','Transactional SERP proxy',ad_proxy,ad_conf,{'warning':'Proxy only; not direct paid-ad impression data','commercial_density':serp['commercial_density'],'price_compare_share':serp['price_compare_share'],'domain_diversity':serp['domain_diversity'],'evidence':serp['evidence']},'flat')
             save_signal(research_run,taxonomy_id,'combined_demand','SocialMarket ensemble',combined_demand,.82 if trend_ok else .58,{'trend_demand':tm['demand'],'feed_purchase':feed_purchase})
             if fc['dates']:
-                for d,point in zip(fc['dates'],fc['points']):
-                    api('POST','forecasts',data={'forecast_run_id':forecast_run,'scope_type':'taxonomy','scope_key':slug_for(category),'taxonomy_id':taxonomy_id,'forecast_date':d,'point_forecast':point,'growth_pct':round(fc['growth_pct'],2),'direction':fc['direction'],'confidence':.78 if trend_ok else .45})
+                for d,point in zip(fc['dates'],fc['points']):api('POST','forecasts',data={'forecast_run_id':forecast_run,'scope_type':'taxonomy','scope_key':slug_for(category),'taxonomy_id':taxonomy_id,'forecast_date':d,'point_forecast':point,'growth_pct':round(fc['growth_pct'],2),'direction':fc['direction'],'confidence':.78 if trend_ok else .45})
             products=category_products(category,MAX_PRODUCTS_PER_CATEGORY);max_product_times=max([float(p.get('times_bought') or 0) for p in products] or [0])
-            cm={'combined_demand':combined_demand,'competition':competition,'forecast_growth':fc['growth_pct'],'trend_growth':tm['growth_pct'],'trend_ok':trend_ok,'serp_ok':serp_ok,'median_price':c.get('median_price'),'max_product_times':max_product_times}
+            cm={'combined_demand':combined_demand,'competition':competition,'seller_competition':seller['score'],'ad_pressure_proxy':ad_proxy,'ad_proxy_confidence':ad_conf,'competition_kill':competition_kill,'competition_kill_reason':kill_reason,'forecast_growth':fc['growth_pct'],'trend_growth':tm['growth_pct'],'trend_ok':trend_ok,'serp_ok':serp_ok,'median_price':c.get('median_price'),'max_product_times':max_product_times}
             promoted=0
             for p in products:
-                sc=score_product(p,cm)
-                api('PATCH','products',params={'id':f"eq.{p['id']}"},data={'purchase_friction':round(sc['friction'],4),'purchase_friction_reason':sc['friction_reason']})
-                rows=api('POST','opportunity_scores',data={'product_id':p['id'],'demand_score':round(sc['demand'],2),'forecast_momentum_score':round(sc['forecast'],2),'attention_gap_score':round(sc['gap'],2),'purchase_ease_score':round(sc['ease'],2),'offer_score':round(sc['offer'],2),'evidence_quality_score':round(sc['evidence'],2),'merchant_reliability_score':round(sc['merchant'],2),'creative_potential_score':round(sc['creative'],2),'higo_raw':round(sc['raw'],2),'confidence':round(sc['confidence'],4),'higo_adjusted':round(sc['adjusted'],2),'decision':sc['decision'],'skeptic_status':'passed' if not sc['risks'] else 'risks_found','explanation':{'category':category,'market':cm,'risks':sc['risks']}},prefer='return=representation')
-                oid=rows[0]['id']
-                api('POST','evidence_audits',data={'opportunity_score_id':oid,'verdict':'pass' if not sc['risks'] else 'review' if sc['decision']!='DROP' else 'fail','risk_score':min(100,len(sc['risks'])*30),'risks':sc['risks'],'counter_evidence':[],'notes':'Deterministic skeptic audit; AI audit can refine later','model_route':'rules-v1'})
+                sc=score_product(p,cm);market_ok=sc['decision']!='DROP' or (not cm['competition_kill'] and sc['validity_days'] is not None and sc['validity_days']>MIN_VALIDITY_DAYS)
+                api('PATCH','products',params={'id':f"eq.{p['id']}"},data={'purchase_friction':round(sc['friction'],4),'purchase_friction_reason':sc['friction_reason'],'validity_days_remaining':sc['validity_days'],'validity_runway_score':round(sc['runway'],2),'market_eligible':market_ok and not cm['competition_kill'],'market_exclusion_reason':kill_reason if cm['competition_kill'] else ('validity_or_friction_gate' if sc['decision']=='DROP' else None)})
+                rows=api('POST','opportunity_scores',data={'product_id':p['id'],'demand_score':round(sc['demand'],2),'forecast_momentum_score':round(sc['forecast'],2),'attention_gap_score':round(sc['gap'],2),'purchase_ease_score':round(sc['ease'],2),'offer_score':round(sc['offer'],2),'evidence_quality_score':round(sc['evidence'],2),'merchant_reliability_score':round(sc['merchant'],2),'creative_potential_score':round(sc['creative'],2),'seller_competition_score':round(seller['score'],2),'ad_pressure_score':round(ad_proxy,2),'competition_kill':cm['competition_kill'],'validity_runway_score':round(sc['runway'],2),'higo_raw':round(sc['raw'],2),'confidence':round(sc['confidence'],4),'higo_adjusted':round(sc['adjusted'],2),'decision':sc['decision'],'skeptic_status':'passed' if not sc['risks'] else 'risks_found','explanation':{'category':category,'market':cm,'validity_days':sc['validity_days'],'validity_runway_score':sc['runway'],'risks':sc['risks']}},prefer='return=representation')
+                oid=rows[0]['id'];api('POST','evidence_audits',data={'opportunity_score_id':oid,'verdict':'pass' if not sc['risks'] else 'review' if sc['decision']!='DROP' else 'fail','risk_score':min(100,len(sc['risks'])*30),'risks':sc['risks'],'counter_evidence':[],'notes':'Deterministic skeptic audit; AI audit can refine later','model_route':'rules-v2'})
                 if sc['decision'] in ('PRIORITY','CREATE_CREATIVE'):promoted+=1
-            summary.append({'category':category,'term':term,'demand':round(combined_demand,1),'competition':round(competition,1),'forecast_growth':round(fc['growth_pct'],1),'trend_available':trend_ok,'serp_available':serp_ok,'scored_products':len(products),'creative_candidates':promoted})
-            print(json.dumps({'progress':f'{idx}/{len(categories)}','category':category,'creative_candidates':promoted},ensure_ascii=False),flush=True)
-            time.sleep(.7)
-        api('PATCH','market_research_runs',params={'id':f'eq.{research_run}'},data={'status':'completed','finished_at':now_iso()})
-        api('PATCH','forecast_runs',params={'id':f'eq.{forecast_run}'},data={'status':'completed','finished_at':now_iso()})
+            summary.append({'category':category,'term':term,'demand':round(combined_demand,1),'seller_competition':round(seller['score'],1),'ad_pressure_proxy':round(ad_proxy,1),'ad_proxy_confidence':round(ad_conf,2),'competition_kill':competition_kill,'kill_reason':kill_reason,'forecast_growth':round(fc['growth_pct'],1),'trend_available':trend_ok,'serp_available':serp_ok,'scored_products':len(products),'creative_candidates':promoted})
+            print(json.dumps({'progress':f'{idx}/{len(categories)}','category':category,'competition_kill':competition_kill,'creative_candidates':promoted},ensure_ascii=False),flush=True);time.sleep(.7)
+        api('PATCH','market_research_runs',params={'id':f'eq.{research_run}'},data={'status':'completed','finished_at':now_iso()});api('PATCH','forecast_runs',params={'id':f'eq.{forecast_run}'},data={'status':'completed','finished_at':now_iso()})
     except Exception as e:
-        api('PATCH','market_research_runs',params={'id':f'eq.{research_run}'},data={'status':'failed','error':str(e)[:1000],'finished_at':now_iso()})
-        api('PATCH','forecast_runs',params={'id':f'eq.{forecast_run}'},data={'status':'failed','finished_at':now_iso()})
-        raise
+        api('PATCH','market_research_runs',params={'id':f'eq.{research_run}'},data={'status':'failed','error':str(e)[:1000],'finished_at':now_iso()});api('PATCH','forecast_runs',params={'id':f'eq.{forecast_run}'},data={'status':'failed','finished_at':now_iso()});raise
     print(json.dumps({'generated_at':now_iso(),'status':'completed','research_run':research_run,'forecast_run':forecast_run,'categories':summary},ensure_ascii=False))
 
 if __name__=='__main__':main()
