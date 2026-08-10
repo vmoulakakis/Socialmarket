@@ -5,3 +5,5 @@ beautifulsoup4>=4.12
 statsforecast>=2.0
 supabase>=2.18
 pydantic>=2.11
+ijson>=3.3
+gdown>=5.2
