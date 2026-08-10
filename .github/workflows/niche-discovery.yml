@@ -2,7 +2,7 @@ name: Niche Discovery
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ['Merchant Resolution']
+    workflows: ['Merchant Trust Research']
     types: [completed]
     branches: [main]
 permissions:
@@ -32,7 +32,7 @@ jobs:
       - name: Install optional semantic stack
         continue-on-error: true
         run: pip install bertopic sentence-transformers
-      - name: Discover semantic micro-niches
+      - name: Discover semantic micro-niches from preferred trusted offers only
         run: python discover_niches.py | tee niche-output.json
       - uses: actions/upload-artifact@v4
         if: always()
