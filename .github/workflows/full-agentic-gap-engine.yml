@@ -107,7 +107,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python workers/agentic_intelligence/run_pipeline_v5.py \
+          python workers/agentic_intelligence/run_pipeline_v6.py \
             --scope GR \
             --max-products '${{ inputs.max_products || '12' }}' \
             --max-searches '${{ inputs.max_searches || '12' }}' \
