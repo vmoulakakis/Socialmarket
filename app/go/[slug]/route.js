@@ -21,7 +21,7 @@ const LINKS = {
   "18-columbia-tunnel-fallstm-ii-interch": "https://go.linkwi.se/z/13700-0/CD104/?lnkurl=https%3A%2F%2Ftobros.gr%2Fproducts%2F51626-1%3Fvariant%3D57466584138111%26utm_source%3Dlinkwise%26utm_medium%3Daffiliate%26utm_campaign%3Dcatalog",
   "19-marc-by-marc-jacobs-mmj-409-s-6wo": "https://go.linkwi.se/z/13703-0/CD104/?lnkurl=https%3A%2F%2Famorvisual.gr%2Fproduct%2Fmarc-by-marc-jacobs-mmj-409-s-6w0-56mm%2F%3Futm_source%3DSkroutz%26utm_campaign%3Dskroutz%26utm_medium%3Dcpc%26utm_term%3D1675",
   "20-marc-jacobs-marc-733-s-szjha-52mm": "https://go.linkwi.se/z/13703-0/CD104/?lnkurl=https%3A%2F%2Famorvisual.gr%2Fproduct%2Fmarc-jacobs-marc-733-s-szjha-52mm%2F%3Futm_source%3DSkroutz%26utm_campaign%3Dskroutz%26utm_medium%3Dcpc%26utm_term%3D12314",
-  "21-marc-jacobs-mj-1013-s-8079o-56mm": "https://go.linkwi.se/z/13703-0/CD104/?lnkurl=https%3A%2F%2Famorvisual.gr%2Fproduct%2Fmarc-jacobs-mj-1013-s-8079o-56mm%2F%3Futm_source%3DSkroutz%26utm_campaign%3Dskroutz%26utm_medium%3Daffiliate%26utm_term%3D1651",
+  "21-marc-jacobs-mj-1013-s-8079o-56mm": "https://go.linkwi.se/z/13703-0/CD104/?lnkurl=https%3A%2F%2Famorvisual.gr%2Fproduct%2Fmarc-jacobs-mj-1013-s-8079o-56mm%2F%3Futm_source%3DSkroutz%26utm_campaign%3Dskroutz%26utm_medium%3Dcpc%26utm_term%3D1651",
   "22-police-spl836-300l-57mm": "https://go.linkwi.se/z/13703-0/CD104/?lnkurl=https%3A%2F%2Famorvisual.gr%2Fproduct%2Fpolice-spl836-300l-57mm%2F%3Futm_source%3DSkroutz%26utm_campaign%3Dskroutz%26utm_medium%3Dcpc%26utm_term%3D9567",
   "23-marc-jacobs-mj-1061-s-7c59o-59mm": "https://go.linkwi.se/z/13703-0/CD104/?lnkurl=https%3A%2F%2Famorvisual.gr%2Fproduct%2Fmarc-jacobs-mj-1061-s-7c59o-59mm%2F%3Futm_source%3DSkroutz%26utm_campaign%3Dskroutz%26utm_medium%3Dcpc%26utm_term%3D7005",
   "24-sportmax-sm0011-01b-58mm": "https://go.linkwi.se/z/13703-0/CD104/?lnkurl=https%3A%2F%2Famorvisual.gr%2Fproduct%2Fsportmax-sm0011-01b-58mm%2F%3Futm_source%3DSkroutz%26utm_campaign%3Dskroutz%26utm_medium%3Dcpc%26utm_term%3D5733",
@@ -41,6 +41,5 @@ export async function GET(_request, { params }) {
     return NextResponse.json({ error: 'Unknown campaign link' }, { status: 404 });
   }
 
-  // Keep Linkwise attribution intact: redirect to the exact tracking URL.
   return NextResponse.redirect(target, 302);
 }
