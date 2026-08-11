@@ -12,7 +12,7 @@ on:
         required: false
         default: '12'
       free_model_calls:
-        description: 'Maximum GitHub Models free semantic calls'
+        description: 'Maximum local/free semantic calls'
         required: false
         default: '8'
   push:
@@ -35,6 +35,8 @@ jobs:
     timeout-minutes: 30
     env:
       SEARXNG_URL: http://127.0.0.1:8080
+      LOCAL_OLLAMA_URL: http://127.0.0.1:11434
+      LOCAL_OLLAMA_MODEL: qwen3.5:2b
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
       ENABLE_PAID_REMOTE: '0'
       PYTHONUNBUFFERED: '1'
@@ -88,11 +90,21 @@ jobs:
           if not isinstance(d.get('results'),list): raise SystemExit('SearXNG JSON discovery unavailable')
           PY
 
+      - name: Start local open-weight Qwen runtime
+        run: |
+          docker run -d --name socialmarket-ollama -p 11434:11434 ollama/ollama:latest
+          for i in {1..30}; do
+            if curl -fsS 'http://127.0.0.1:11434/api/tags' >/dev/null; then break; fi
+            sleep 2
+          done
+          docker exec socialmarket-ollama ollama pull qwen3.5:2b
+          curl -fsS 'http://127.0.0.1:11434/api/tags' | head -c 1000
+
       - name: Run full evidence-first agentic circuit
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python workers/agentic_intelligence/run_pipeline_v4.py \
+          python workers/agentic_intelligence/run_pipeline_v5.py \
             --scope GR \
             --max-products '${{ inputs.max_products || '12' }}' \
             --max-searches '${{ inputs.max_searches || '12' }}' \
