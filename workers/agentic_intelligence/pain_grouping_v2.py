@@ -1,4 +1,4 @@
-def semantic_group_pains(core, evidence_rows, agent_runtime, run_id):
+def semantic_group_pains(core, evidence_rows, agent_runtime, run_id, fallback_group=None):
     """Use one bounded local/free agent call to group evidence across sources.
 
     Final validation still uses deterministic DB thresholds; the model only
@@ -31,7 +31,9 @@ def semantic_group_pains(core, evidence_rows, agent_runtime, run_id):
     )
     core.log_model_usage(run_id,telemetry,'pain_semantic_grouping')
     if not parsed or not isinstance(parsed.get('groups'),list):
-        return core.group_pains(evidence_rows,agent_runtime,run_id)
+        if fallback_group:
+            return fallback_group(evidence_rows,agent_runtime,run_id)
+        return []
 
     used=set(); groups=[]
     for g in parsed['groups'][:12]:
@@ -53,8 +55,6 @@ def semantic_group_pains(core, evidence_rows, agent_runtime, run_id):
             'pain_type':str(g.get('pain_type') or 'friction')[:80],
             'target_segment':str(g.get('target_segment') or '')[:200] or None,
         })
-    # Keep a few unassigned strong statements as singleton candidates instead
-    # of silently discarding evidence due to model grouping uncertainty.
     leftovers=[evidence_rows[i] for i in range(len(evidence_rows)) if i not in used]
     for ev in leftovers[:max(0,12-len(groups))]:
         rep=str(ev.get('normalized_statement') or ev.get('statement') or '')[:700]
