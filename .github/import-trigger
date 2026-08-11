@@ -1,16 +1,19 @@
-production-import: 2026-08-11T01:29:00+03:00
-policy: selection-v4
-min_price_eur: 150
+production-import: 2026-08-11T09:32:00+03:00
+policy: selection-v5-smart-stream
+min_price_eur: 100
 min_validity_days: 20
 validity_timezone: Europe/Athens
 exclude_travel: true
-merchant_resolution: internal-identity-resolution -> external-reputation-research -> final-trusted-preferred-offer
+full_feed_method: sequential-ijson-stream-scan-with-bounded-heaps
+candidate_pool_max: 35000
+final_product_limit: 1000
+merchant_strategy: trusted-but-not-mega-visible
+merchant_external_research_limit: 220
+merchant_cap_final: 80
+category_cap_final: 120
+brand_cap_final: 100
 identity_matching: brand+model+size+colour OR strict-fuzzy>=97 with numeric/spec compatibility
-external_trust: internal-feed-trust + official-domain + RDAP-age + business-identity + review-evidence + complaint-corroboration
-external_search: ephemeral-self-hosted-searxng-no-paid-search-api
-deepseek_audit: optional-deepseek-v4-flash-evidence-only-no-fact-invention
+mega_visibility_rule: high-feed-share-plus-generic-serp-dominance-penalty-or-kill
 competition_kill: seller>=82 OR ad-pressure-proxy>=92@confidence>=0.65
 niche_discovery: semantic-multilingual-bertopic-with-tfidf-fallback
-market_levels: category+micro-niche
-higo_refinement: final-merchant-trust+niche-evidence
 source: linkwise-products.json
