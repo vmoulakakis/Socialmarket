@@ -4,114 +4,32 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 const EDGE=process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-function badge(status){
-  const good=['connected','published','scheduled','completed','approved'];
-  const bad=['failed','blocked','error','revoked','expired'];
-  return `pill ${good.includes(status)?'good':bad.includes(status)?'bad':'warn'}`;
-}
+function badge(status){const good=['connected','published','scheduled','completed','approved'];const bad=['failed','blocked','error','revoked','expired'];return `pill ${good.includes(status)?'good':bad.includes(status)?'bad':'warn'}`}
 function money(v){return v==null?'—':new Intl.NumberFormat('el-GR',{style:'currency',currency:'EUR'}).format(Number(v))}
 function localDate(v){return v?new Date(v).toLocaleString('el-GR'):'—'}
 
 export default function TikTokStudio(){
-  const [connections,setConnections]=useState([]);
-  const [batches,setBatches]=useState([]);
-  const [posts,setPosts]=useState([]);
-  const [health,setHealth]=useState(null);
-  const [busy,setBusy]=useState('');
-  const [msg,setMsg]=useState('');
-  const [form,setForm]=useState({count:10,postsPerDay:5,strategy:'conversion',start:''});
-
-  useEffect(()=>{load()},[]);
-  async function load(){
-    setMsg('');
-    const [{data:c},{data:b},{data:p}]=await Promise.all([
-      supabase.from('tiktok_connections').select('id,label,username,nickname,avatar_url,status,audited,can_direct_post,privacy_level_options,max_video_post_duration_sec,last_creator_info_at,last_error,updated_at').order('updated_at',{ascending:false}),
-      supabase.from('tiktok_batches').select('id,name,strategy,requested_count,scheduled_from,posts_per_day,status,created_at,updated_at').order('created_at',{ascending:false}).limit(20),
-      supabase.from('tiktok_posts').select('id,batch_id,status,media_type,strategy,hook,title,caption,hashtags,scheduled_at,published_at,publish_id,last_error_code,last_error_message,media_urls,metadata,products(product_name,brand_name,merchant_name,category_raw,price,full_price,discount_pct)').order('created_at',{ascending:false}).limit(120)
-    ]);
-    setConnections(c||[]);setBatches(b||[]);setPosts(p||[]);
-    if(EDGE){try{const r=await fetch(`${EDGE}/functions/v1/tiktok-oauth/health`,{cache:'no-store'});setHealth(await r.json())}catch{setHealth({ok:false,error:'health_unavailable'})}}
-  }
-
-  async function connectTikTok(){
-    if(!EDGE)return setMsg('NEXT_PUBLIC_SUPABASE_URL λείπει.');
-    setBusy('connect');setMsg('');
-    try{
-      const returnTo=window.location.href;
-      const r=await fetch(`${EDGE}/functions/v1/tiktok-oauth/start?return_to=${encodeURIComponent(returnTo)}`,{cache:'no-store'});
-      const d=await r.json();
-      if(!r.ok||!d.authorize_url)throw new Error(d.error||'TikTok OAuth unavailable');
-      window.location.href=d.authorize_url;
-    }catch(e){setMsg(String(e.message||e));setBusy('')}
-  }
-
-  async function createBatch(e){
-    e.preventDefault();setBusy('batch');setMsg('');
-    const start=form.start?new Date(form.start).toISOString():null;
-    const {data,error}=await supabase.rpc('create_tiktok_batch',{p_name:`TikTok Top ${form.count}`,p_count:Number(form.count),p_posts_per_day:Number(form.postsPerDay),p_scheduled_from:start,p_strategy:form.strategy});
-    if(error)setMsg(error.message);else setMsg(`Δημιουργήθηκαν ${data?.created||0} TikTok drafts.`);
-    setBusy('');await load();
-  }
-  async function queueCreatives(batchId){
-    setBusy(`creative-${batchId}`);setMsg('');
-    const {data,error}=await supabase.rpc('queue_tiktok_creatives',{p_batch_id:batchId});
-    if(error)setMsg(error.message);else setMsg(`Μπήκαν ${data?.creative_jobs_queued||0} TikTok-safe creative jobs στην ουρά.`);
-    setBusy('');await load();
-  }
-  async function scheduleBatch(batchId){
-    setBusy(`schedule-${batchId}`);setMsg('');
-    const {data,error}=await supabase.rpc('approve_and_schedule_tiktok_batch',{p_batch_id:batchId});
-    if(error)setMsg(error.message);else setMsg(`Scheduled: ${data?.scheduled||0} · Waiting creative: ${data?.waiting_for_creative||0}`);
-    setBusy('');await load();
-  }
-
-  const kpis=useMemo(()=>({
-    total:posts.length,
-    creative:posts.filter(x=>x.status==='needs_creative').length,
-    scheduled:posts.filter(x=>x.status==='scheduled').length,
-    published:posts.filter(x=>x.status==='published').length,
-    failed:posts.filter(x=>['failed','blocked'].includes(x.status)).length
-  }),[posts]);
-  const conn=connections[0];
-
-  return <main>
-    <div className="hero"><div><div className="eyebrow">SocialMarket Publishing</div><h1>TikTok Studio</h1><p className="sub">Mass creator + approval + scheduler. Τα TikTok assets είναι native 9:16 και δεν επιτρέπουν QR, baked tracking URL ή promotional watermark.</p></div></div>
-    {msg?<div className="notice">{msg}</div>:null}
-
-    <section className="grid">
-      <div className="card kpi"><span className="muted">Draft queue</span><strong>{kpis.total}</strong></div>
-      <div className="card kpi"><span className="muted">Need creative</span><strong>{kpis.creative}</strong></div>
-      <div className="card kpi"><span className="muted">Scheduled</span><strong>{kpis.scheduled}</strong></div>
-      <div className="card kpi"><span className="muted">Published</span><strong>{kpis.published}</strong></div>
-
-      <div className="card wide">
-        <div className="section-head"><div><div className="eyebrow">Account</div><h2>TikTok Connection</h2></div><span className={badge(conn?.status||'disconnected')}>{conn?.status||'disconnected'}</span></div>
-        {conn?<div className="connection-row">{conn.avatar_url?<img src={conn.avatar_url} className="avatar" alt="TikTok avatar"/>:null}<div><strong>{conn.nickname||conn.username||conn.label}</strong><div className="muted">@{conn.username||'—'} · Direct Post {conn.can_direct_post?'enabled':'not granted'} · Audit {conn.audited?'approved':'pending/not set'}</div><div className="muted">Creator info: {localDate(conn.last_creator_info_at)}</div>{conn.last_error?<div className="bad">{conn.last_error}</div>:null}</div></div>:<p className="muted">Δεν έχει συνδεθεί TikTok creator account.</p>}
-        <div className="creative-actions"><button className="button" onClick={connectTikTok} disabled={busy==='connect'}>{conn?'Reconnect TikTok':'Connect TikTok'}</button><span className="muted">API config: {health?.configured?'ready':'client key/secret not configured yet'}</span></div>
-      </div>
-
-      <div className="card side">
-        <div className="eyebrow">Compliance</div><h2>TikTok-safe media</h2>
-        <div className="rule-list"><span>✓ 9:16 native creative</span><span>✓ No QR in media</span><span>✓ No baked tracking URL</span><span>✓ No promotional watermark</span><span>✓ Creator privacy refreshed before publish</span><span>✓ Unaudited API → SELF_ONLY</span></div>
-      </div>
-
-      <form className="card full batch-form" onSubmit={createBatch}>
-        <div><div className="eyebrow">Mass Creator</div><h2>Create a batch from top opportunities</h2><p className="muted">Παίρνει μόνο active, market-eligible, preferred offers και αποκλείει travel.</p></div>
-        <label>Products<input className="search" type="number" min="1" max="1000" value={form.count} onChange={e=>setForm({...form,count:e.target.value})}/></label>
-        <label>Posts/day<input className="search" type="number" min="1" max="15" value={form.postsPerDay} onChange={e=>setForm({...form,postsPerDay:e.target.value})}/></label>
-        <label>Strategy<select className="search" value={form.strategy} onChange={e=>setForm({...form,strategy:e.target.value})}><option value="conversion">Conversion</option><option value="deal">Deal Reveal</option><option value="problem_solution">Problem → Solution</option><option value="lifestyle">Lifestyle</option><option value="curiosity">Curiosity</option></select></label>
-        <label>Start<input className="search" type="datetime-local" value={form.start} onChange={e=>setForm({...form,start:e.target.value})}/></label>
-        <button className="button" disabled={busy==='batch'}>{busy==='batch'?'Creating…':'Generate Batch'}</button>
-      </form>
-
-      <div className="card full"><div className="section-head"><div><div className="eyebrow">Production Queue</div><h2>Batches</h2></div><button className="link-button" onClick={load}>Refresh</button></div>
-        {batches.length===0?<p className="muted">No TikTok batches yet.</p>:<div className="batch-grid">{batches.map(b=><article className="batch-item" key={b.id}><div className="section-head"><strong>{b.name}</strong><span className={badge(b.status)}>{b.status}</span></div><div className="muted">{b.requested_count} posts · {b.posts_per_day}/day · {b.strategy}</div><div className="muted">Start: {localDate(b.scheduled_from)}</div><div className="creative-actions"><button className="link-button" onClick={()=>queueCreatives(b.id)} disabled={busy===`creative-${b.id}`}>Queue creatives</button><button className="button" onClick={()=>scheduleBatch(b.id)} disabled={busy===`schedule-${b.id}`}>Approve & Schedule</button></div></article>)}</div>}
-      </div>
-
-      <div className="card full"><div className="section-head"><div><div className="eyebrow">Post Queue</div><h2>Latest posts</h2></div><span className="muted">{kpis.failed} blocked/failed</span></div>
-        <table className="table"><thead><tr><th>Product</th><th>Offer</th><th>Strategy</th><th>Status</th><th>Media</th><th>Schedule</th><th>Publish</th></tr></thead><tbody>{posts.map(p=><tr key={p.id}><td><strong>{p.products?.brand_name||''}</strong><br/>{p.products?.product_name||'Product'}<div className="muted">{p.products?.merchant_name||''}</div></td><td>{money(p.products?.price)}{p.products?.discount_pct?<> <span className="good">-{Math.round(Number(p.products.discount_pct))}%</span></>:null}</td><td><span className="pill">{p.strategy}</span><div className="muted queue-hook">{p.hook}</div></td><td><span className={badge(p.status)}>{p.status}</span>{p.last_error_code?<div className="bad queue-hook">{p.last_error_code}</div>:null}</td><td>{Array.isArray(p.media_urls)&&p.media_urls.length?<span className="good">ready</span>:<span className="warn">waiting</span>}</td><td>{localDate(p.scheduled_at)}</td><td>{p.publish_id?<span className="muted">{p.publish_id.slice(0,18)}…</span>:'—'}</td></tr>)}</tbody></table>
-      </div>
-    </section>
-  </main>
+ const [connections,setConnections]=useState([]),[batches,setBatches]=useState([]),[posts,setPosts]=useState([]),[health,setHealth]=useState(null),[busy,setBusy]=useState(''),[msg,setMsg]=useState('');
+ const [form,setForm]=useState({count:10,postsPerDay:5,strategy:'conversion',start:''});
+ useEffect(()=>{load()},[]);
+ async function load(){setMsg('');const [{data:c},{data:b},{data:p}]=await Promise.all([
+  supabase.from('tiktok_connections').select('id,label,username,nickname,avatar_url,status,audited,can_direct_post,privacy_level_options,max_video_post_duration_sec,last_creator_info_at,last_error,updated_at').order('updated_at',{ascending:false}),
+  supabase.from('tiktok_batches').select('id,name,strategy,requested_count,scheduled_from,posts_per_day,status,created_at,updated_at').order('created_at',{ascending:false}).limit(20),
+  supabase.from('tiktok_posts').select('id,batch_id,status,media_type,strategy,hook,title,caption,hashtags,scheduled_at,published_at,publish_id,last_error_code,last_error_message,media_urls,metadata,creative_spec,products(product_name,brand_name,merchant_name,merchant_trust_score,category_raw,price,full_price,discount_pct)').order('created_at',{ascending:false}).limit(150)
+ ]);setConnections(c||[]);setBatches(b||[]);setPosts(p||[]);if(EDGE){try{const r=await fetch(`${EDGE}/functions/v1/tiktok-oauth/health`,{cache:'no-store'});setHealth(await r.json())}catch{setHealth({ok:false,error:'health_unavailable'})}}}
+ async function connectTikTok(){if(!EDGE)return setMsg('NEXT_PUBLIC_SUPABASE_URL λείπει.');setBusy('connect');setMsg('');try{const r=await fetch(`${EDGE}/functions/v1/tiktok-oauth/start?return_to=${encodeURIComponent(window.location.href)}`,{cache:'no-store'}),d=await r.json();if(!r.ok||!d.authorize_url)throw new Error(d.error||'TikTok OAuth unavailable');window.location.href=d.authorize_url}catch(e){setMsg(String(e.message||e));setBusy('')}}
+ async function createBatch(e){e.preventDefault();setBusy('batch');setMsg('');const start=form.start?new Date(form.start).toISOString():null;const {data,error}=await supabase.rpc('create_tiktok_batch',{p_name:`TikTok Top ${form.count}`,p_count:Number(form.count),p_posts_per_day:Number(form.postsPerDay),p_scheduled_from:start,p_strategy:form.strategy});if(error)setMsg(error.message);else setMsg(`Δημιουργήθηκαν ${data?.created||0} TikTok drafts.`);setBusy('');await load()}
+ async function aiRefine(batchId){setBusy(`ai-${batchId}`);setMsg('');try{const rows=posts.filter(p=>p.batch_id===batchId).slice(0,25).map(p=>({id:p.id,strategy:p.strategy,product:{...p.products,selection_score:p.metadata?.selection_score}}));if(!rows.length)throw new Error('No posts in batch');const r=await fetch('/api/tiktok/refine',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({posts:rows})}),d=await r.json();if(!r.ok)throw new Error(d.error||'AI refine failed');for(const x of d.posts||[]){await supabase.from('tiktok_posts').update({hook:x.hook,title:x.title,caption:x.caption,hashtags:x.hashtags||[],strategy:x.strategy||undefined,creative_spec:x.creative_spec||{}}).eq('id',x.id)}setMsg(`AI refined ${d.posts?.length||0} posts · ${d.provider}${d.model?` / ${d.model}`:''}`)}catch(e){setMsg(String(e.message||e))}setBusy('');await load()}
+ async function queueCreatives(batchId){setBusy(`creative-${batchId}`);setMsg('');const {data,error}=await supabase.rpc('queue_tiktok_creatives',{p_batch_id:batchId});if(error)setMsg(error.message);else setMsg(`Μπήκαν ${data?.creative_jobs_queued||0} TikTok-safe creative jobs στην ουρά.`);setBusy('');await load()}
+ async function scheduleBatch(batchId){setBusy(`schedule-${batchId}`);setMsg('');const {data,error}=await supabase.rpc('approve_and_schedule_tiktok_batch',{p_batch_id:batchId});if(error)setMsg(error.message);else setMsg(`Scheduled: ${data?.scheduled||0} · Waiting creative: ${data?.waiting_for_creative||0}`);setBusy('');await load()}
+ const kpis=useMemo(()=>({total:posts.length,creative:posts.filter(x=>x.status==='needs_creative').length,scheduled:posts.filter(x=>x.status==='scheduled').length,published:posts.filter(x=>x.status==='published').length,failed:posts.filter(x=>['failed','blocked'].includes(x.status)).length}),[posts]);const conn=connections[0];
+ return <main><div className="hero"><div><div className="eyebrow">SocialMarket Publishing</div><h1>TikTok Studio</h1><p className="sub">Mass creator + approval + scheduler. TikTok assets: native 9:16, χωρίς QR, baked tracking URL ή promotional watermark.</p></div></div>{msg?<div className="notice">{msg}</div>:null}
+ <section className="grid">
+  <div className="card kpi"><span className="muted">Draft queue</span><strong>{kpis.total}</strong></div><div className="card kpi"><span className="muted">Need creative</span><strong>{kpis.creative}</strong></div><div className="card kpi"><span className="muted">Scheduled</span><strong>{kpis.scheduled}</strong></div><div className="card kpi"><span className="muted">Published</span><strong>{kpis.published}</strong></div>
+  <div className="card wide"><div className="section-head"><div><div className="eyebrow">Account</div><h2>TikTok Connection</h2></div><span className={badge(conn?.status||'disconnected')}>{conn?.status||'disconnected'}</span></div>{conn?<div className="connection-row">{conn.avatar_url?<img src={conn.avatar_url} className="avatar" alt="TikTok avatar"/>:null}<div><strong>{conn.nickname||conn.username||conn.label}</strong><div className="muted">@{conn.username||'—'} · Direct Post {conn.can_direct_post?'enabled':'not granted'} · Audit {conn.audited?'approved':'pending/not set'}</div><div className="muted">Creator info: {localDate(conn.last_creator_info_at)}</div>{conn.last_error?<div className="bad">{conn.last_error}</div>:null}</div></div>:<p className="muted">Δεν έχει συνδεθεί TikTok creator account.</p>}<div className="creative-actions"><button className="button" onClick={connectTikTok} disabled={busy==='connect'}>{conn?'Reconnect TikTok':'Connect TikTok'}</button><span className="muted">API config: {health?.configured?'ready':'client key/secret not configured yet'}</span></div></div>
+  <div className="card side"><div className="eyebrow">Compliance</div><h2>TikTok-safe media</h2><div className="rule-list"><span>✓ 9:16 native creative</span><span>✓ No QR in media</span><span>✓ No baked tracking URL</span><span>✓ No promotional watermark</span><span>✓ Creator privacy refreshed before publish</span><span>✓ Unaudited API → SELF_ONLY</span></div></div>
+  <form className="card full batch-form" onSubmit={createBatch}><div><div className="eyebrow">Mass Creator</div><h2>Create a batch from top opportunities</h2><p className="muted">Μόνο active, market-eligible, preferred offers. Travel excluded.</p></div><label>Products<input className="search" type="number" min="1" max="1000" value={form.count} onChange={e=>setForm({...form,count:e.target.value})}/></label><label>Posts/day<input className="search" type="number" min="1" max="15" value={form.postsPerDay} onChange={e=>setForm({...form,postsPerDay:e.target.value})}/></label><label>Strategy<select className="search" value={form.strategy} onChange={e=>setForm({...form,strategy:e.target.value})}><option value="conversion">Conversion</option><option value="deal">Deal Reveal</option><option value="problem_solution">Problem → Solution</option><option value="lifestyle">Lifestyle</option><option value="curiosity">Curiosity</option></select></label><label>Start<input className="search" type="datetime-local" value={form.start} onChange={e=>setForm({...form,start:e.target.value})}/></label><button className="button" disabled={busy==='batch'}>{busy==='batch'?'Creating…':'Generate Batch'}</button></form>
+  <div className="card full"><div className="section-head"><div><div className="eyebrow">Production Queue</div><h2>Batches</h2></div><button className="link-button" onClick={load}>Refresh</button></div>{batches.length===0?<p className="muted">No TikTok batches yet.</p>:<div className="batch-grid">{batches.map(b=><article className="batch-item" key={b.id}><div className="section-head"><strong>{b.name}</strong><span className={badge(b.status)}>{b.status}</span></div><div className="muted">{b.requested_count} posts · {b.posts_per_day}/day · {b.strategy}</div><div className="muted">Start: {localDate(b.scheduled_from)}</div><div className="creative-actions"><button className="link-button" onClick={()=>aiRefine(b.id)} disabled={busy===`ai-${b.id}`}>AI Refine</button><button className="link-button" onClick={()=>queueCreatives(b.id)} disabled={busy===`creative-${b.id}`}>Queue creatives</button><button className="button" onClick={()=>scheduleBatch(b.id)} disabled={busy===`schedule-${b.id}`}>Approve & Schedule</button></div></article>)}</div>}</div>
+  <div className="card full"><div className="section-head"><div><div className="eyebrow">Post Queue</div><h2>Latest posts</h2></div><span className="muted">{kpis.failed} blocked/failed</span></div><table className="table"><thead><tr><th>Product</th><th>Offer</th><th>Strategy</th><th>Status</th><th>Media</th><th>Schedule</th><th>Publish</th></tr></thead><tbody>{posts.map(p=><tr key={p.id}><td><strong>{p.products?.brand_name||''}</strong><br/>{p.products?.product_name||'Product'}<div className="muted">{p.products?.merchant_name||''}</div></td><td>{money(p.products?.price)}{p.products?.discount_pct?<> <span className="good">-{Math.round(Number(p.products.discount_pct))}%</span></>:null}</td><td><span className="pill">{p.strategy}</span><div className="muted queue-hook">{p.hook}</div></td><td><span className={badge(p.status)}>{p.status}</span>{p.last_error_code?<div className="bad queue-hook">{p.last_error_code}</div>:null}</td><td>{Array.isArray(p.media_urls)&&p.media_urls.length?<span className="good">ready</span>:<span className="warn">waiting</span>}</td><td>{localDate(p.scheduled_at)}</td><td>{p.publish_id?<span className="muted">{p.publish_id.slice(0,18)}…</span>:'—'}</td></tr>)}</tbody></table></div>
+ </section></main>
 }
