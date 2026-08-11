@@ -23,6 +23,7 @@ jobs:
       STREAM_GLOBAL_POOL: '25000'
       STREAM_PER_CATEGORY_POOL: '40'
       STREAM_MAX_CANDIDATE_POOL: '35000'
+      MERCHANT_EXTERNAL_RESEARCH_LIMIT: '220'
       FINAL_PRODUCT_LIMIT: '1000'
       FINAL_MAX_PER_MERCHANT: '80'
       FINAL_MAX_PER_CATEGORY: '120'
@@ -39,7 +40,8 @@ jobs:
         run: gdown --id "$DRIVE_FILE_ID" -O linkwise-products.json
       - name: Full streaming scan and bounded shortlist
         run: python workers/market_intelligence/smart_stream_select.py linkwise-products.json | tee stream-selection-output.json
-      - name: Start ephemeral SearXNG for merchant research
+      - name: Start optional ephemeral SearXNG
+        continue-on-error: true
         run: |
           docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
           for i in $(seq 1 30); do
