@@ -10,10 +10,12 @@ from agent_runtime import FreeAgentRuntime
 class LocalFirstAgentRuntime(FreeAgentRuntime):
     """Real Agents SDK runtime: local Ollama open-weight model first.
 
-    The first path is a real OpenAI Agents SDK Agent backed by a local Ollama
-    OpenAI-compatible endpoint. If that compatibility path fails or times out,
-    a bounded direct Ollama JSON call is used as a zero-cost semantic fallback;
-    GitHub Models included quota is last. Paid providers are never invoked here.
+    The primary path is an OpenAI Agents SDK Agent backed by Ollama's
+    OpenAI-compatible endpoint. Qwen thinking is explicitly disabled for these
+    bounded classification/labeling tasks so a small CPU runner does not spend
+    most of its budget on hidden reasoning. A direct Ollama JSON call remains a
+    zero-cost compatibility fallback; GitHub Models included quota is last.
+    Paid providers are never invoked here.
     """
 
     def __init__(self, router):
@@ -30,7 +32,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
                 "stream": False,
                 "think": False,
                 "format": "json",
-                "options": {"temperature": 0, "num_predict": 900},
+                "options": {"temperature": 0, "num_predict": 700},
                 "messages": [
                     {
                         "role": "system",
@@ -60,7 +62,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
             if call_no is not None:
                 sdk_error = None
                 try:
-                    from agents import Agent, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
+                    from agents import Agent, ModelSettings, OpenAIChatCompletionsModel, Runner, set_tracing_disabled
                     from openai import AsyncOpenAI
 
                     set_tracing_disabled(True)
@@ -79,6 +81,11 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
                             + "Never invent evidence, sources, product facts or numbers. Return strict JSON only."
                         ),
                         model=model,
+                        model_settings=ModelSettings(
+                            temperature=0,
+                            max_tokens=700,
+                            extra_body={"think": False},
+                        ),
                     )
                     result = Runner.run_sync(agent, json.dumps(payload, ensure_ascii=False), max_turns=1)
                     text = str(result.final_output or "").strip()
@@ -97,6 +104,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
                         "call_no": call_no,
                         "cost_usd": 0,
                         "runtime": "openai_agents_sdk",
+                        "thinking": False,
                     }
                 except Exception as exc:
                     sdk_error = str(exc)[:300]
@@ -111,6 +119,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
                         "call_no": call_no,
                         "cost_usd": 0,
                         "runtime": "direct_ollama_fallback",
+                        "thinking": False,
                         "agents_sdk_error": sdk_error,
                     }
                 except Exception as exc:
