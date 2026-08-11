@@ -39,6 +39,7 @@ jobs:
       LOCAL_OLLAMA_MODEL: qwen3.5:0.8b
       LOCAL_EMBED_MODEL: qwen3-embedding:0.6b
       LOCAL_MODEL_TIMEOUT_SECONDS: '45'
+      PAIN_CLUSTER_COSINE: '0.68'
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
       ENABLE_PAID_REMOTE: '0'
       PYTHONUNBUFFERED: '1'
@@ -107,7 +108,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python workers/agentic_intelligence/run_pipeline_v6.py \
+          python workers/agentic_intelligence/run_pipeline_v7.py \
             --scope GR \
             --max-products '${{ inputs.max_products || '12' }}' \
             --max-searches '${{ inputs.max_searches || '12' }}' \
