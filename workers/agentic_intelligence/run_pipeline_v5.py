@@ -53,7 +53,7 @@ def corrected_log_model_usage(run_id, telemetry, task_type):
 
 core.log_model_usage = corrected_log_model_usage
 _original_group = core.group_pains
-core.group_pains = lambda evidence_rows, agent_runtime, run_id: semantic_group_pains(core, evidence_rows, agent_runtime, run_id)
+core.group_pains = lambda evidence_rows, agent_runtime, run_id: semantic_group_pains(core, evidence_rows, agent_runtime, run_id, _original_group)
 
 if __name__ == '__main__':
     core.main()
