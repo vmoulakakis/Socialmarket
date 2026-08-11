@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/import-trigger'
+concurrency:
+  group: socialmarket-product-import
+  cancel-in-progress: true
 permissions:
   contents: read
   id-token: write
@@ -36,10 +39,17 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r workers/market_intelligence/requirements.txt
+      - name: Mark pipeline start
+        run: python workers/market_intelligence/pipeline_status.py pipeline_start
       - name: Download source feed to runner disk
-        run: gdown --id "$DRIVE_FILE_ID" -O linkwise-products.json
+        run: |
+          python workers/market_intelligence/pipeline_status.py downloading_source
+          gdown --id "$DRIVE_FILE_ID" -O linkwise-products.json
       - name: Full streaming scan and bounded shortlist
-        run: python workers/market_intelligence/smart_stream_select.py linkwise-products.json | tee stream-selection-output.json
+        run: |
+          python workers/market_intelligence/pipeline_status.py streaming_scan
+          python workers/market_intelligence/smart_stream_select.py linkwise-products.json | tee stream-selection-output.json
+          python workers/market_intelligence/pipeline_status.py shortlist_ready
       - name: Start optional ephemeral SearXNG
         continue-on-error: true
         run: |
@@ -51,11 +61,17 @@ jobs:
           docker logs socialmarket-searxng || true
           exit 1
       - name: Research trust and online visibility of shortlist merchants
-        run: python workers/market_intelligence/research_pool_merchants.py | tee merchant-pool-output.json
+        run: |
+          python workers/market_intelligence/pipeline_status.py merchant_research
+          python workers/market_intelligence/research_pool_merchants.py | tee merchant-pool-output.json
       - name: Dedupe and select trusted low-competition top 1000
-        run: python workers/market_intelligence/final_top1000.py | tee final-selection-output.json
+        run: |
+          python workers/market_intelligence/pipeline_status.py final_ranking
+          python workers/market_intelligence/final_top1000.py | tee final-selection-output.json
       - name: Import only final selected products
-        run: python workers/market_intelligence/import_final_selection.py
+        run: |
+          python workers/market_intelligence/pipeline_status.py importing_top1000
+          python workers/market_intelligence/import_final_selection.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
