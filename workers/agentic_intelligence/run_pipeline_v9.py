@@ -9,6 +9,7 @@ from pain_grouping_embedding import embedding_group_pains
 from deep_validation_iterative import iterative_deepen_then_contradict
 from evidence_filter import ConcretePainMatcher
 from competitor_v2 import strict_candidates, strict_get_or_create
+from scope_context import install_scope_context
 
 _original_searx = core.searx
 _original_log_model_usage = core.log_model_usage
@@ -72,6 +73,7 @@ core.competitor_candidates = lambda results, products, agent_runtime, run_id: st
 core.get_or_create_competitor = lambda candidate: strict_get_or_create(
     core, _original_get_or_create, candidate
 )
+install_scope_context(core)
 
 if __name__ == '__main__':
     core.main()
