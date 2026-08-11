@@ -3,14 +3,18 @@ name: Full Agentic Pain-Gap Engine
 on:
   workflow_dispatch:
     inputs:
-      max_products:
-        description: 'Bounded product context for this run'
+      market_scope_key:
+        description: 'Market scope to research independently'
         required: false
-        default: '12'
+        default: 'eyewear'
+      max_products:
+        description: 'Bounded product context for this scope'
+        required: false
+        default: '20'
       max_searches:
         description: 'Maximum research queries'
         required: false
-        default: '12'
+        default: '16'
       free_model_calls:
         description: 'Maximum local/free semantic calls'
         required: false
@@ -40,6 +44,7 @@ jobs:
       LOCAL_EMBED_MODEL: qwen3-embedding:0.6b
       LOCAL_MODEL_TIMEOUT_SECONDS: '60'
       PAIN_CLUSTER_COSINE: '0.68'
+      MARKET_SCOPE_KEY: ${{ inputs.market_scope_key || 'eyewear' }}
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
       ENABLE_PAID_REMOTE: '0'
       PYTHONUNBUFFERED: '1'
@@ -104,14 +109,15 @@ jobs:
           docker exec socialmarket-ollama ollama pull qwen3-embedding:0.6b
           curl -fsS 'http://127.0.0.1:11434/api/tags' | head -c 1500
 
-      - name: Run strict evidence-first full agentic circuit
+      - name: Run strict evidence-first scoped agentic circuit
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          echo "Market scope: $MARKET_SCOPE_KEY"
           python workers/agentic_intelligence/run_pipeline_v9.py \
             --scope GR \
-            --max-products '${{ inputs.max_products || '12' }}' \
-            --max-searches '${{ inputs.max_searches || '12' }}' \
+            --max-products '${{ inputs.max_products || '20' }}' \
+            --max-searches '${{ inputs.max_searches || '16' }}' \
             --free-model-calls '${{ inputs.free_model_calls || '8' }}' \
             | tee full-agentic-run.json
 
