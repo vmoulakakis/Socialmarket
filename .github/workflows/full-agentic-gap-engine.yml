@@ -119,7 +119,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python workers/agentic_intelligence/vectorize_local.py --product-limit 500 \
+          python workers/agentic_intelligence/vectorize_local_fast.py --product-limit 500 \
             | tee full-vector-run.json
 
       - name: Upload audit summaries
