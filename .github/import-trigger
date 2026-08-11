@@ -1,4 +1,4 @@
-production-import: 2026-08-11T09:32:00+03:00
+production-import: 2026-08-11T09:40:00+03:00
 policy: selection-v5-smart-stream
 min_price_eur: 100
 min_validity_days: 20
@@ -17,3 +17,4 @@ mega_visibility_rule: high-feed-share-plus-generic-serp-dominance-penalty-or-kil
 competition_kill: seller>=82 OR ad-pressure-proxy>=92@confidence>=0.65
 niche_discovery: semantic-multilingual-bertopic-with-tfidf-fallback
 source: linkwise-products.json
+live_checkpoints: enabled
