@@ -36,7 +36,8 @@ jobs:
     env:
       SEARXNG_URL: http://127.0.0.1:8080
       LOCAL_OLLAMA_URL: http://127.0.0.1:11434
-      LOCAL_OLLAMA_MODEL: qwen3.5:2b
+      LOCAL_OLLAMA_MODEL: qwen3.5:0.8b
+      LOCAL_MODEL_TIMEOUT_SECONDS: '45'
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
       ENABLE_PAID_REMOTE: '0'
       PYTHONUNBUFFERED: '1'
@@ -97,7 +98,7 @@ jobs:
             if curl -fsS 'http://127.0.0.1:11434/api/tags' >/dev/null; then break; fi
             sleep 2
           done
-          docker exec socialmarket-ollama ollama pull qwen3.5:2b
+          docker exec socialmarket-ollama ollama pull qwen3.5:0.8b
           curl -fsS 'http://127.0.0.1:11434/api/tags' | head -c 1000
 
       - name: Run full evidence-first agentic circuit
