@@ -109,6 +109,13 @@ jobs:
           docker exec socialmarket-ollama ollama pull qwen3-embedding:0.6b
           curl -fsS 'http://127.0.0.1:11434/api/tags' | head -c 1500
 
+      - name: Bootstrap complete product vector database at zero paid-token cost
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python workers/agentic_intelligence/vectorize_products_only.py \
+            | tee product-vector-bootstrap.json
+
       - name: Run strict evidence-first scoped agentic circuit
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -121,7 +128,7 @@ jobs:
             --free-model-calls '${{ inputs.free_model_calls || '8' }}' \
             | tee full-agentic-run.json
 
-      - name: Populate full AI vector database with local Qwen embeddings
+      - name: Vectorize newly collected research evidence
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -134,6 +141,7 @@ jobs:
         with:
           name: full-agentic-pain-gap-run
           path: |
+            product-vector-bootstrap.json
             full-agentic-run.json
             full-vector-run.json
           if-no-files-found: ignore
