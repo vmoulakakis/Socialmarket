@@ -10,7 +10,7 @@ on:
       max_searches:
         description: 'Maximum research queries'
         required: false
-        default: '24'
+        default: '12'
       free_model_calls:
         description: 'Maximum GitHub Models free semantic calls'
         required: false
@@ -22,7 +22,7 @@ on:
 
 concurrency:
   group: socialmarket-full-agentic-gap
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -32,7 +32,7 @@ permissions:
 jobs:
   pain-gap-intelligence:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       SEARXNG_URL: http://127.0.0.1:8080
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
@@ -92,10 +92,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python workers/agentic_intelligence/run_pipeline_v3.py \
+          python workers/agentic_intelligence/run_pipeline_v4.py \
             --scope GR \
             --max-products '${{ inputs.max_products || '12' }}' \
-            --max-searches '${{ inputs.max_searches || '24' }}' \
+            --max-searches '${{ inputs.max_searches || '12' }}' \
             --free-model-calls '${{ inputs.free_model_calls || '8' }}' \
             | tee full-agentic-run.json
 
