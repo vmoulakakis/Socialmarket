@@ -32,13 +32,13 @@ permissions:
 jobs:
   pain-gap-intelligence:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     env:
       SEARXNG_URL: http://127.0.0.1:8080
       LOCAL_OLLAMA_URL: http://127.0.0.1:11434
-      LOCAL_OLLAMA_MODEL: qwen3.5:0.8b
+      LOCAL_OLLAMA_MODEL: qwen3.5:2b
       LOCAL_EMBED_MODEL: qwen3-embedding:0.6b
-      LOCAL_MODEL_TIMEOUT_SECONDS: '45'
+      LOCAL_MODEL_TIMEOUT_SECONDS: '60'
       PAIN_CLUSTER_COSINE: '0.68'
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
       ENABLE_PAID_REMOTE: '0'
@@ -100,22 +100,22 @@ jobs:
             if curl -fsS 'http://127.0.0.1:11434/api/tags' >/dev/null; then break; fi
             sleep 2
           done
-          docker exec socialmarket-ollama ollama pull qwen3.5:0.8b
+          docker exec socialmarket-ollama ollama pull qwen3.5:2b
           docker exec socialmarket-ollama ollama pull qwen3-embedding:0.6b
           curl -fsS 'http://127.0.0.1:11434/api/tags' | head -c 1500
 
-      - name: Run full evidence-first agentic circuit
+      - name: Run strict evidence-first full agentic circuit
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python workers/agentic_intelligence/run_pipeline_v7.py \
+          python workers/agentic_intelligence/run_pipeline_v9.py \
             --scope GR \
             --max-products '${{ inputs.max_products || '12' }}' \
             --max-searches '${{ inputs.max_searches || '12' }}' \
             --free-model-calls '${{ inputs.free_model_calls || '8' }}' \
             | tee full-agentic-run.json
 
-      - name: Populate AI vector database with local Qwen embeddings
+      - name: Populate full AI vector database with local Qwen embeddings
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
