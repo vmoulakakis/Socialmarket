@@ -32,11 +32,12 @@ permissions:
 jobs:
   pain-gap-intelligence:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       SEARXNG_URL: http://127.0.0.1:8080
       LOCAL_OLLAMA_URL: http://127.0.0.1:11434
       LOCAL_OLLAMA_MODEL: qwen3.5:0.8b
+      LOCAL_EMBED_MODEL: qwen3-embedding:0.6b
       LOCAL_MODEL_TIMEOUT_SECONDS: '45'
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
       ENABLE_PAID_REMOTE: '0'
@@ -99,7 +100,8 @@ jobs:
             sleep 2
           done
           docker exec socialmarket-ollama ollama pull qwen3.5:0.8b
-          curl -fsS 'http://127.0.0.1:11434/api/tags' | head -c 1000
+          docker exec socialmarket-ollama ollama pull qwen3-embedding:0.6b
+          curl -fsS 'http://127.0.0.1:11434/api/tags' | head -c 1500
 
       - name: Run full evidence-first agentic circuit
         env:
@@ -112,11 +114,20 @@ jobs:
             --free-model-calls '${{ inputs.free_model_calls || '8' }}' \
             | tee full-agentic-run.json
 
-      - name: Upload audit summary
+      - name: Populate AI vector database with local Qwen embeddings
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python workers/agentic_intelligence/vectorize_local.py --product-limit 500 \
+            | tee full-vector-run.json
+
+      - name: Upload audit summaries
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: full-agentic-pain-gap-run
-          path: full-agentic-run.json
+          path: |
+            full-agentic-run.json
+            full-vector-run.json
           if-no-files-found: ignore
           retention-days: 7
