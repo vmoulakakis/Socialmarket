@@ -53,15 +53,40 @@ jobs:
           pip install -r workers/agentic_intelligence/requirements.txt
 
       - name: Start no-key SearXNG discovery service
-        continue-on-error: true
         run: |
-          docker run -d --name socialmarket-searxng -p 8080:8080 docker.io/searxng/searxng:latest
-          for i in {1..20}; do
-            if curl -fsS 'http://127.0.0.1:8080/' >/dev/null; then exit 0; fi
+          mkdir -p .searxng
+          cat > .searxng/settings.yml <<'YAML'
+          use_default_settings: true
+          general:
+            debug: false
+          search:
+            safe_search: 1
+            autocomplete: ''
+            formats:
+              - html
+              - json
+          server:
+            secret_key: 'socialmarket-ci-ephemeral-only'
+            limiter: false
+            image_proxy: false
+          YAML
+          docker run -d --name socialmarket-searxng \
+            -p 8080:8080 \
+            -v "$PWD/.searxng/settings.yml:/etc/searxng/settings.yml:ro" \
+            docker.io/searxng/searxng:latest
+          for i in {1..30}; do
+            if curl -fsS 'http://127.0.0.1:8080/' >/dev/null; then break; fi
             sleep 2
           done
-          docker logs socialmarket-searxng || true
-          exit 1
+          curl -fsS --get 'http://127.0.0.1:8080/search' \
+            --data-urlencode 'q=product review' \
+            --data 'format=json' > /tmp/searx-health.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/searx-health.json'))
+          print({'searx_results':len(d.get('results') or []),'unresponsive_engines':len(d.get('unresponsive_engines') or [])})
+          if not isinstance(d.get('results'),list): raise SystemExit('SearXNG JSON discovery unavailable')
+          PY
 
       - name: Run full evidence-first agentic circuit
         env:
