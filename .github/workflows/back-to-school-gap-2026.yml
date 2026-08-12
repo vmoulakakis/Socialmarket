@@ -22,12 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
-      DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
+      DRIVE_ZIP_FILE_ID: 1ZekIb4rmFPPTHzsEOTn6RjfzVMZ4ae0U
       MARKET_TIMEZONE: Europe/Athens
       BTS_MIN_PRICE_EUR: '50'
       BTS_MIN_VALIDITY_DAYS: '20'
       BTS_MIN_RAW_DISCOUNT_PCT: '12'
       BTS_MIN_TIMES_BOUGHT: '3'
+      BTS_MAX_GREEK_SELLERS: '4'
+      BTS_MIN_OFFLINE_SCARCITY: '70'
       BTS_GLOBAL_POOL: '14000'
       BTS_PER_CLUSTER_POOL: '2500'
       BTS_MAX_PREFILTER: '10000'
@@ -54,18 +56,23 @@ jobs:
       - name: Install BTS research dependencies
         run: pip install -r workers/market_intelligence/requirements-bts.txt
 
-      - name: Download full Linkwise product feed
-        run: gdown "$DRIVE_FILE_ID" -O linkwise-products.json
+      - name: Download compressed Linkwise product feed
+        run: gdown "$DRIVE_ZIP_FILE_ID" -O linkwise-products.zip
 
-      - name: Verify feed download
+      - name: Verify and extract feed archive
         run: |
-          test -s linkwise-products.json
+          test -s linkwise-products.zip
+          unzip -t linkwise-products.zip
+          unzip -p linkwise-products.zip > linkwise-products.json
           python - <<'PY'
           from pathlib import Path
+          z=Path('linkwise-products.zip')
           p=Path('linkwise-products.json')
-          print({'feed_bytes': p.stat().st_size})
+          print({'zip_bytes': z.stat().st_size, 'feed_bytes': p.stat().st_size})
+          if z.stat().st_size < 100_000_000:
+              raise SystemExit('Downloaded ZIP is unexpectedly small')
           if p.stat().st_size < 1_000_000_000:
-              raise SystemExit('Downloaded feed is unexpectedly small')
+              raise SystemExit('Extracted feed is unexpectedly small')
           PY
 
       - name: Full-feed BTS demand and deal prefilter
