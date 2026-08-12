@@ -1,0 +1,43 @@
+name: BTS Demand First Scan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'workers/market_intelligence/bts_demand_first_scan.py'
+      - '.github/workflows/bts-demand-first.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: socialmarket-bts-demand-first
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
+      MARKET_TIMEZONE: Europe/Athens
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install streaming dependencies
+        run: pip install 'ijson>=3.3' 'gdown>=6.1'
+      - name: Download accessible Linkwise snapshot
+        run: gdown "$DRIVE_FILE_ID" -O linkwise-products.json
+      - name: Demand-first BTS scan
+        run: python workers/market_intelligence/bts_demand_first_scan.py linkwise-products.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bts-demand-first
+          retention-days: 14
+          path: |
+            bts-demand-first-summary.json
+            bts-demand-first-candidates.json
