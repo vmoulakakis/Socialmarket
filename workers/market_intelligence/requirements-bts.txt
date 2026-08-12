@@ -1,5 +1,4 @@
 -r requirements.txt
-sentence-transformers>=3.4
+sentence-transformers>=3.4,<6
 scikit-learn>=1.6
 hdbscan>=0.8.40
-torch>=2.5
