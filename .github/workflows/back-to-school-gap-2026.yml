@@ -47,11 +47,25 @@ jobs:
           cache: pip
           cache-dependency-path: workers/market_intelligence/requirements-bts.txt
 
+      - name: Install CPU PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
       - name: Install BTS research dependencies
         run: pip install -r workers/market_intelligence/requirements-bts.txt
 
       - name: Download full Linkwise product feed
-        run: gdown --id "$DRIVE_FILE_ID" -O linkwise-products.json
+        run: gdown "$DRIVE_FILE_ID" -O linkwise-products.json
+
+      - name: Verify feed download
+        run: |
+          test -s linkwise-products.json
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('linkwise-products.json')
+          print({'feed_bytes': p.stat().st_size})
+          if p.stat().st_size < 1_000_000_000:
+              raise SystemExit('Downloaded feed is unexpectedly small')
+          PY
 
       - name: Full-feed BTS demand and deal prefilter
         run: python workers/market_intelligence/bts_stream_select.py linkwise-products.json
