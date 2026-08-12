@@ -27,6 +27,7 @@ jobs:
       BTS_MIN_PRICE_EUR: '50'
       BTS_MIN_VALIDITY_DAYS: '20'
       BTS_MIN_RAW_DISCOUNT_PCT: '12'
+      BTS_MIN_TIMES_BOUGHT: '3'
       BTS_GLOBAL_POOL: '14000'
       BTS_PER_CLUSTER_POOL: '2500'
       BTS_MAX_PREFILTER: '10000'
@@ -85,7 +86,7 @@ jobs:
           exit 1
 
       - name: Greek high-demand low-competition market audit
-        run: python workers/market_intelligence/bts_market_audit.py
+        run: python workers/market_intelligence/bts_market_audit_strict.py
 
       - uses: actions/upload-artifact@v4
         if: always()
