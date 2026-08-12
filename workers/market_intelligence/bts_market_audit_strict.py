@@ -2,6 +2,8 @@ import os, re
 import bts_market_audit as audit
 
 MIN_TIMES_BOUGHT = float(os.getenv('BTS_MIN_TIMES_BOUGHT', '3'))
+MAX_GREEK_SELLERS = int(os.getenv('BTS_MAX_GREEK_SELLERS', '4'))
+MIN_OFFLINE_SCARCITY = float(os.getenv('BTS_MIN_OFFLINE_SCARCITY', '70'))
 
 # Generic return-policy text is not negative quality evidence. Keep only defect/failure language.
 audit.NEG_QUALITY = (
@@ -25,7 +27,6 @@ def strict_review_count(text):
     if preferred:
         return max(preferred)
 
-    # Fallback only when no labeled product review section is available; cap to reduce merchant-rating contamination.
     fallback = []
     for pat in (r'(\d{1,5})\s+αξιολογησεις', r'(\d{1,5})\s+κριτικες', r'(\d{1,5})\s+reviews?'):
         fallback.extend(int(x) for x in re.findall(pat, t) if int(x) < 5000)
@@ -76,12 +77,29 @@ def strict_audit_candidate(p, demand_pct, cluster_market):
     if not high_demand:
         failures.append('high_demand_not_verified')
 
+    # User policy: normal winners must be hard to find offline and outside major retail.
+    # Any major-retailer exception is reviewed manually later and is not auto-selected here.
+    if result.get('physical_pickup_evidence'):
+        failures.append('physical_store_pickup_detected')
+    if result.get('major_retail_domains_exact'):
+        failures.append('major_retail_presence_requires_manual_exception')
+    seller_breadth = int(result.get('greek_seller_breadth_proxy') or 0)
+    if seller_breadth > MAX_GREEK_SELLERS:
+        failures.append('too_many_greek_sellers')
+    if float(result.get('offline_scarcity_proxy') or 0) < MIN_OFFLINE_SCARCITY:
+        failures.append('offline_scarcity_too_low')
+
+    # Deduplicate failure reasons while preserving order.
+    failures = list(dict.fromkeys(failures))
+
     result['times_bought_absolute'] = purchases
     result['minimum_times_bought_gate'] = MIN_TIMES_BOUGHT
     result['first_party_demand_signal'] = first_party_signal
     result['greek_market_demand_signal'] = greek_market_signal
     result['independent_demand_signal_count'] = signal_count
     result['high_demand_gate'] = high_demand
+    result['max_greek_sellers_gate'] = MAX_GREEK_SELLERS
+    result['minimum_offline_scarcity_gate'] = MIN_OFFLINE_SCARCITY
     result['hard_fail_reasons'] = failures
     result['research_survivor'] = not failures
     return result
