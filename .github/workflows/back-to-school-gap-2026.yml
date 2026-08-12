@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: socialmarket-bts-2026-gap-research-zip-v2
+  group: socialmarket-bts-2026-gap-research-json-v3
   cancel-in-progress: true
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
-      DRIVE_ZIP_FILE_ID: 1ZekIb4rmFPPTHzsEOTn6RjfzVMZ4ae0U
+      DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
       MARKET_TIMEZONE: Europe/Athens
       BTS_MIN_PRICE_EUR: '50'
       BTS_MIN_VALIDITY_DAYS: '20'
@@ -56,26 +56,21 @@ jobs:
       - name: Install BTS research dependencies
         run: pip install -r workers/market_intelligence/requirements-bts.txt
 
-      - name: Download compressed Linkwise product feed
-        run: gdown "$DRIVE_ZIP_FILE_ID" -O linkwise-products.zip
+      - name: Download accessible Linkwise product feed
+        run: gdown "$DRIVE_FILE_ID" -O linkwise-products.json
 
-      - name: Verify and extract feed archive
+      - name: Verify feed download
         run: |
-          test -s linkwise-products.zip
-          unzip -t linkwise-products.zip
-          unzip -p linkwise-products.zip > linkwise-products.json
+          test -s linkwise-products.json
           python - <<'PY'
           from pathlib import Path
-          z=Path('linkwise-products.zip')
           p=Path('linkwise-products.json')
-          print({'zip_bytes': z.stat().st_size, 'feed_bytes': p.stat().st_size})
-          if z.stat().st_size < 100_000_000:
-              raise SystemExit('Downloaded ZIP is unexpectedly small')
+          print({'feed_bytes': p.stat().st_size})
           if p.stat().st_size < 1_000_000_000:
-              raise SystemExit('Extracted feed is unexpectedly small')
+              raise SystemExit('Downloaded feed is unexpectedly small')
           PY
 
-      - name: Full-feed BTS demand and deal prefilter
+      - name: Full-feed BTS demand and deal prefilter with integrity-aware salvage
         run: python workers/market_intelligence/bts_stream_select_tolerant.py linkwise-products.json
 
       - name: BGE-M3 semantic pain matching and cluster discovery
