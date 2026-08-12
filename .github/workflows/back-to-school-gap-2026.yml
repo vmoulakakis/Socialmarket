@@ -69,7 +69,7 @@ jobs:
           PY
 
       - name: Full-feed BTS demand and deal prefilter
-        run: python workers/market_intelligence/bts_stream_select.py linkwise-products.json
+        run: python workers/market_intelligence/bts_stream_select_tolerant.py linkwise-products.json
 
       - name: BGE-M3 semantic pain matching and cluster discovery
         run: python workers/market_intelligence/bts_semantic_rank.py
