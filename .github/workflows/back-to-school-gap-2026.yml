@@ -1,0 +1,92 @@
+name: Back to School 2026 Hidden Gap Research
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'workers/market_intelligence/bts_*.py'
+      - 'workers/market_intelligence/requirements-bts.txt'
+      - 'agents/skills/back-to-school-gap/**'
+      - '.github/workflows/back-to-school-gap-2026.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: socialmarket-bts-2026-gap-research
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
+      MARKET_TIMEZONE: Europe/Athens
+      BTS_MIN_PRICE_EUR: '50'
+      BTS_MIN_VALIDITY_DAYS: '20'
+      BTS_MIN_RAW_DISCOUNT_PCT: '12'
+      BTS_GLOBAL_POOL: '14000'
+      BTS_PER_CLUSTER_POOL: '2500'
+      BTS_MAX_PREFILTER: '10000'
+      BTS_SEMANTIC_MAX_INPUT: '10000'
+      BTS_SEMANTIC_MAX_OUTPUT: '4500'
+      BTS_MIN_PAIN_SIMILARITY: '0.42'
+      BTS_AUDIT_LIMIT: '220'
+      BTS_RESEARCH_SHORTLIST: '60'
+      BTS_EMBEDDING_MODEL: BAAI/bge-m3
+      SEARXNG_BASE_URL: http://127.0.0.1:8080
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: workers/market_intelligence/requirements-bts.txt
+
+      - name: Install BTS research dependencies
+        run: pip install -r workers/market_intelligence/requirements-bts.txt
+
+      - name: Download full Linkwise product feed
+        run: gdown --id "$DRIVE_FILE_ID" -O linkwise-products.json
+
+      - name: Full-feed BTS demand and deal prefilter
+        run: python workers/market_intelligence/bts_stream_select.py linkwise-products.json
+
+      - name: BGE-M3 semantic pain matching and cluster discovery
+        run: python workers/market_intelligence/bts_semantic_rank.py
+
+      - name: Start ephemeral SearXNG for Greek market discovery
+        continue-on-error: true
+        run: |
+          docker run -d --name socialmarket-bts-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker logs socialmarket-bts-searxng || true
+          exit 1
+
+      - name: Greek high-demand low-competition market audit
+        run: python workers/market_intelligence/bts_market_audit.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bts-2026-hidden-gap-research
+          retention-days: 14
+          path: |
+            bts-feed-profile.json
+            bts-cluster-stats.json
+            bts-merchant-stats.json
+            bts-pre-candidates.jsonl
+            bts-semantic-report.json
+            bts-unsupervised-clusters.json
+            bts-semantic-candidates.jsonl
+            bts-cluster-market-evidence.json
+            bts-market-audited.jsonl
+            bts-market-audit-report.json
+            bts-research-shortlist.json
