@@ -1,0 +1,43 @@
+name: BTS Targeted Linkwise Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'workers/market_intelligence/targeted_bts_extract.py'
+      - '.github/workflows/bts-targeted-extract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: socialmarket-bts-targeted-evidence
+  cancel-in-progress: true
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
+      MARKET_TIMEZONE: Europe/Athens
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install streaming dependencies
+        run: pip install 'ijson>=3.3' 'gdown>=6.1'
+      - name: Download accessible Linkwise snapshot
+        run: gdown "$DRIVE_FILE_ID" -O linkwise-products.json
+      - name: Extract targeted BTS evidence
+        run: python workers/market_intelligence/targeted_bts_extract.py linkwise-products.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bts-targeted-linkwise-evidence
+          retention-days: 14
+          path: |
+            targeted-bts-linkwise-summary.json
+            targeted-bts-linkwise-matches.json
