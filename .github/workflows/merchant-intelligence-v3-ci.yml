@@ -2,7 +2,7 @@ name: Merchant Intelligence V4 CI
 
 on:
   push:
-    branches: [feat/merchant-audit-agent]
+    branches: [feat/merchant-audit-agent, fix/social-evidence-v4]
   pull_request:
     paths:
       - 'workers/market_intelligence/merchant_intelligence_v3.py'
@@ -10,6 +10,8 @@ on:
       - 'workers/market_intelligence/evidence_collectors.py'
       - 'workers/market_intelligence/audit_agent.py'
       - '.github/workflows/merchant-intelligence-v3.yml'
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
 
 permissions:
   contents: read
@@ -28,25 +30,29 @@ jobs:
           python -m py_compile workers/market_intelligence/merchant_intelligence_v4.py
           python -m py_compile workers/market_intelligence/evidence_collectors.py
           python -m py_compile workers/market_intelligence/audit_agent.py
-      - name: Audit agent smoke tests
+      - name: Audit entity relevance and pain gates
         run: |
           cd workers/market_intelligence
           python - <<'PY'
           from audit_agent import audit_research, pain_language
-          good = {'official_url':'https://example.gr','category':'Home','subcategory':'Storage','demand_score':75,'competition_score':35,'pain_gap_score':80}
+          good = {'merchant_name':'Example Shop','official_url':'https://example.gr','category':'Home','subcategory':'Storage','demand_score':75,'competition_score':35,'pain_gap_score':80}
           evidence=[
-            {'source_url':'https://example.gr','source_kind':'official_site','collector':'trafilatura','confidence':.95},
-            {'source_url':'https://reddit.com/a','source_kind':'social_comment','platform':'reddit','collector':'searxng_social','confidence':.65,'body':'too expensive, looking for alternative'},
-            {'source_url':'https://youtube.com/watch?v=x','source_kind':'social_public_observation','platform':'youtube','collector':'searxng_social','confidence':.65},
-            {'source_url':'https://competitor1.gr','source_kind':'demand','collector':'searxng','confidence':.65},
-            {'source_url':'https://competitor2.gr','source_kind':'alternatives','collector':'searxng','confidence':.65},
-            {'source_url':'https://reviews.gr','source_kind':'complaints','collector':'searxng','confidence':.65,'body':'πρόβλημα και ακριβό'},
+            {'source_url':'https://example.gr','source_kind':'official_site','collector':'trafilatura','confidence':.95,'body':'Example Shop storage solutions'},
+            {'source_url':'https://reddit.com/a','source_kind':'social_comment','platform':'reddit','collector':'searxng_social','confidence':.65,'body':'Example Shop is too expensive, looking for alternative'},
+            {'source_url':'https://youtube.com/watch?v=x','source_kind':'social_public_observation','platform':'youtube','collector':'searxng_social','confidence':.65,'body':'Example Shop review and storage test'},
+            {'source_url':'https://competitor1.gr','source_kind':'demand','collector':'searxng','confidence':.65,'body':'Example Shop storage demand Greece'},
+            {'source_url':'https://competitor2.gr','source_kind':'alternatives','collector':'searxng','confidence':.65,'body':'Example Shop alternative storage'},
+            {'source_url':'https://reviews.gr','source_kind':'complaints','collector':'searxng','confidence':.65,'body':'Example Shop πρόβλημα και ακριβό'},
           ]
           a=audit_research(good,evidence,'https://example.gr')
           assert a['identity_score']==100
+          assert a['entity_relevance_score']>=80
           assert a['verdict'] in {'validated','needs_review'}
-          assert pain_language(evidence)
-          bad=dict(good,official_url='https://wrong.gr',subcategory='Βοήθεια')
+          pains=pain_language(evidence,'Example Shop','https://example.gr')
+          assert pains and all('Example Shop' in p for p in pains)
+          noisy=[{'source_url':'https://news.gr/x','source_kind':'complaints','collector':'searxng','confidence':.8,'body':'Πρόστιμο μαμούθ και γενικό πρόβλημα χώρας'}]
+          assert pain_language(noisy,'Mamouth','https://mamouth.gr') == []
+          bad=dict(good,official_url='https://wrong.gr',subcategory='EXTRA ΕΚΠΤΩΣΗ 30% • ΚΟΥΠΟΝΙ HOT30')
           b=audit_research(bad,evidence,'https://example.gr')
           assert b['verdict']!='validated'
           assert b['contradictions']
@@ -59,3 +65,6 @@ jobs:
           grep -q 'trafilatura' .github/workflows/merchant-intelligence-v3.yml
           grep -q 'playwright' .github/workflows/merchant-intelligence-v3.yml
           grep -q 'yt-dlp' .github/workflows/merchant-intelligence-v3.yml
+          test -f supabase/functions/generic-embedding-worker/index.ts
+          test -f supabase/functions/semantic-pain-search/index.ts
+          test -f supabase/functions/merchant-research-gateway/index.ts
