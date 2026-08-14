@@ -19,7 +19,9 @@ def _clamp(v: float, low: float = 0, high: float = 100) -> float:
 
 
 def _tokens(text: str | None) -> list[str]:
-    stop = {"shop", "store", "official", "the", "and", "gr", "com", "online", "greece"}
+    # Keep brand-bearing words such as Shop/Store when they are part of a multi-word
+    # merchant identity (e.g. Abito Shop, The Body Shop). Only remove structural/TLD words.
+    stop = {"official", "the", "and", "gr", "com", "online", "greece"}
     return [x for x in re.findall(r"[\wΑ-Ωα-ωάέήίόύώϊϋΐΰ]+", (text or "").lower()) if len(x) >= 3 and x not in stop]
 
 
