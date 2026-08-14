@@ -89,7 +89,7 @@ jobs:
 
   vectorize:
     needs: [start-refresh, research]
-    if: always() && needs.start-refresh.outputs.queued_merchants != '0' && needs.research.result != 'cancelled'
+    if: always() && needs.start-refresh.outputs.queued_merchants != '0' && needs.research.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
