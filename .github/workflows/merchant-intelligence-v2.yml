@@ -1,0 +1,135 @@
+name: Merchant Intelligence V2
+
+on:
+  workflow_dispatch:
+    inputs:
+      merchant_id:
+        description: "Optional merchant UUID; leave blank for all merchants"
+        required: false
+        default: ""
+      enable_ai_audit:
+        description: "Allow optional DeepSeek narrative evidence audit"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: "23 2 * * 1"
+  push:
+    branches:
+      - feat/socialmarket-v2-merchant-intelligence
+    paths:
+      - .github/workflows/merchant-intelligence-v2.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: merchant-intelligence-v2
+  cancel-in-progress: false
+
+jobs:
+  start-refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run_id: ${{ steps.start.outputs.run_id }}
+      queued_merchants: ${{ steps.start.outputs.queued_merchants }}
+    env:
+      MERCHANT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-intelligence-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests==2.32.5
+      - id: start
+        working-directory: workers/v2_merchant_intelligence
+        env:
+          REFRESH_REASON: ${{ github.event_name == 'schedule' && 'weekly_refresh' || github.event_name == 'push' && 'initial_v2_refresh' || 'manual_refresh' }}
+        run: python start_refresh.py --merchant-id "${{ github.event.inputs.merchant_id || '' }}"
+
+  research:
+    needs: start-refresh
+    if: needs.start-refresh.outputs.queued_merchants != '0'
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      WORKER_SLOT: ${{ matrix.slot }}
+      MERCHANT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-intelligence-gateway
+      SEARXNG_BASE_URL: http://127.0.0.1:8080
+      ENABLE_DEEPSEEK_AUDIT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_ai_audit == 'true' && '1' || '0' }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install research dependencies
+        working-directory: workers/v2_merchant_intelligence
+        run: pip install -r requirements.txt
+      - name: Start ephemeral SearXNG
+        working-directory: workers/v2_merchant_intelligence
+        run: |
+          docker run -d --name socialmarket-v2-searxng -p 8080:8080 -v "$PWD/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+          for i in $(seq 1 40); do
+            if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker logs socialmarket-v2-searxng || true
+          exit 1
+      - name: Deep research merchants
+        working-directory: workers/v2_merchant_intelligence
+        run: python research.py --max-jobs 90 --batch-size 3
+
+  vectorize:
+    needs: [start-refresh, research]
+    if: always() && needs.start-refresh.outputs.queued_merchants != '0' && needs.research.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      MERCHANT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-intelligence-gateway
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      MERCHANT_EMBEDDING_MODEL: BAAI/bge-m3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-bge-m3-${{ runner.os }}-v1
+      - name: Install vector dependencies
+        run: pip install requests==2.32.5 sentence-transformers==5.1.0
+      - name: Generate real semantic embeddings
+        working-directory: workers/v2_merchant_intelligence
+        run: python vectorize.py --max-jobs 400 --batch-size 32
+
+  finalize:
+    needs: [start-refresh, research, vectorize]
+    if: always() && needs.start-refresh.outputs.run_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MERCHANT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-intelligence-gateway
+      RUN_ID: ${{ needs.start-refresh.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests==2.32.5
+      - name: Finalize run status
+        working-directory: workers/v2_merchant_intelligence
+        run: |
+          python - <<'PY'
+          import json, os
+          from gateway import call
+          print(json.dumps({"run_id": os.environ["RUN_ID"], "status": call("refresh_run_status", p_run_id=os.environ["RUN_ID"])}))
+          PY
