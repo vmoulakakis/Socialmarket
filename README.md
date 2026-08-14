@@ -1,21 +1,52 @@
 # SocialMarket AI — Greek Hidden Opportunity Engine
 
-Agentic market-intelligence system for Greece. Phase 1: market research, taxonomy, demand–competition gap, statistical forecasting, HIGO scoring, evidence audit and private-admin workflow.
+Agentic market-intelligence and content-decision system for Greece.
 
-## Business gates
-- Price >= EUR 150 before AI scoring
-- Active/in-stock offer
+## Ownership boundary
+
+SocialMarket AI is the **brain and source of truth**. It owns merchant/category/product intelligence, evidence, AI audit, pain-gap discovery, semantic search, opportunity ranking, content generation, approval and canonical publishing intent.
+
+SocialMarket stops at:
+
+```text
+Approved Publishing Intent → publish.outbox
+```
+
+The separate `vmoulakakis/socialscheduler` repository is the **execution plane**. It reads the same Supabase database, claims approved outbox jobs, sends them through Buffer, reconciles provider state and writes execution status back. It must not duplicate products, merchants, content or campaign intelligence.
+
+See `docs/decisions/ADR-006-socialmarket-socialscheduler-boundary.md`.
+
+## Shared database
+
+Production Supabase project:
+
+```text
+rpfadpdnnxequgvdcfoq
+```
+
+Silent fallback to older Supabase projects is forbidden.
+
+## Core business gates
+
+- Active/eligible offer
 - Valid tracking URL and usable product image
-- High demand + low attention/commercial saturation
-- Purchase-friction gate, relaxed only by verified strong discount
-- Opportunity score and confidence are separate
+- High Greek demand + meaningful pain
+- Low or defensible competition
+- Merchant trust/risk gate
+- Opportunity score and confidence remain separate
+- Only audited evidence is eligible for validated semantic search
 
 ## Stack
+
 - Next.js / Vercel admin
 - Supabase Postgres + pgvector + Auth + Storage
-- DeepSeek primary, OpenRouter free failover
+- SearXNG + Trafilatura + Playwright/yt-dlp fallbacks
 - GitHub Actions market-intelligence workers
-- StatsForecast numeric forecasting
+- Supabase-native semantic embeddings
 - Skill-driven agent roles under `agents/skills/`
+
+## Publishing rule
+
+This repository must not contain Buffer execution credentials, provider account-connection UI, independent publishing queues, publishing retries or provider reconciliation logic. Those belong to SocialScheduler.
 
 No secret belongs in GitHub.
