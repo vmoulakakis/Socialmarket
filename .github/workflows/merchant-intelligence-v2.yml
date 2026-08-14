@@ -46,7 +46,7 @@ jobs:
       - id: start
         working-directory: workers/v2_merchant_intelligence
         env:
-          REFRESH_REASON: ${{ github.event_name == 'schedule' && 'weekly_refresh' || github.event_name == 'push' && 'initial_v2_refresh' || 'manual_refresh' }}
+          REFRESH_REASON: ${{ github.event_name == 'schedule' && 'weekly_refresh' || github.event_name == 'push' && 'evidence_search_v3_resume' || 'manual_refresh' }}
         run: python start_refresh.py --merchant-id "${{ github.event.inputs.merchant_id || '' }}"
 
   research:
@@ -83,9 +83,9 @@ jobs:
           done
           docker logs socialmarket-v2-searxng || true
           exit 1
-      - name: Deep research merchants
+      - name: Deep research merchants with evidence-required search
         working-directory: workers/v2_merchant_intelligence
-        run: python research.py --max-jobs 90 --batch-size 3
+        run: python research_v3.py --max-jobs 90 --batch-size 3
 
   vectorize:
     needs: [start-refresh, research]
