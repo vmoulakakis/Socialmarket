@@ -1,0 +1,12 @@
+export const dynamic='force-dynamic';
+const base=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://prrehmcvpyhupvlhtbzg.supabase.co';
+const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+export async function GET(req){
+  if(!key)return new Response('Links unavailable',{status:503});
+  const q=new URL(`${base}/rest/v1/affiliate_redirects`);q.searchParams.set('platform','eq.tiktok');q.searchParams.set('active','eq.true');q.searchParams.set('select','slug,label,merchant_name,price,image_url,created_at');q.searchParams.set('order','created_at.desc');q.searchParams.set('limit','24');
+  const r=await fetch(q,{headers:{apikey:key,Authorization:`Bearer ${key}`},cache:'no-store'});const rows=r.ok?await r.json():[];const origin=new URL(req.url).origin;
+  const cards=(rows||[]).map(x=>`<a class="card" href="${origin}/go/${encodeURIComponent(x.slug)}">${x.image_url?`<img src="${esc(x.image_url)}" alt="${esc(x.label)}">`:''}<div><b>${esc(x.label)}</b><small>${esc(x.merchant_name||'')}</small>${x.price!=null?`<strong>€${Number(x.price).toFixed(2)}</strong>`:''}<span>Δες την προσφορά →</span></div></a>`).join('');
+  return new Response(`<!doctype html><html lang="el"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Προϊόντα από το TikTok</title><style>*{box-sizing:border-box}body{margin:0;background:#071018;color:#fff;font-family:Arial,sans-serif}.wrap{max-width:760px;margin:auto;padding:32px 18px 60px}h1{font-size:clamp(30px,8vw,56px);margin:0 0 8px}.sub{color:#9fb0bf;margin-bottom:24px}.grid{display:grid;gap:12px}.card{display:grid;grid-template-columns:110px 1fr;gap:14px;text-decoration:none;color:inherit;background:#101b25;border:1px solid #263746;border-radius:18px;padding:12px}img{width:110px;height:110px;object-fit:contain;background:#fff;border-radius:13px}.card div{display:grid;gap:6px;align-content:center}.card small{color:#9fb0bf}.card strong{font-size:22px}.card span{color:#68e6b0;font-weight:700}</style></head><body><main class="wrap"><h1>Τα προϊόντα που είδες 👀</h1><p class="sub">Επίλεξε το προϊόν από το TikTok. Οι σύνδεσμοι μπορεί να είναι affiliate.</p><div class="grid">${cards||'<p>Δεν υπάρχουν ενεργές προτάσεις αυτή τη στιγμή.</p>'}</div></main></body></html>`,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'public, max-age=120'}});
+}
