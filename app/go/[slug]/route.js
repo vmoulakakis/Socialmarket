@@ -1,8 +1,7 @@
 import {createHash} from 'node:crypto';
+import {supabaseUrl as base,supabasePublishableKey as key} from '@/lib/supabase-config';
 
 export const dynamic='force-dynamic';
-const base=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://prrehmcvpyhupvlhtbzg.supabase.co';
-const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'';
 const hdr=(extra={})=>({apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json',...extra});
 
 export async function GET(req,{params}){
