@@ -12,11 +12,10 @@ import requests
 
 try:
     import trafilatura
-except Exception:  # optional at import time
+except Exception:
     trafilatura = None
 
-
-UA = {"User-Agent": "Mozilla/5.0 SocialMarketEvidenceBot/1.0"}
+UA = {"User-Agent": "Mozilla/5.0 SocialMarketEvidenceBot/1.1"}
 SOCIAL_DOMAINS = {
     "instagram": "instagram.com",
     "facebook": "facebook.com",
@@ -24,7 +23,6 @@ SOCIAL_DOMAINS = {
     "youtube": "youtube.com",
     "reddit": "reddit.com",
 }
-
 
 @dataclass
 class EvidenceRecord:
@@ -67,16 +65,28 @@ def searx_search(base_url: str, query: str, limit: int = 10) -> list[dict[str, s
             timeout=25,
         )
         r.raise_for_status()
-        rows = []
-        for x in (r.json().get("results") or [])[:limit]:
-            rows.append({
-                "url": x.get("url", ""),
-                "title": x.get("title", ""),
-                "snippet": x.get("content") or x.get("snippet") or "",
-            })
-        return rows
+        return [{
+            "url": x.get("url", ""),
+            "title": x.get("title", ""),
+            "snippet": x.get("content") or x.get("snippet") or "",
+        } for x in (r.json().get("results") or [])[:limit]]
     except Exception:
         return []
+
+
+def render_public_page(url: str) -> str | None:
+    """JS-rendered public-page fallback. Never logs in or bypasses access controls."""
+    try:
+        code = (
+            "from playwright.sync_api import sync_playwright;import sys;"
+            "p=sync_playwright().start();b=p.chromium.launch(headless=True);"
+            "page=b.new_page();page.goto(sys.argv[1],wait_until='domcontentloaded',timeout=30000);"
+            "print(page.locator('body').inner_text()[:120000]);b.close();p.stop()"
+        )
+        p = subprocess.run(["python", "-c", code, url], capture_output=True, text=True, timeout=45)
+        return p.stdout[:120000] if p.returncode == 0 and p.stdout else None
+    except Exception:
+        return None
 
 
 def collect_site(url: str | None) -> list[EvidenceRecord]:
@@ -89,26 +99,26 @@ def collect_site(url: str | None) -> list[EvidenceRecord]:
         text = ""
         if trafilatura is not None:
             text = trafilatura.extract(
-                r.text,
-                include_comments=True,
-                include_links=True,
-                include_tables=True,
-                favor_precision=True,
+                r.text, include_comments=True, include_links=True,
+                include_tables=True, favor_precision=True,
             ) or ""
+        collector = "trafilatura"
+        if len(text.strip()) < 250:
+            rendered = render_public_page(r.url)
+            if rendered:
+                text = rendered
+                collector = "playwright"
         if not text:
             text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", r.text))
+            collector = "requests_html_fallback"
         title = None
         m = re.search(r"<title[^>]*>(.*?)</title>", r.text, re.I | re.S)
         if m:
             title = re.sub(r"\s+", " ", m.group(1)).strip()[:500]
         return [EvidenceRecord(
-            source_kind="official_site",
-            source_url=r.url,
-            title=title,
-            body=text[:120000],
+            source_kind="official_site", source_url=r.url, title=title, body=text[:120000],
             metadata={"domain": _host(r.url), "status": r.status_code},
-            confidence=0.95,
-            collector="trafilatura" if trafilatura is not None else "requests_html_fallback",
+            confidence=0.95, collector=collector,
         )]
     except Exception:
         return []
@@ -122,38 +132,54 @@ def collect_search_evidence(name: str, searx_url: str) -> list[EvidenceRecord]:
         ("demand", f'"{name}" αγορά Ελλάδα'),
     ]
     out: list[EvidenceRecord] = []
+    seen = set()
     for kind, q in queries:
-        for row in searx_search(searx_url, q, 10):
+        for row in searx_search(searx_url, q, 12):
+            key = (kind, row["url"], row["snippet"][:120])
+            if key in seen:
+                continue
+            seen.add(key)
             out.append(EvidenceRecord(
-                source_kind=kind,
-                source_url=row["url"],
-                title=row["title"],
-                body=row["snippet"],
-                confidence=0.65,
-                collector="searxng",
+                source_kind=kind, source_url=row["url"], title=row["title"], body=row["snippet"],
+                confidence=0.65, collector="searxng",
             ))
     return out
 
 
 def collect_social_evidence(name: str, searx_url: str) -> list[EvidenceRecord]:
+    """No-key social discovery through search-visible public pages.
+
+    Mention queries and pain queries are separate so a platform with sparse indexing
+    does not disappear just because every pain term is not present in one result.
+    """
     out: list[EvidenceRecord] = []
-    pain_terms = "παράπονα πρόβλημα review experience alternative αξίζει"
+    seen = set()
     for platform, domain in SOCIAL_DOMAINS.items():
-        for row in searx_search(searx_url, f'site:{domain} "{name}" {pain_terms}', 12):
-            out.append(EvidenceRecord(
-                source_kind="social_public_observation",
-                platform=platform,
-                source_url=row["url"],
-                title=row["title"],
-                body=row["snippet"],
-                confidence=0.55 if platform in {"instagram", "facebook", "tiktok"} else 0.65,
-                collector="searxng_social",
-            ))
+        queries = [
+            f'site:{domain} "{name}"',
+            f'site:{domain} "{name}" review OR reviews OR αξιολόγηση OR κριτική',
+            f'site:{domain} "{name}" πρόβλημα OR παράπονο OR expensive OR alternative',
+        ]
+        for query_type, q in enumerate(queries):
+            for row in searx_search(searx_url, q, 10):
+                key = (platform, row["url"], row["snippet"][:120])
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(EvidenceRecord(
+                    source_kind="social_public_observation",
+                    platform=platform,
+                    source_url=row["url"],
+                    title=row["title"],
+                    body=row["snippet"],
+                    metadata={"query_type": ["mention", "review", "pain"][query_type]},
+                    confidence=0.5 if platform in {"instagram", "facebook", "tiktok"} else 0.65,
+                    collector="searxng_social",
+                ))
     return out
 
 
 def collect_youtube_public(url: str) -> list[EvidenceRecord]:
-    """Best-effort no-key YouTube metadata/comments via yt-dlp. Never fails the pipeline."""
     try:
         cmd = [
             "yt-dlp", "--skip-download", "--dump-single-json", "--no-warnings",
@@ -164,50 +190,35 @@ def collect_youtube_public(url: str) -> list[EvidenceRecord]:
             return []
         data = json.loads(p.stdout)
         rows = [EvidenceRecord(
-            source_kind="social_video",
-            platform="youtube",
-            source_url=data.get("webpage_url") or url,
-            title=data.get("title"),
-            body=data.get("description"),
-            metrics={
-                "view_count": data.get("view_count"),
-                "like_count": data.get("like_count"),
-                "comment_count": data.get("comment_count"),
-            },
-            confidence=0.8,
-            collector="yt-dlp",
+            source_kind="social_video", platform="youtube",
+            source_url=data.get("webpage_url") or url, title=data.get("title"), body=data.get("description"),
+            metrics={"view_count": data.get("view_count"), "like_count": data.get("like_count"), "comment_count": data.get("comment_count")},
+            confidence=0.8, collector="yt-dlp",
         )]
         for c in (data.get("comments") or [])[:50]:
             rows.append(EvidenceRecord(
-                source_kind="social_comment",
-                platform="youtube",
-                source_url=data.get("webpage_url") or url,
-                body=c.get("text"),
-                metrics={"like_count": c.get("like_count")},
-                metadata={"author": c.get("author")},
-                confidence=0.75,
-                collector="yt-dlp",
+                source_kind="social_comment", platform="youtube",
+                source_url=data.get("webpage_url") or url, body=c.get("text"),
+                metrics={"like_count": c.get("like_count")}, metadata={"author": c.get("author")},
+                confidence=0.75, collector="yt-dlp",
             ))
         return rows
     except Exception:
         return []
 
 
-def render_public_page(url: str) -> str | None:
-    """Playwright fallback for JS-rendered public pages. No login/cookie bypass."""
+def collect_gallery_public(url: str) -> list[EvidenceRecord]:
+    """Optional public metadata fallback for supported social/media URLs."""
     try:
-        code = (
-            "from playwright.sync_api import sync_playwright;"
-            "import sys;"
-            "p=sync_playwright().start();"
-            "b=p.chromium.launch(headless=True);"
-            "page=b.new_page();page.goto(sys.argv[1],wait_until='domcontentloaded',timeout=30000);"
-            "print(page.locator('body').inner_text()[:120000]);b.close();p.stop()"
-        )
-        p = subprocess.run(["python", "-c", code, url], capture_output=True, text=True, timeout=45)
-        return p.stdout[:120000] if p.returncode == 0 and p.stdout else None
+        p = subprocess.run(["gallery-dl", "--dump-json", url], capture_output=True, text=True, timeout=60, check=False)
+        if p.returncode != 0 or not p.stdout.strip():
+            return []
+        return [EvidenceRecord(
+            source_kind="social_media_metadata", source_url=url, body=p.stdout[:10000],
+            confidence=0.45, collector="gallery-dl",
+        )]
     except Exception:
-        return None
+        return []
 
 
 def collect_entity_evidence(name: str, official_url: str | None, searx_url: str) -> list[dict[str, Any]]:
@@ -215,11 +226,17 @@ def collect_entity_evidence(name: str, official_url: str | None, searx_url: str)
     records.extend(collect_site(official_url))
     records.extend(collect_search_evidence(name, searx_url))
     records.extend(collect_social_evidence(name, searx_url))
-    # Enrich discovered YouTube URLs without API keys.
+
     youtube_urls = []
     for r in records:
         if r.platform == "youtube" and r.source_url and ("watch?v=" in r.source_url or "youtu.be/" in r.source_url):
             youtube_urls.append(r.source_url)
-    for url in list(dict.fromkeys(youtube_urls))[:3]:
+    for url in list(dict.fromkeys(youtube_urls))[:2]:
         records.extend(collect_youtube_public(url))
+
+    # Media collectors are intentionally capped: they are enrichment, not the source of truth.
+    social_urls = [r.source_url for r in records if r.platform in {"instagram", "tiktok"} and r.source_url]
+    for url in list(dict.fromkeys(social_urls))[:2]:
+        records.extend(collect_gallery_public(url))
+
     return [r.to_dict() for r in records]
