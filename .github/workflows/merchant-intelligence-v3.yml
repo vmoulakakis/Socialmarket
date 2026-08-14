@@ -1,0 +1,50 @@
+name: Merchant Intelligence V3
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 0 * * *'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: merchant-intelligence-v3
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: workers/market_intelligence
+    env:
+      MERCHANT_RESEARCH_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-research-gateway
+      SEARXNG_BASE_URL: http://127.0.0.1:8080
+      MERCHANT_RESEARCH_LIMIT: '350'
+      MERCHANT_RESEARCH_WORKERS: '6'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install worker dependencies
+        run: pip install requests beautifulsoup4
+      - name: Start ephemeral SearXNG
+        run: |
+          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+          for i in $(seq 1 40); do
+            if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker logs socialmarket-searxng || true
+          exit 1
+      - name: Deep research all queued merchants
+        run: python merchant_intelligence_v3.py | tee merchant-intelligence-v3-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: merchant-intelligence-v3-output
+          path: workers/market_intelligence/merchant-intelligence-v3-output.json

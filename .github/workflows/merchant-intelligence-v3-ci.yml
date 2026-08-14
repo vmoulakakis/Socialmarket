@@ -1,0 +1,28 @@
+name: Merchant Intelligence V3 CI
+
+on:
+  push:
+    branches: [feat/merchant-intelligence-v3]
+  pull_request:
+    paths:
+      - 'workers/market_intelligence/merchant_intelligence_v3.py'
+      - '.github/workflows/merchant-intelligence-v3.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile worker
+        run: python -m py_compile workers/market_intelligence/merchant_intelligence_v3.py
+      - name: Validate required workflow fields
+        run: |
+          grep -q 'id-token: write' .github/workflows/merchant-intelligence-v3.yml
+          grep -q 'socialmarket-searxng' .github/workflows/merchant-intelligence-v3.yml
+          grep -q 'merchant_intelligence_v3.py' .github/workflows/merchant-intelligence-v3.yml
