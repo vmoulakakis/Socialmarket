@@ -1,6 +1,6 @@
+import {supabaseUrl as base,supabasePublishableKey as key} from '@/lib/supabase-config';
+
 export const dynamic='force-dynamic';
-const base=process.env.NEXT_PUBLIC_SUPABASE_URL||'https://prrehmcvpyhupvlhtbzg.supabase.co';
-const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||'';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 export async function GET(req){
