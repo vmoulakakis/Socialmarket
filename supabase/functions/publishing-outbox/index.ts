@@ -68,6 +68,10 @@ async function importLegacyCampaigns(campaigns: any[]) {
       warnings.push(`Skipped ${sourceKey || "unknown"}: unmapped brand ${brandName || "unknown"}`);
       continue;
     }
+    if (campaign?.requires_verification === true) {
+      warnings.push(`Held ${sourceKey}: fresh verification is required before SocialMarket approval`);
+      continue;
+    }
 
     const { data: brand, error: brandError } = await supabase
       .from("brand_sites").select("id,slug,name").eq("slug", brandSlug).single();
@@ -82,7 +86,6 @@ async function importLegacyCampaigns(campaigns: any[]) {
       idea_id: campaign?.idea_id ?? null,
       idea_title: campaign?.idea_title ?? null,
       alt_text: campaign?.alt_text ?? null,
-      requires_verification: Boolean(campaign?.requires_verification),
       imported_at: new Date().toISOString(),
     };
 
@@ -129,7 +132,6 @@ async function importLegacyCampaigns(campaigns: any[]) {
         status: "approved",
         executor_metadata: {
           source: "socialscheduler_legacy_backlog",
-          requires_verification: Boolean(campaign?.requires_verification),
           legacy_idea_id: campaign?.idea_id ?? null,
         },
         updated_at: new Date().toISOString(),
@@ -155,6 +157,27 @@ Deno.serve(async (req) => {
       const { count, error } = await supabase.from("publishing_outbox").select("id", { count: "exact", head: true });
       if (error) throw error;
       return json({ ok: true, repository: claims.repository, outbox_jobs: count ?? 0 });
+    }
+
+    if (action === "peek") {
+      const limit = Math.max(1, Math.min(Number(body?.limit ?? 10), 50));
+      const { data, error } = await supabase
+        .from("publishing_outbox")
+        .select("id,content_item_id,platform,caption,hashtags,format,media_url,tracking_url,scheduled_for,priority,content_items(title,brand_sites(slug,name))")
+        .eq("status", "approved")
+        .not("scheduled_for", "is", null)
+        .order("scheduled_for", { ascending: true })
+        .order("priority", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      const jobs = (data ?? []).map((row: any) => ({
+        ...row,
+        title: row.content_items?.title ?? null,
+        brand_slug: row.content_items?.brand_sites?.slug ?? null,
+        brand_name: row.content_items?.brand_sites?.name ?? null,
+        content_items: undefined,
+      }));
+      return json({ ok: true, jobs });
     }
 
     if (action === "claim") {
