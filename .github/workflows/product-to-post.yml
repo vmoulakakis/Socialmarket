@@ -6,7 +6,12 @@ on:
       - 'workers/product_to_post/**'
       - 'agents/skills/**'
       - 'app/product-to-post/**'
+      - 'app/monitor/**'
+      - 'app/go/**'
+      - 'app/links/**'
       - 'supabase/migrations/*product_to_post*'
+      - 'supabase/migrations/*autonomous_social*'
+      - 'supabase/functions/buffer-sync/**'
       - '.github/workflows/product-to-post.yml'
   workflow_dispatch:
     inputs:
@@ -33,26 +38,38 @@ jobs:
       - run: pip install -r workers/product_to_post/requirements.txt
       - run: python -m compileall -q workers/product_to_post workers/agentic_intelligence/model_router.py
 
-  run:
+  autonomous-run:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GITHUB_TOKEN: ${{ github.token }}
+      POSTIZ_API_URL: ${{ secrets.POSTIZ_API_URL }}
+      POSTIZ_API_KEY: ${{ secrets.POSTIZ_API_KEY }}
+      PUBLISHER_MODE: hybrid
+      P2P_MIN_PRICE_EUR: '100'
+      P2P_MIN_HIGO: '70'
+      P2P_MIN_CONFIDENCE: '0.55'
+      P2P_WORKER_ID: github-actions
+      PUBLISH_WORKER_ID: github-actions-publisher
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install -r workers/product_to_post/requirements.txt
-      - name: Process queued Product-to-Post runs
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
-          P2P_WORKER_ID: github-actions
-          P2P_MAX_RUNS: '2'
+      - name: Ensure forward 30-day content coverage
+        run: python -m workers.product_to_post.autonomous
+      - name: Build product-to-post campaigns
         run: |
           if [ -n "${{ inputs.run_id }}" ]; then
             python -m workers.product_to_post.run --run-id "${{ inputs.run_id }}"
           else
             python -m workers.product_to_post.run --limit 2
           fi
+      - name: Auto-QA and create publish jobs
+        run: python -m workers.product_to_post.autopublish
+      - name: Schedule through Postiz or Buffer
+        run: python -m workers.product_to_post.publisher_worker
