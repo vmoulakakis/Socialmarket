@@ -12,6 +12,14 @@ on:
         type: boolean
         required: false
         default: false
+      validation_mode:
+        description: "Canary or full portfolio research"
+        required: true
+        default: "full"
+        type: choice
+        options:
+          - canary
+          - full
   schedule:
     - cron: "23 2 * * 1"
   push:
@@ -19,6 +27,7 @@ on:
       - feat/socialmarket-v2-merchant-intelligence
     paths:
       - .github/workflows/merchant-intelligence-v2.yml
+      - workers/v2_merchant_intelligence/**
 
 permissions:
   contents: read
@@ -46,7 +55,7 @@ jobs:
       - id: start
         working-directory: workers/v2_merchant_intelligence
         env:
-          REFRESH_REASON: ${{ github.event_name == 'schedule' && 'weekly_refresh' || github.event_name == 'push' && 'evidence_search_v3_resume' || 'manual_refresh' }}
+          REFRESH_REASON: ${{ github.event_name == 'schedule' && 'weekly_refresh' || github.event_name == 'push' && 'weighted_classifier_canary_v4' || 'manual_refresh' }}
         run: python start_refresh.py --merchant-id "${{ github.event.inputs.merchant_id || '' }}"
 
   research:
@@ -65,6 +74,7 @@ jobs:
       ENABLE_DEEPSEEK_AUDIT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_ai_audit == 'true' && '1' || '0' }}
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      MERCHANT_MAX_JOBS: ${{ github.event_name == 'push' && '3' || github.event_name == 'workflow_dispatch' && github.event.inputs.validation_mode == 'canary' && '3' || '90' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -83,9 +93,9 @@ jobs:
           done
           docker logs socialmarket-v2-searxng || true
           exit 1
-      - name: Deep research merchants with evidence-required search
+      - name: Deep research merchants with evidence-required weighted classifier
         working-directory: workers/v2_merchant_intelligence
-        run: python research_v3.py --max-jobs 90 --batch-size 3
+        run: python research_v3.py --max-jobs "$MERCHANT_MAX_JOBS" --batch-size 3
 
   vectorize:
     needs: [start-refresh, research]
