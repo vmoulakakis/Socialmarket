@@ -1,0 +1,56 @@
+name: Generic Evidence Intelligence
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 1 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'workers/market_intelligence/generic_entity_intelligence.py'
+      - 'workers/market_intelligence/evidence_collectors.py'
+      - '.github/workflows/generic-evidence-intelligence.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: generic-evidence-intelligence
+  cancel-in-progress: false
+
+jobs:
+  pain-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: workers/market_intelligence
+    env:
+      GENERIC_EVIDENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/evidence-gateway
+      SEARXNG_BASE_URL: http://127.0.0.1:8080
+      GENERIC_EVIDENCE_LIMIT: '300'
+      GENERIC_EVIDENCE_WORKERS: '5'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install requests trafilatura
+      - name: Start ephemeral SearXNG
+        run: |
+          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+          for i in $(seq 1 40); do
+            if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker logs socialmarket-searxng || true
+          exit 1
+      - name: Discover category and subcategory pain gaps
+        run: python generic_entity_intelligence.py | tee generic-evidence-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: generic-evidence-output
+          path: workers/market_intelligence/generic-evidence-output.json
