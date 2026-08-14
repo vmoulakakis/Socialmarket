@@ -1,0 +1,58 @@
+name: Product-to-Post Engine
+
+on:
+  pull_request:
+    paths:
+      - 'workers/product_to_post/**'
+      - 'agents/skills/**'
+      - 'app/product-to-post/**'
+      - 'supabase/migrations/*product_to_post*'
+      - '.github/workflows/product-to-post.yml'
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Optional Product-to-Post run UUID
+        required: false
+        type: string
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r workers/product_to_post/requirements.txt
+      - run: python -m compileall -q workers/product_to_post workers/agentic_intelligence/model_router.py
+
+  run:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r workers/product_to_post/requirements.txt
+      - name: Process queued Product-to-Post runs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          P2P_WORKER_ID: github-actions
+          P2P_MAX_RUNS: '2'
+        run: |
+          if [ -n "${{ inputs.run_id }}" ]; then
+            python -m workers.product_to_post.run --run-id "${{ inputs.run_id }}"
+          else
+            python -m workers.product_to_post.run --limit 2
+          fi
