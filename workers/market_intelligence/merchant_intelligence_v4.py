@@ -20,9 +20,12 @@ def process(job: dict) -> dict:
         authoritative_url = job.get("official_url") or base.get("official_url")
         evidence = collect_entity_evidence(job["canonical_name"], authoritative_url, SEARXNG)
         audit = audit_research(base, evidence, authoritative_url=job.get("official_url"))
-        pains = pain_language(evidence)
+        pains = pain_language(
+            evidence,
+            entity_name=job.get("canonical_name"),
+            authoritative_url=job.get("official_url"),
+        )
 
-        # Keep the V3 gateway contract but enrich the evidence and semantic payload.
         base["evidence"] = (base.get("evidence") or []) + evidence[:120]
         base["evidence_count"] = len(base["evidence"])
         base.setdefault("metadata", {})
@@ -30,13 +33,13 @@ def process(job: dict) -> dict:
             "worker": "merchant_intelligence_v4",
             "audit": audit,
             "pain_language": pains,
-            "collector_stack": ["searxng", "trafilatura", "yt-dlp", "playwright-fallback"],
+            "collector_stack": ["searxng", "trafilatura", "scrapy-ready", "yt-dlp", "gallery-dl", "playwright-fallback"],
             "authoritative_url_used": bool(job.get("official_url")),
+            "pain_relevance_gate": "entity_bound_v2",
         })
         if pains:
-            base["semantic_text"] = (base.get("semantic_text") or "") + " | pains: " + " | ".join(pains[:12])
+            base["semantic_text"] = (base.get("semantic_text") or "") + " | validated pain candidates: " + " | ".join(pains[:12])
 
-        # Audit gates: suspicious results stay available as evidence but are not high-confidence facts.
         if audit["verdict"] == "rejected":
             base["confidence"] = min(float(base.get("confidence") or 0), 0.35)
             base["risk_flag"] = True
@@ -50,9 +53,10 @@ def process(job: dict) -> dict:
             "merchant": job["canonical_name"],
             "audit": audit["verdict"],
             "audit_score": audit["overall_score"],
+            "entity_relevance": audit.get("entity_relevance_score"),
             "evidence": len(evidence),
             "pain_candidates": len(pains),
-            "url": base.get("official_url"),
+            "url": authoritative_url,
         }
     except Exception as exc:
         try:
@@ -67,7 +71,7 @@ def main() -> None:
     summary = {"validated": 0, "needs_review": 0, "rejected": 0, "failed": 0}
     while done < MAX:
         batch = min(30, MAX - done)
-        jobs = gateway("claim", limit=batch, worker="github-evidence-audit-v4").get("jobs") or []
+        jobs = gateway("claim", limit=batch, worker="github-evidence-audit-v4.1").get("jobs") or []
         if not jobs:
             break
         with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
