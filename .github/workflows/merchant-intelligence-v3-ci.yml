@@ -1,11 +1,14 @@
-name: Merchant Intelligence V3 CI
+name: Merchant Intelligence V4 CI
 
 on:
   push:
-    branches: [feat/merchant-intelligence-v3]
+    branches: [feat/merchant-audit-agent]
   pull_request:
     paths:
       - 'workers/market_intelligence/merchant_intelligence_v3.py'
+      - 'workers/market_intelligence/merchant_intelligence_v4.py'
+      - 'workers/market_intelligence/evidence_collectors.py'
+      - 'workers/market_intelligence/audit_agent.py'
       - '.github/workflows/merchant-intelligence-v3.yml'
 
 permissions:
@@ -19,10 +22,40 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile worker
-        run: python -m py_compile workers/market_intelligence/merchant_intelligence_v3.py
-      - name: Validate required workflow fields
+      - name: Compile workers
+        run: |
+          python -m py_compile workers/market_intelligence/merchant_intelligence_v3.py
+          python -m py_compile workers/market_intelligence/merchant_intelligence_v4.py
+          python -m py_compile workers/market_intelligence/evidence_collectors.py
+          python -m py_compile workers/market_intelligence/audit_agent.py
+      - name: Audit agent smoke tests
+        run: |
+          cd workers/market_intelligence
+          python - <<'PY'
+          from audit_agent import audit_research, pain_language
+          good = {'official_url':'https://example.gr','category':'Home','subcategory':'Storage','demand_score':75,'competition_score':35,'pain_gap_score':80}
+          evidence=[
+            {'source_url':'https://example.gr','source_kind':'official_site','collector':'trafilatura','confidence':.95},
+            {'source_url':'https://reddit.com/a','source_kind':'social_comment','platform':'reddit','collector':'searxng_social','confidence':.65,'body':'too expensive, looking for alternative'},
+            {'source_url':'https://youtube.com/watch?v=x','source_kind':'social_public_observation','platform':'youtube','collector':'searxng_social','confidence':.65},
+            {'source_url':'https://competitor1.gr','source_kind':'demand','collector':'searxng','confidence':.65},
+            {'source_url':'https://competitor2.gr','source_kind':'alternatives','collector':'searxng','confidence':.65},
+            {'source_url':'https://reviews.gr','source_kind':'complaints','collector':'searxng','confidence':.65,'body':'πρόβλημα και ακριβό'},
+          ]
+          a=audit_research(good,evidence,'https://example.gr')
+          assert a['identity_score']==100
+          assert a['verdict'] in {'validated','needs_review'}
+          assert pain_language(evidence)
+          bad=dict(good,official_url='https://wrong.gr',subcategory='Βοήθεια')
+          b=audit_research(bad,evidence,'https://example.gr')
+          assert b['verdict']!='validated'
+          assert b['contradictions']
+          PY
+      - name: Validate workflow stack
         run: |
           grep -q 'id-token: write' .github/workflows/merchant-intelligence-v3.yml
           grep -q 'socialmarket-searxng' .github/workflows/merchant-intelligence-v3.yml
-          grep -q 'merchant_intelligence_v3.py' .github/workflows/merchant-intelligence-v3.yml
+          grep -q 'merchant_intelligence_v4.py' .github/workflows/merchant-intelligence-v3.yml
+          grep -q 'trafilatura' .github/workflows/merchant-intelligence-v3.yml
+          grep -q 'playwright' .github/workflows/merchant-intelligence-v3.yml
+          grep -q 'yt-dlp' .github/workflows/merchant-intelligence-v3.yml

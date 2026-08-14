@@ -1,4 +1,4 @@
-name: Merchant Intelligence V3
+name: Merchant Intelligence V4
 
 on:
   workflow_dispatch:
@@ -8,6 +8,9 @@ on:
     branches: [main]
     paths:
       - 'workers/market_intelligence/merchant_intelligence_v3.py'
+      - 'workers/market_intelligence/merchant_intelligence_v4.py'
+      - 'workers/market_intelligence/evidence_collectors.py'
+      - 'workers/market_intelligence/audit_agent.py'
       - '.github/workflows/merchant-intelligence-v3.yml'
 
 permissions:
@@ -15,13 +18,13 @@ permissions:
   id-token: write
 
 concurrency:
-  group: merchant-intelligence-v3
+  group: merchant-intelligence-v4
   cancel-in-progress: false
 
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     defaults:
       run:
         working-directory: workers/market_intelligence
@@ -29,14 +32,16 @@ jobs:
       MERCHANT_RESEARCH_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-research-gateway
       SEARXNG_BASE_URL: http://127.0.0.1:8080
       MERCHANT_RESEARCH_LIMIT: '350'
-      MERCHANT_RESEARCH_WORKERS: '6'
+      MERCHANT_RESEARCH_WORKERS: '5'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install worker dependencies
-        run: pip install requests beautifulsoup4
+      - name: Install free-first evidence collectors
+        run: |
+          pip install requests beautifulsoup4 trafilatura scrapy playwright yt-dlp gallery-dl
+          playwright install chromium
       - name: Start ephemeral SearXNG
         run: |
           docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
@@ -46,10 +51,10 @@ jobs:
           done
           docker logs socialmarket-searxng || true
           exit 1
-      - name: Deep research all queued merchants
-        run: python merchant_intelligence_v3.py | tee merchant-intelligence-v3-output.json
+      - name: Run audited deep research
+        run: python merchant_intelligence_v4.py | tee merchant-intelligence-v4-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: merchant-intelligence-v3-output
-          path: workers/market_intelligence/merchant-intelligence-v3-output.json
+          name: merchant-intelligence-v4-output
+          path: workers/market_intelligence/merchant-intelligence-v4-output.json
