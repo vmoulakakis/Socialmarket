@@ -41,7 +41,7 @@ jobs:
         run: python -m py_compile workers/product_intelligence/*.py
       - name: Run deterministic policy and shortlist tests
         working-directory: workers/product_intelligence
-        run: python -m unittest -v test_product_intelligence.py test_candidate_shortlist.py
+        run: python -m unittest -v test_product_intelligence.py test_candidate_shortlist.py test_product_concentration.py
       - name: Guard against legacy minimum-price policy
         run: |
           if grep -R "MIN_PRICE\|price_not_over_50\|price > 50\|price >= 50" workers/product_intelligence; then
@@ -55,4 +55,5 @@ jobs:
           grep -R "min_expected_commission_eur" workers/product_intelligence/runtime_config.py
           grep -R "pre_ai_no_validated_pain_match" workers/product_intelligence/candidate_shortlist.py
           grep -R "pain_first_diversified_v2" workers/product_intelligence/product_intelligence_v2.py
+          grep -R "disabled_as_kill_switch" workers/product_intelligence/product_safety.py
           grep -R "validated_pain_required" supabase/functions/product-intelligence-gateway/index.ts
