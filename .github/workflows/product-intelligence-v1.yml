@@ -33,18 +33,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight Product Intelligence gateway and DeepSeek
+      - name: Preflight Product Intelligence gateway
+        id: preflight
         run: |
           python - <<'PY'
-          import json, urllib.request
+          import json, os, urllib.request
           url='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway'
           with urllib.request.urlopen(url, timeout=30) as r:
               health=json.loads(r.read().decode())
-          print({k:health.get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')})
+          safe={k:health.get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')}
+          print(safe)
           if not health.get('ok'):
               raise SystemExit('Product Intelligence gateway unhealthy')
-          if not health.get('deepseek_configured'):
-              raise SystemExit('DEEPSEEK_API_KEY is not configured in Supabase Edge secrets; refusing feed download')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
+              f.write(f"deepseek_configured={'true' if health.get('deepseek_configured') else 'false'}\n")
+              f.write(f"deepseek_model={health.get('deepseek_model') or ''}\n")
           PY
 
       - uses: actions/setup-python@v5
@@ -68,17 +71,28 @@ jobs:
               raise SystemExit('Source feed unexpectedly small; refusing incomplete product run')
           PY
 
-      - name: Stream commercial gate + Merchant RAG + Product Agents + Skeptic Audit
+      - name: Phase A — stream commission gate + merchant resolution + canonical profiling
+        run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
+
+      - name: Phase B — Merchant RAG + Product Research Agent + Skeptic Audit + persistence
+        if: steps.preflight.outputs.deepseek_configured == 'true'
         run: python workers/product_intelligence/product_intelligence_v1.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Upload run profile only
+      - name: AI phase intentionally blocked when DeepSeek is absent
+        if: steps.preflight.outputs.deepseek_configured != 'true'
+        run: echo 'Phase A completed. Phase B skipped because DEEPSEEK_API_KEY is not configured in the shared Supabase Edge environment. No products were persisted by the scan.'
+
+      - name: Upload run profiles only
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: product-intelligence-v1-profile
           retention-days: 30
-          path: product-intelligence-profile.json
+          path: |
+            product-commercial-scan-profile.json
+            product-commercial-scan-sample.json
+            product-intelligence-profile.json
 
-      - name: Remove raw feed from runner
+      - name: Remove raw feed and local staging from runner
         if: always()
         run: rm -f "$PRODUCT_SOURCE_FEED" product-stage.sqlite3 product-stage.sqlite3-wal product-stage.sqlite3-shm
