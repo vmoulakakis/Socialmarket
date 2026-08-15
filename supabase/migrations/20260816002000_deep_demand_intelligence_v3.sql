@@ -1,6 +1,27 @@
 -- Deep Demand Intelligence V3
 -- Additive admin-only analytical contract. Does not alter existing demand scoring.
 
+create table if not exists intel.deep_demand_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  taxonomy_id uuid not null references catalog.taxonomy_nodes(id) on delete cascade,
+  geography text not null default 'GR',
+  generated_at timestamptz not null default now(),
+  source_max_observed_at timestamptz,
+  engine_version text not null default 'deep_demand_v3',
+  history_points integer not null default 0,
+  history_span_days numeric,
+  forecast_tier text,
+  analysis jsonb not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists deep_demand_snapshots_taxonomy_generated_idx
+  on intel.deep_demand_snapshots(taxonomy_id, generated_at desc);
+
+alter table intel.deep_demand_snapshots enable row level security;
+revoke all on table intel.deep_demand_snapshots from anon, authenticated;
+
 create or replace function public.admin_deep_demand_intelligence_v3(p_days integer default 90)
 returns jsonb
 language plpgsql
@@ -13,6 +34,7 @@ declare
   v_history jsonb;
   v_supply jsonb;
   v_pains jsonb;
+  v_models jsonb;
   v_quality jsonb;
 begin
   if not public.socialmarket_is_admin() then
@@ -92,6 +114,24 @@ begin
       and c.taxonomy_id is not null
   ) p;
 
+  select coalesce(jsonb_agg(to_jsonb(m) order by m.generated_at desc), '[]'::jsonb)
+    into v_models
+  from (
+    select distinct on (d.taxonomy_id)
+      d.taxonomy_id,
+      d.generated_at,
+      d.source_max_observed_at,
+      d.engine_version,
+      d.history_points,
+      d.history_span_days,
+      d.forecast_tier,
+      d.analysis,
+      d.metadata
+    from intel.deep_demand_snapshots d
+    where d.geography='GR'
+    order by d.taxonomy_id, d.generated_at desc
+  ) m;
+
   select jsonb_build_object(
     'history_days_requested', v_days,
     'history_rows', count(*),
@@ -116,6 +156,7 @@ begin
     'history', v_history,
     'trusted_supply', v_supply,
     'validated_social_pains', v_pains,
+    'model_snapshots', v_models,
     'data_quality', v_quality,
     'semantics', jsonb_build_object(
       'observed_demand', 'existing semantic_category_market_v2 demand index; never overwritten',
