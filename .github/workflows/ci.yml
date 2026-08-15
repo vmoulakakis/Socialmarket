@@ -21,6 +21,8 @@ jobs:
         with:
           deno-version: v2.x
       - run: npm install
+      - name: Install product worker test dependencies
+        run: pip install -r workers/product_intelligence/requirements.txt
       - run: npm run test:design-v2
       - run: npm run test:demand-v3
       - name: Compile intelligence workers
