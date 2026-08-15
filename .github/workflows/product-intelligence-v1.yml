@@ -79,7 +79,7 @@ jobs:
 
       - name: Phase B — bounded Merchant/Pain/Theme RAG + Product Research + Skeptic Audit + VALIDATED-only persistence
         if: steps.preflight.outputs.deepseek_configured == 'true'
-        run: python workers/product_intelligence/product_intelligence_v1.py "$PRODUCT_SOURCE_FEED"
+        run: python workers/product_intelligence/product_intelligence_fresh_oidc.py "$PRODUCT_SOURCE_FEED"
 
       - name: AI phase intentionally blocked when DeepSeek is absent
         if: steps.preflight.outputs.deepseek_configured != 'true'
