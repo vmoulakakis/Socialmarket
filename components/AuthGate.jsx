@@ -8,7 +8,9 @@ const ADMIN_EMAIL = 'vmoulakakis@gmail.com';
 export default function AuthGate({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -23,25 +25,14 @@ export default function AuthGate({ children }) {
       }
 
       const email = String(nextSession.user?.email || '').toLowerCase();
-      const provider = String(nextSession.user?.app_metadata?.provider || '').toLowerCase();
-      const providers = Array.isArray(nextSession.user?.app_metadata?.providers)
-        ? nextSession.user.app_metadata.providers.map((value) => String(value).toLowerCase())
-        : [];
-      const isGoogle = provider === 'google' || providers.includes('google');
-      const isApprovedAdmin = email === ADMIN_EMAIL && isGoogle;
-
-      if (!isApprovedAdmin) {
+      if (email !== ADMIN_EMAIL) {
         await supabase.auth.signOut({ scope: 'local' });
         if (mounted) {
           setSession(null);
-          setMessage('Η πρόσβαση επιτρέπεται μόνο μέσω Google με το εγκεκριμένο admin account.');
+          setMessage('Δεν επιτρέπεται πρόσβαση σε αυτόν τον λογαριασμό.');
           setLoading(false);
         }
         return;
-      }
-
-      if (window.location.hash || window.location.search) {
-        window.history.replaceState({}, document.title, window.location.pathname);
       }
 
       setSession(nextSession);
@@ -49,7 +40,6 @@ export default function AuthGate({ children }) {
     };
 
     supabase.auth.getSession().then(({ data }) => acceptSession(data.session ?? null));
-
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       void acceptSession(nextSession ?? null);
     });
@@ -60,26 +50,31 @@ export default function AuthGate({ children }) {
     };
   }, []);
 
-  async function signInWithGoogle() {
+  async function signIn(event) {
+    event.preventDefault();
+    if (!password) return;
+    setSigningIn(true);
     setMessage('');
 
-    const redirectTo = window.location.origin;
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo,
-        queryParams: {
-          prompt: 'select_account',
-        },
-      },
+    const { error } = await supabase.auth.signInWithPassword({
+      email: ADMIN_EMAIL,
+      password,
     });
 
-    if (error) setMessage(error.message);
+    if (error) {
+      setMessage(error.message === 'Invalid login credentials' ? 'Λάθος password.' : error.message);
+      setSigningIn(false);
+      return;
+    }
+
+    setPassword('');
+    setSigningIn(false);
   }
 
   async function signOut() {
     await supabase.auth.signOut();
     setSession(null);
+    setPassword('');
   }
 
   if (loading) {
@@ -91,9 +86,12 @@ export default function AuthGate({ children }) {
       <div className="auth-card">
         <div className="eyebrow">Private Admin</div>
         <h1>SocialMarket AI</h1>
-        <p className="sub">Η βάση, τα market signals, τα HIGO scores και τα creatives είναι διαθέσιμα μόνο στο εγκεκριμένο Google admin account.</p>
-        <button className="button" type="button" onClick={signInWithGoogle}>Continue with Google</button>
-        <p className="muted">Μόνο {ADMIN_EMAIL} μέσω Google OAuth.</p>
+        <p className="sub">Private admin access με email και password.</p>
+        <form onSubmit={signIn} className="auth-form">
+          <input className="search" type="email" value={ADMIN_EMAIL} readOnly autoComplete="username" aria-label="Admin email" />
+          <input className="search" type="password" value={password} onChange={(event)=>setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" required autoFocus />
+          <button className="button" type="submit" disabled={signingIn}>{signingIn ? 'Signing in…' : 'Sign in'}</button>
+        </form>
         {message && <p className="muted">{message}</p>}
       </div>
     </main>;
