@@ -7,6 +7,10 @@ on:
         description: Maximum taxonomy nodes to analyze
         required: false
         default: '120'
+  push:
+    branches: [main]
+    paths:
+      - '.github/deep-demand-trigger'
   workflow_run:
     workflows: ['Semantic Category Pain Intelligence']
     types: [completed]
