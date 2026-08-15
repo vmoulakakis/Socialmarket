@@ -54,8 +54,8 @@ export default function DemandIntelligence(){
  const treemap=useMemo(()=>({backgroundColor:'transparent',animationDuration:650,tooltip:{backgroundColor:'#0b1220',borderColor:'rgba(148,163,184,.2)',textStyle:{color:palette.text},formatter:p=>`${p.name}<br/>Evidence footprint: <b>${fmt(p.value)}</b>`},series:[{type:'treemap',roam:false,nodeClick:false,breadcrumb:{show:false},label:{show:true,color:'#f8fafc',fontSize:11,formatter:'{b}'},upperLabel:{show:true,height:24,color:'#cbd5e1',fontWeight:700},itemStyle:{borderColor:'#090e17',borderWidth:3,gapWidth:3},levels:[{itemStyle:{borderWidth:0,gapWidth:4}},{colorSaturation:[.25,.7],itemStyle:{borderWidth:2,gapWidth:2,borderColorSaturation:.7}}],data:Object.entries(rows.reduce((acc,x)=>{const cat=x.category_name||x.taxonomy_name||'Other';const value=Number(x.evidence_entities||0);if(value<=0)return acc;(acc[cat]??=[]).push({name:x.subcategory_name||'Category level',value});return acc},{})).map(([name,children])=>({name,value:children.reduce((s,x)=>s+x.value,0),children}))}]}),[rows]);
 
  const columns=useMemo(()=>[
-  {accessorFn:r=>r.category_name||r.taxonomy_name||'—',id:'category',header:'Category'},
-  {accessorFn:r=>r.subcategory_name||'Category level',id:'subcategory',header:'Subcategory'},
+  {accessorFn:r=>r.category_name||r.taxonomy_name||'—',id:'category',header:'Category',cell:i=>String(i.getValue()??'—')},
+  {accessorFn:r=>r.subcategory_name||'Category level',id:'subcategory',header:'Subcategory',cell:i=>String(i.getValue()??'—')},
   {accessorKey:'demand_score',header:'Demand',cell:i=>fmt(i.getValue())},
   {accessorKey:'competition_score',header:'Competition',cell:i=>fmt(i.getValue())},
   {accessorKey:'pain_gap_score',header:'Pain',cell:i=>fmt(i.getValue())},
