@@ -19,6 +19,7 @@ MIN_VALIDATED_PAIN_CLUSTERS=max(1,int(os.getenv('PRODUCT_MIN_VALIDATED_PAIN_CLUS
 MIN_AUDIT_OVERALL=float(os.getenv('PRODUCT_MIN_AUDIT_OVERALL','70'))
 MIN_PAIN_FIT=float(os.getenv('PRODUCT_MIN_PAIN_FIT','60'))
 MIN_PRODUCT_EVIDENCE=float(os.getenv('PRODUCT_MIN_PRODUCT_EVIDENCE','60'))
+MAX_AI_BATCH_FAILURE_RATE=max(0.0,min(float(os.getenv('PRODUCT_MAX_AI_BATCH_FAILURE_RATE','0.25')),1.0))
 SOURCE_FEED=os.getenv('PRODUCT_SOURCE_FEED','linkwise-products.json')
 PROFILE_PATH=Path(os.getenv('PRODUCT_PROFILE_PATH','product-intelligence-profile.json'))
 STAGE_DB=os.getenv('PRODUCT_STAGE_DB','product-stage.sqlite3')
@@ -226,8 +227,14 @@ def build_ai_item(p,context):
 
 
 def process_batch(items,stats):
+    stats['ai_batches_attempted']+=1
     wire=[{k:v for k,v in x.items() if not k.startswith('_')} for x in items]
-    enrich_res=gateway('enrich',items=wire,thinking='auto')
+    try:
+        enrich_res=gateway('enrich',items=wire,thinking='auto')
+    except Exception as exc:
+        stats['ai_batch_failures']+=1;stats['enrich_batch_failures']+=1;stats['ai_items_quarantined']+=len(items)
+        print(json.dumps({'warning':'ai_enrich_batch_quarantined','items':len(items),'error':str(exc)[:500]}),flush=True)
+        return 0
     decision=enrich_res.get('thinking') or {}
     stats['enrich_thinking_on' if decision.get('enabled') else 'enrich_thinking_off']+=1
     enriched=enrich_res.get('items',[])
@@ -239,7 +246,12 @@ def process_batch(items,stats):
             stats['ai_enrichment_missing']+=1;continue
         audit_input.append({**{k:v for k,v in x.items() if not k.startswith('_')},'enrichment':by_hash[h]})
     if not audit_input:return 0
-    audit_res=gateway('audit',items=audit_input,thinking='auto')
+    try:
+        audit_res=gateway('audit',items=audit_input,thinking='auto')
+    except Exception as exc:
+        stats['ai_batch_failures']+=1;stats['audit_batch_failures']+=1;stats['ai_items_quarantined']+=len(audit_input)
+        print(json.dumps({'warning':'ai_audit_batch_quarantined','items':len(audit_input),'error':str(exc)[:500]}),flush=True)
+        return 0
     decision=audit_res.get('thinking') or {}
     stats['audit_thinking_on' if decision.get('enabled') else 'audit_thinking_off']+=1
     audited=audit_res.get('items',[])
@@ -333,12 +345,16 @@ def main(feed):
             print(json.dumps({'phase':'ai','submitted':submitted,**stats}),flush=True)
     if batch:process_batch(batch,stats);submitted+=len(batch)
     unique_products=db.execute('select count(distinct canonical_key) from candidates').fetchone()[0]
+    attempted=int(stats.get('ai_batches_attempted') or 0); failures=int(stats.get('ai_batch_failures') or 0)
+    failure_rate=(failures/attempted) if attempted else 0.0
+    stats['ai_batch_failure_rate']=round(failure_rate,4)
     profile={**stream_stats,'unique_commission_eligible_products':unique_products,'ai_offers_submitted':submitted,**stats,'policy':{
       'commission_gate_eur':MIN_COMMISSION,'merchant_trust_gate':MIN_MERCHANT_TRUST,
       'merchant_resolution':'Linkwise tracking_url destination domain -> authoritative merchant official_domain; exact program/alias only as secondary path',
       'dominant_merchants':'static + dynamic feed/candidate saturation excluded from promotion; evidence retained as demand beacons',
       'price_integrity':'no automatic cents/EUR conversion; statistically suspicious scales are quarantined before commission',
       'ai_max_candidates':AI_MAX_CANDIDATES,'ai_offers_per_product':AI_OFFERS_PER_PRODUCT,
+      'max_ai_batch_failure_rate':MAX_AI_BATCH_FAILURE_RATE,
       'persistence':'VALIDATED only + validated pain + audit/pain/evidence thresholds',
       'ranking':'25 pain + 20 merchant whitespace + 15 Greek demand + 12 commission + 10 inverse competition + 8 seasonal + 5 trust + 3 discount + 2 evidence confidence',
       'raw_feed_imported':False,'ai_fallback_allowed':False
@@ -346,6 +362,8 @@ def main(feed):
     PROFILE_PATH.write_text(json.dumps(profile,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
     print(json.dumps({'product_intelligence_final':profile},ensure_ascii=False,default=str),flush=True)
     db.close()
+    if failure_rate>MAX_AI_BATCH_FAILURE_RATE:
+        raise SystemExit(f'AI batch circuit breaker: failure_rate={failure_rate:.3f} exceeds {MAX_AI_BATCH_FAILURE_RATE:.3f}')
 
 
 if __name__=='__main__':
