@@ -1,44 +1,71 @@
 {
-  "version": "demand_intelligence_v3",
+  "version": "deep_demand_v31",
   "autonomy": {
     "mode": "autonomous_by_default",
     "user_override": true,
-    "allowed": ["query_planning", "retrieval_depth", "source_expansion", "analyst_routing", "fuzzy_state_classification", "challenger_model_selection", "presentation_scene_selection"],
-    "forbidden": ["overwrite_canonical_metrics", "coerce_missing_to_zero", "relax_validation_gates", "promote_unbacktested_forecast", "invent_search_volume", "invent_paid_ad_metrics"]
+    "allowed": ["query_planning", "retrieval_depth", "source_expansion", "analyst_routing", "fuzzy_state_classification", "whitespace_inference", "graph_context_building", "jtbd_routing", "challenger_model_selection", "change_point_detection", "causal_readiness_audit", "presentation_scene_selection"],
+    "forbidden": ["overwrite_canonical_metrics", "coerce_missing_to_zero", "relax_validation_gates", "promote_unbacktested_forecast", "invent_search_volume", "invent_market_size", "invent_paid_ad_metrics", "treat_correlation_as_causation", "let_supply_reduce_observed_demand"]
   },
   "retrieval": {
-    "strategy": "hybrid_rag",
-    "components": ["direct_taxonomy", "postgres_fts", "pg_trgm_fuzzy", "vector_when_query_embedding_available", "recency", "authority", "confidence"],
+    "strategy": "hybrid_rag_plus_lightweight_graph_context",
+    "components": ["direct_taxonomy", "postgres_fts", "pg_trgm_fuzzy", "vector_when_query_embedding_available", "recency", "authority", "confidence", "validated_pain_edges", "exact_taxonomy_supply_edges"],
     "max_evidence": 120,
     "weights": {"direct": 0.35, "fts": 0.20, "fuzzy": 0.15, "confidence": 0.10, "recency": 0.10, "authority": 0.10},
-    "source_authority": {"statistics.gr": 1.0, "ec.europa.eu": 1.0, "eurostat.ec.europa.eu": 1.0, "greekecommerce.gr": 0.82, "default": 0.58}
+    "source_authority": {"statistics.gr": 1.0, "ec.europa.eu": 1.0, "eurostat.ec.europa.eu": 1.0, "greekecommerce.gr": 0.82, "default": 0.58},
+    "graph_rule": "graph structure is lineage/retrieval context only; graph degree and centrality never become demand"
   },
   "fuzzy_fusion": {
-    "purpose": "analytical state classification only",
+    "purpose": "market-state classification plus explainable solution-whitespace inference",
     "canonical_scores_immutable": true,
-    "states": ["validated_unmet_need", "whitespace", "emerging", "crowded_demand", "balanced", "uncertain"]
+    "demand_supply_separate": true,
+    "states": ["validated_unmet_need", "whitespace", "emerging", "crowded_demand", "balanced", "uncertain"],
+    "output_labels": ["DERIVED", "INFERRED"]
+  },
+  "jobs_to_be_done": {
+    "mode": "validated_pain_first",
+    "facets": ["price_constraint", "availability_constraint", "delivery_constraint", "trust_constraint", "simplicity_desire", "alternative_request", "fit_or_variant"],
+    "rule": "facets route research and synthesis; they cannot invent a pain not present in validated evidence"
   },
   "forecast": {
     "mode": "shadow_until_backtested",
     "minimum_points": 90,
     "minimum_span_days": 30,
     "minimum_backtest_windows": 3,
-    "promotion_rule": "challenger must beat naive baseline out-of-sample and preserve calibrated uncertainty",
-    "baselines": ["naive", "drift", "rolling_mean"],
-    "challengers": ["NHITS", "NBEATSx", "PatchTST", "TFT", "TimesFM", "Chronos2"],
-    "tooling": ["Nixtla/NeuralForecast", "unit8co/darts", "Nixtla/hierarchicalforecast", "google-research/timesfm", "amazon-science/chronos-forecasting"]
+    "statistical_min_daily_points": 14,
+    "change_point_min_daily_points": 14,
+    "neural_min_daily_points": 60,
+    "neural_min_span_days": 45,
+    "promotion_rule": "challenger must beat naive/statistical baselines on chronological rolling-origin tests and preserve calibrated uncertainty",
+    "baselines": ["naive", "drift", "rolling_mean_7"],
+    "statistical_challengers": ["AutoETS", "Theta", "AutoARIMA"],
+    "neural_challengers": ["NHITS", "NBEATSx", "PatchTST", "TFT"],
+    "foundation_challengers": ["TimesFM", "Chronos2"],
+    "tooling": ["Nixtla/StatsForecast", "Nixtla/NeuralForecast", "ruptures", "Nixtla/HierarchicalForecast", "Google TimesFM", "Amazon Chronos"],
+    "truth_rule": "forecasts model the evidence-derived demand index; they are never search volume, sales or observed demand"
+  },
+  "causal": {
+    "mode": "withheld_until_identified_and_refuted",
+    "minimum_observations": 60,
+    "minimum_exogenous_series": 2,
+    "tooling": ["PyWhy/DoWhy"],
+    "requirements": ["explicit_DAG", "treatment_outcome", "identified_estimand", "effect_estimate", "placebo_refutation", "data_subset_refutation", "sensitivity_analysis"],
+    "rule": "correlation remains non-causal until all gates pass"
   },
   "greek_market_context": {
     "sources": ["ELSTAT_Retail", "ELSTAT_HBS", "ELSTAT_ICT", "Eurostat_Digital", "GRECA_Research"],
+    "query_families": ["purchase_intent", "pain", "price_objection", "availability", "alternative_request", "delivery_returns", "trust", "use_case_constraint", "reviews_forums_social"],
     "rule": "macro and industry series are exogenous context unless the measure directly observes the category; they never become search volume by inference"
   },
   "supply_correlation": {
-    "sources": ["api.merchant_gap_rankings", "api.merchant_rankings", "Linkwise_network_baselines"],
-    "rule": "supply context may explain opportunity tension but must not rewrite demand"
+    "sources": ["api.validated_merchant_opportunities", "Linkwise_network_baselines", "validated_product_offers_when_available"],
+    "dimensions": ["trusted_merchant_count", "program_coverage", "trust", "commercial_quality", "risk", "competition_intensity", "solution_diversity"],
+    "rule": "supply context explains market structure and whitespace but must never rewrite observed demand"
   },
+  "research_panel": ["Greek Market Researcher", "Jobs-to-be-Done Analyst", "Supply Structure Analyst", "Temporal Forecast Scientist", "Causal Skeptic", "Adversarial Evidence Auditor", "Executive BI Storyteller", "Visualization Critic"],
   "presentation": {
-    "style": "kimi_like_executive_storytelling",
-    "scene_order": ["thesis", "market_state", "evidence_stack", "greek_context", "demand_supply_tension", "contradictions", "history", "forecast_lab", "actions", "falsification"],
-    "labels": ["OBSERVED", "DERIVED", "MODELED", "WITHHELD"]
+    "style": "kimi_like_interactive_executive_storytelling",
+    "scene_order": ["executive_thesis", "demand_anatomy", "demand_supply_regime", "jobs_to_be_done", "market_structure", "temporal_regime", "forecast_lab", "evidence_graph", "causal_skeptic", "decision_board"],
+    "scene_grammar": ["question", "headline", "primary_visual", "drivers", "evidence", "uncertainty", "so_what", "action"],
+    "labels": ["OBSERVED", "DERIVED", "INFERRED", "FORECASTED", "CAUSAL_CANDIDATE", "WITHHELD", "UNAVAILABLE"]
   }
 }
