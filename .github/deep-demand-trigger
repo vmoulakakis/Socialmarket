@@ -1,1 +1,2 @@
-2026-08-16T02:50:00+03:00 ranking-v3-production-chain
+2026-08-16T03:15:00+03:00 deep-demand-v31-fixed-production-rerun
+reason: validated_pain_clusters schema drift fixed; pipefail and persisted-output assertion enabled
