@@ -10,10 +10,33 @@ MAJOR_COMMERCE_DOMAINS=(
     'skroutz.gr','bestprice.gr','public.gr','plaisio.gr','kotsovolos.gr','e-shop.gr','shopflix.gr',
     'amazon.de','amazon.com','ikea.gr','jysk.gr','intersport.gr','cosmossport.gr','notino.gr','sephora.gr',
 )
+CHANNEL_BUDGETS={
+    'pain_candidate':80,
+    'demand':60,
+    'competition':60,
+    'official_context':8,
+    'industry_context':8,
+    'consumer_discovery':20,
+}
 
 
 def _is_major(domain:str)->bool:
     return any(domain==x or domain.endswith('.'+x) for x in MAJOR_COMMERCE_DOMAINS)
+
+
+def _dedup_key(e):
+    return (e.get('source_kind'),e.get('source_url'),e.get('content_hash') or e.get('title'),e.get('body'))
+
+
+def _budget_channel(rows,kind,limit):
+    out=[];seen=set()
+    for e in rows:
+        if e.get('source_kind')!=kind:continue
+        k=_dedup_key(e)
+        if k in seen:continue
+        seen.add(k);out.append(e)
+        if len(out)>=limit:break
+    return out
 
 
 def collect_v4(job):
@@ -23,7 +46,7 @@ def collect_v4(job):
     aliases=base.market_query_terms(category,subcategory)
     keys=base.keyword_set(category,subcategory,aliases)
 
-    evidence=[]
+    market_raw=[]
     planned_demand_queries=[]
     for term in aliases[:3]:
         demand_queries=[
@@ -32,26 +55,25 @@ def collect_v4(job):
         ]
         competition_queries=[f'{term} αγορά shop Ελλάδα',f'{term} τιμές eshop Ελλάδα',f'{term} καταστήματα Ελλάδα']
         planned_demand_queries.extend(demand_queries)
-        for q in demand_queries:evidence.extend(base.useful_rows(q,keys,term,'demand',7))
-        for q in competition_queries:evidence.extend(base.useful_rows(q,keys,term,'competition',10))
+        for q in demand_queries:market_raw.extend(base.useful_rows(q,keys,term,'demand',7))
+        for q in competition_queries:market_raw.extend(base.useful_rows(q,keys,term,'competition',10))
 
-    # V4 pain evidence is extracted from real public consumer/review/forum pages.
-    # Raw search-result snippets are discovery only and never eligible for pain audit.
-    consumer=collect_consumer_evidence(category,subcategory,aliases,keys,max_rows=90)
-    evidence.extend(consumer)
-    evidence.extend(authoritative_context_rows(category,subcategory,aliases,keys))
+    # Consumer and context channels are collected separately so broad SERP market
+    # coverage can never crowd real consumer pain evidence out of the persisted/audited bundle.
+    consumer_raw=collect_consumer_evidence(category,subcategory,aliases,keys,max_rows=100)
+    context_raw=authoritative_context_rows(category,subcategory,aliases,keys)
 
-    dedup=[];seen=set()
-    for e in evidence:
-        k=(e.get('source_kind'),e.get('source_url'),e.get('content_hash') or e.get('title'),e.get('body'))
-        if k in seen:continue
-        seen.add(k);dedup.append(e)
-    evidence=dedup[:240]
+    pain_rows=_budget_channel(consumer_raw,'pain_candidate',CHANNEL_BUDGETS['pain_candidate'])
+    discovery_rows=_budget_channel(consumer_raw,'consumer_discovery',CHANNEL_BUDGETS['consumer_discovery'])
+    demand_rows=_budget_channel(market_raw,'demand',CHANNEL_BUDGETS['demand'])
+    comp_rows=_budget_channel(market_raw,'competition',CHANNEL_BUDGETS['competition'])
+    official_rows=_budget_channel(context_raw,'official_context',CHANNEL_BUDGETS['official_context'])
+    industry_rows=_budget_channel(context_raw,'industry_context',CHANNEL_BUDGETS['industry_context'])
+    context_rows=official_rows+industry_rows
 
-    demand_rows=[e for e in evidence if e.get('source_kind')=='demand']
-    pain_rows=[e for e in evidence if e.get('source_kind')=='pain_candidate']
-    comp_rows=[e for e in evidence if e.get('source_kind')=='competition']
-    context_rows=[e for e in evidence if e.get('source_kind') in ('official_context','industry_context')]
+    # Pain comes first intentionally: the gateway's bounded persistence and AI payload
+    # must preserve the evidence that can create validated consumer-need clusters.
+    evidence=pain_rows+demand_rows+comp_rows+context_rows+discovery_rows
 
     demand_domains={host(e.get('source_url','')) for e in demand_rows if host(e.get('source_url',''))}
     pain_domains={host(e.get('source_url','')) for e in pain_rows if host(e.get('source_url',''))}
@@ -89,6 +111,18 @@ def collect_v4(job):
             'planned_demand_queries':len(set(planned_demand_queries)),'matched_demand_queries':len(matched_queries),'query_coverage':round(query_coverage,3),
             'demand_domains':len(demand_domains),'pain_consumer_rows':len(pain_rows),'pain_domains':len(pain_domains),'pain_source_families':sorted(pain_families),
             'competition_domains':len(comp_domains),'major_commerce_domains':major_count,'context_rows':len(context_rows),
+            'channel_budget_policy':'independent_v4_budgets_consumer_pain_first',
+            'channel_counts':{
+                'pain_candidate_raw':sum(1 for e in consumer_raw if e.get('source_kind')=='pain_candidate'),
+                'pain_candidate_retained':len(pain_rows),
+                'consumer_discovery_raw':sum(1 for e in consumer_raw if e.get('source_kind')=='consumer_discovery'),
+                'consumer_discovery_retained':len(discovery_rows),
+                'demand_raw':sum(1 for e in market_raw if e.get('source_kind')=='demand'),
+                'demand_retained':len(demand_rows),
+                'competition_raw':sum(1 for e in market_raw if e.get('source_kind')=='competition'),
+                'competition_retained':len(comp_rows),
+                'context_raw':len(context_raw),'context_retained':len(context_rows),
+            },
         },
         'metric_semantics':{
             'demand':'derived evidence-coverage index from relevant Greek purchase-intent query breadth + domain diversity + commercial-source coverage; not search volume, sales or market size',
