@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: semantic-category-pain-intelligence
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   collect-audit:
