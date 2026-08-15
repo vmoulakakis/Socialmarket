@@ -16,6 +16,7 @@ export default function RootLayout({ children }) {
             <Link className="brand" href="/analytics">SocialMarket AI</Link>
             <div className="navlinks">
               <Link href="/analytics">Analytics</Link>
+              <Link href="/optimization">Optimize</Link>
               <Link href="/">AI Console</Link>
               <Link href="/market">Market Map</Link>
               <Link href="/niches">Niches</Link>
