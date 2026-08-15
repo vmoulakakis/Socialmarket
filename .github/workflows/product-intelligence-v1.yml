@@ -25,13 +25,9 @@ jobs:
     env:
       DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
       PRODUCT_SOURCE_FEED: linkwise-products.json
-      PRODUCT_MIN_COMMISSION_EUR: '10'
-      PRODUCT_MIN_MERCHANT_TRUST: '30'
-      PRODUCT_AI_BATCH: '1'
-      PRODUCT_AI_MAX_CANDIDATES: '4'
-      PRODUCT_AI_OFFERS_PER_PRODUCT: '1'
       PRODUCT_REUSE_STAGE_DB: 'true'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
+      PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
 
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +36,7 @@ jobs:
         id: preflight
         run: |
           python - <<'PY'
-          import json, os, urllib.request
+          import json, urllib.request
           url='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway'
           with urllib.request.urlopen(url, timeout=30) as r:
               health=json.loads(r.read().decode())
@@ -48,6 +44,7 @@ jobs:
           print(safe)
           if not health.get('ok'):
               raise SystemExit('Product Intelligence gateway unhealthy')
+          import os
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
               f.write(f"deepseek_configured={'true' if health.get('deepseek_configured') else 'false'}\n")
               f.write(f"deepseek_model={health.get('deepseek_model') or ''}\n")
@@ -74,16 +71,16 @@ jobs:
               raise SystemExit('Source feed unexpectedly small; refusing incomplete product run')
           PY
 
-      - name: Phase A — price integrity + merchant resolution + dynamic saturation + commission gate
+      - name: Phase A — runtime-configured commercial scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Phase B — bounded Merchant/Pain/Theme RAG + Product Research + Skeptic Audit + VALIDATED-only persistence
+      - name: Phase B — runtime-configured RAG + Product Research + Skeptic Audit
         if: steps.preflight.outputs.deepseek_configured == 'true'
         run: python workers/product_intelligence/product_intelligence_fresh_oidc.py "$PRODUCT_SOURCE_FEED"
 
       - name: AI phase intentionally blocked when DeepSeek is absent
         if: steps.preflight.outputs.deepseek_configured != 'true'
-        run: echo 'Phase A completed. Phase B skipped because DeepSeek is not configured in the shared Supabase Edge environment. No products were persisted by the scan.'
+        run: echo 'Phase A completed. Phase B skipped because DeepSeek is not configured. No non-AI persistence fallback is allowed.'
 
       - name: Upload run profiles only
         uses: actions/upload-artifact@v4
