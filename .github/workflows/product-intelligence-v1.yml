@@ -28,6 +28,9 @@ jobs:
       PRODUCT_MIN_COMMISSION_EUR: '10'
       PRODUCT_MIN_MERCHANT_TRUST: '30'
       PRODUCT_AI_BATCH: '8'
+      PRODUCT_AI_MAX_CANDIDATES: '48'
+      PRODUCT_AI_OFFERS_PER_PRODUCT: '1'
+      PRODUCT_REUSE_STAGE_DB: 'true'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
 
     steps:
@@ -71,16 +74,16 @@ jobs:
               raise SystemExit('Source feed unexpectedly small; refusing incomplete product run')
           PY
 
-      - name: Phase A — stream commission gate + merchant resolution + canonical profiling
+      - name: Phase A — price integrity + merchant resolution + dynamic saturation + commission gate
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Phase B — Merchant RAG + Product Research Agent + Skeptic Audit + persistence
+      - name: Phase B — bounded Merchant/Pain/Theme RAG + Product Research + Skeptic Audit + VALIDATED-only persistence
         if: steps.preflight.outputs.deepseek_configured == 'true'
         run: python workers/product_intelligence/product_intelligence_v1.py "$PRODUCT_SOURCE_FEED"
 
       - name: AI phase intentionally blocked when DeepSeek is absent
         if: steps.preflight.outputs.deepseek_configured != 'true'
-        run: echo 'Phase A completed. Phase B skipped because DEEPSEEK_API_KEY is not configured in the shared Supabase Edge environment. No products were persisted by the scan.'
+        run: echo 'Phase A completed. Phase B skipped because DeepSeek is not configured in the shared Supabase Edge environment. No products were persisted by the scan.'
 
       - name: Upload run profiles only
         uses: actions/upload-artifact@v4
@@ -91,6 +94,7 @@ jobs:
           path: |
             product-commercial-scan-profile.json
             product-commercial-scan-sample.json
+            product-feed-safety-profile.json
             product-intelligence-profile.json
 
       - name: Remove raw feed and local staging from runner

@@ -2,6 +2,7 @@ import unittest
 from product_agents import parse_commission_rule,commission_score,canonical_key,final_opportunity_score
 from stream_feed import normalize,target_domain,linkwise_route
 from product_intelligence_v1 import merchant_maps,resolve_merchant
+from product_safety import classify_price_sample,price_integrity_allows
 
 
 class ProductIntelligencePolicyTests(unittest.TestCase):
@@ -68,6 +69,20 @@ class ProductIntelligencePolicyTests(unittest.TestCase):
         merchant,method=resolve_merchant({'target_domain':None,'program_name':'Unique'},by_program,aliases,by_domain)
         self.assertIsNone(merchant)
         self.assertIsNone(method)
+
+    def test_price_integrity_quarantines_minor_unit_pattern(self):
+        info=classify_price_sample([3501+i for i in range(30)])
+        self.assertEqual(info['status'],'minor_unit_risk')
+        ok,reason,_=price_integrity_allows(3501,{'price_integrity':info})
+        self.assertFalse(ok)
+        self.assertEqual(reason,'price_scale_unverified')
+
+    def test_price_integrity_allows_plausible_major_units(self):
+        info=classify_price_sample([19.99,25.5,40.0,75.9,120.0]*5)
+        self.assertEqual(info['status'],'major_unit_probable')
+        ok,reason,_=price_integrity_allows(120,{'price_integrity':info})
+        self.assertTrue(ok)
+        self.assertEqual(reason,'price_major_unit_probable')
 
 
 if __name__=='__main__':unittest.main()
