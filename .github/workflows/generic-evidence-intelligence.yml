@@ -39,7 +39,7 @@ jobs:
       CATEGORY_PAIN_WORKERS: '3'
       CATEGORY_PAIN_AI_BATCH: '4'
       CATEGORY_CONSUMER_FETCH_WORKERS: '6'
-      CATEGORY_CONSUMER_MAX_URLS: '36'
+      CATEGORY_CONSUMER_MAX_URLS: '60'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
