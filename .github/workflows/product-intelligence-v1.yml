@@ -3,7 +3,8 @@ name: Product Intelligence + Promotion Ranking
 on:
   workflow_dispatch:
   schedule:
-    - cron: '20 4 * * *'
+    # Fallback cron. Normal path is workflow_run after Deep Demand completes.
+    - cron: '20 6 * * *'
   workflow_run:
     workflows: ['Deep Demand Intelligence V3.1']
     types: [completed]
@@ -40,25 +41,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight ranking and reference gateways
+      - name: Preflight ranking gateway
         id: preflight
         run: |
           python - <<'PY'
           import json, os, urllib.request
-          urls={
-            'reference':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway',
-            'ranking':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway',
-          }
-          health={}
-          for name,url in urls.items():
-              with urllib.request.urlopen(url, timeout=30) as r:
-                  health[name]=json.loads(r.read().decode())
-              print(name,{k:health[name].get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')})
-              if not health[name].get('ok'):
-                  raise SystemExit(f'{name} gateway unhealthy')
+          url='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway'
+          with urllib.request.urlopen(url, timeout=30) as r:
+              health=json.loads(r.read().decode())
+          print({k:health.get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')})
+          if not health.get('ok'):
+              raise SystemExit('ranking gateway unhealthy')
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              f.write(f"reference_ai={'true' if health['reference'].get('deepseek_configured') else 'false'}\n")
-              f.write(f"ranking_ai={'true' if health['ranking'].get('deepseek_configured') else 'false'}\n")
+              f.write(f"ranking_ai={'true' if health.get('deepseek_configured') else 'false'}\n")
           PY
 
       - uses: actions/setup-python@v5
@@ -85,14 +80,6 @@ jobs:
       - name: Phase A — deterministic commercial universe scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Pain-solver diagnostic — optional signal only
-        run: python workers/product_intelligence/pain_solver_scan.py
-
-      - name: Reference audit pipeline — non-blocking for ranking
-        if: steps.preflight.outputs.reference_ai == 'true'
-        continue-on-error: true
-        run: python workers/product_intelligence/product_intelligence_v2.py "$PRODUCT_SOURCE_FEED"
-
       - name: Final Ranking V3 — AI strategy + independent ranking skeptic
         if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v3.py "$PRODUCT_SOURCE_FEED"
@@ -112,10 +99,7 @@ jobs:
           path: |
             product-commercial-scan-profile.json
             product-commercial-scan-sample.json
-            product-pain-solver-profile.json
-            product-pain-solver-sample.json
             product-feed-safety-profile.json
-            product-intelligence-profile.json
             product-ranking-v3-profile.json
 
       - name: Remove raw feed and local staging from runner
