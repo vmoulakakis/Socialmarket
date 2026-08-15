@@ -1,0 +1,11 @@
+# Deep Demand V3.1 model-lab dependencies.
+# Do not install these in the lightweight daily evidence collector.
+numpy>=2.0
+pandas>=2.2
+statsforecast>=2.0
+ruptures>=1.1.10
+rapidfuzz>=3.9
+networkx>=3.3
+# Heavy/optional challenger and causal tiers; runtime gates remain fail-closed.
+neuralforecast>=3.1
+dowhy>=0.14
