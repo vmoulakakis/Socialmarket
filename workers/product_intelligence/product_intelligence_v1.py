@@ -7,14 +7,22 @@ from product_agents import (
     canonical_key, compact_product_for_ai, evidence_metrics, final_opportunity_score,
     fold, parse_commission_rule, select_pain_rag, select_theme_rag
 )
+from product_safety import build_feed_safety_profile, price_integrity_allows, prune_dynamic_candidate_saturation
 
 GATEWAY=os.getenv('PRODUCT_INTELLIGENCE_GATEWAY','https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway')
 MIN_COMMISSION=float(os.getenv('PRODUCT_MIN_COMMISSION_EUR','10'))
 MIN_MERCHANT_TRUST=float(os.getenv('PRODUCT_MIN_MERCHANT_TRUST','30'))
 AI_BATCH=max(1,min(int(os.getenv('PRODUCT_AI_BATCH','8')),12))
+AI_MAX_CANDIDATES=max(1,int(os.getenv('PRODUCT_AI_MAX_CANDIDATES','48')))
+AI_OFFERS_PER_PRODUCT=max(1,min(int(os.getenv('PRODUCT_AI_OFFERS_PER_PRODUCT','1')),3))
+MIN_VALIDATED_PAIN_CLUSTERS=max(1,int(os.getenv('PRODUCT_MIN_VALIDATED_PAIN_CLUSTERS','1')))
+MIN_AUDIT_OVERALL=float(os.getenv('PRODUCT_MIN_AUDIT_OVERALL','70'))
+MIN_PAIN_FIT=float(os.getenv('PRODUCT_MIN_PAIN_FIT','60'))
+MIN_PRODUCT_EVIDENCE=float(os.getenv('PRODUCT_MIN_PRODUCT_EVIDENCE','60'))
 SOURCE_FEED=os.getenv('PRODUCT_SOURCE_FEED','linkwise-products.json')
 PROFILE_PATH=Path(os.getenv('PRODUCT_PROFILE_PATH','product-intelligence-profile.json'))
 STAGE_DB=os.getenv('PRODUCT_STAGE_DB','product-stage.sqlite3')
+REUSE_STAGE=os.getenv('PRODUCT_REUSE_STAGE_DB','true').lower() in ('1','true','yes','on')
 
 
 def oidc_token():
@@ -39,15 +47,21 @@ def gateway(action,**payload):
         raise RuntimeError(f'gateway {action} failed: {e.code} {msg[:1000]}')
 
 
-def init_stage(path):
+def init_stage(path,reset=False):
+    if reset:
+        for suffix in ('','-wal','-shm'):
+            try:Path(str(path)+suffix).unlink()
+            except FileNotFoundError:pass
     db=sqlite3.connect(path)
     db.execute('pragma journal_mode=WAL')
     db.execute('pragma synchronous=NORMAL')
     db.execute('''create table if not exists candidates(
-      source_hash text primary key, canonical_key text not null, payload text not null,
+      source_hash text primary key, canonical_key text not null, merchant_id text not null,
+      merchant_name text, competition_score real not null default 50, payload text not null,
       expected_commission real not null, preliminary_score real not null
     )''')
     db.execute('create index if not exists candidates_canonical_idx on candidates(canonical_key,preliminary_score desc)')
+    db.execute('create index if not exists candidates_merchant_idx on candidates(merchant_id)')
     db.commit();return db
 
 
@@ -82,12 +96,11 @@ def resolve_merchant(product,by_program,aliases,by_domain):
     if domain:
         exact=_unique_row(by_domain.get(domain,[]))
         if exact:return exact,'target_domain_exact'
-        # Safe subdomain fallback: only if exactly one canonical domain is a suffix.
-        hits=[]
-        for known,rows in by_domain.items():
-            if domain.endswith('.'+known):hits.extend(rows)
-        suffix=_unique_row(hits)
-        if suffix:return suffix,'target_domain_suffix'
+        # Safe O(labels) subdomain fallback: only exact suffixes in the canonical domain map.
+        labels=domain.split('.')
+        for i in range(1,max(1,len(labels)-1)):
+            suffix=_unique_row(by_domain.get('.'.join(labels[i:]),[]))
+            if suffix:return suffix,'target_domain_suffix'
 
     k=fold(product.get('program_name'))
     if k:
@@ -105,8 +118,9 @@ def preliminary_score(p,merchant):
 
 
 def stage_feed(feed,context):
+    safety=build_feed_safety_profile(feed,context,iter_records,normalize,resolve_merchant,merchant_maps)
     by_program,aliases,by_domain=merchant_maps(context)
-    db=init_stage(STAGE_DB)
+    db=init_stage(STAGE_DB,reset=True)
     reasons=collections.Counter(); resolution_methods=collections.Counter(); seen=eligible=0
     try:
         iterator=iter_records(feed)
@@ -124,8 +138,12 @@ def stage_feed(feed,context):
                 reasons['merchant_unresolved']+=1;continue
             resolution_methods[resolution_method]+=1
             p['merchant_resolution_method']=resolution_method
+            mid=str(merchant.get('merchant_id'))
+            merchant_safety=safety.get('merchants',{}).get(mid,{})
             if merchant.get('promotion_mode') in ('demand_beacon_only','blocked') or merchant.get('dominant_market'):
                 reasons['dominant_or_blocked_merchant']+=1;continue
+            if merchant_safety.get('feed_saturated'):
+                reasons['dynamic_feed_saturation']+=1;continue
             trust=float(merchant.get('trust_score') or 0)
             if trust<MIN_MERCHANT_TRUST:
                 reasons['merchant_trust_below_gate']+=1;continue
@@ -140,6 +158,14 @@ def stage_feed(feed,context):
                 reasons['invalid_effective_price']+=1;continue
             if str(p.get('currency') or 'EUR').upper()!='EUR':
                 reasons['non_eur_requires_fx']+=1;continue
+            price_ok,price_reason,price_info=price_integrity_allows(price,merchant_safety)
+            if not price_ok:
+                reasons[price_reason]+=1;continue
+            p['price_integrity']={
+              'status':price_reason,'confidence':price_info.get('confidence'),
+              'merchant_sample_count':price_info.get('sample_count'),'merchant_median':price_info.get('median'),
+              'merchant_p90':price_info.get('p90'),'auto_scaled':False
+            }
             comm=parse_commission_rule(merchant.get('raw_commission_pct'),merchant.get('raw_flat_commission'),price)
             p.update(comm)
             if p['expected_commission_eur']+1e-9<MIN_COMMISSION:
@@ -151,24 +177,31 @@ def stage_feed(feed,context):
                 'merchant_id','merchant_program_id','canonical_name','official_domain','solution_whitespace_score','demand_beacon_score',
                 'demand_score','competition_score','trust_score','confidence','promotion_mode','dominant_market'
             )}
+            p['merchant_context']['resolved_feed_share']=merchant_safety.get('resolved_feed_share')
             p['canonical_key']=canonical_key(p)
             pre=preliminary_score(p,merchant)
-            db.execute('insert or replace into candidates(source_hash,canonical_key,payload,expected_commission,preliminary_score) values(?,?,?,?,?)',(
-                p['source_record_hash'],p['canonical_key'],json.dumps(p,ensure_ascii=False,default=str),p['expected_commission_eur'],pre))
+            db.execute('insert or replace into candidates(source_hash,canonical_key,merchant_id,merchant_name,competition_score,payload,expected_commission,preliminary_score) values(?,?,?,?,?,?,?,?)',(
+                p['source_record_hash'],p['canonical_key'],mid,p['merchant_name'],float(merchant.get('competition_score') or 50),
+                json.dumps(p,ensure_ascii=False,default=str),p['expected_commission_eur'],pre))
             eligible+=1
             if eligible%5000==0:db.commit()
             if seen%250000==0:
                 print(json.dumps({'phase':'stream','seen':seen,'commission_eligible':eligible,'merchant_resolution_methods':resolution_methods.most_common(),'excluded':reasons.most_common(8)}),flush=True)
     finally:db.commit()
+    removed,saturated=prune_dynamic_candidate_saturation(db,reasons)
+    eligible=max(0,eligible-removed)
     return db,{
       'records_seen':seen,
       'commission_eligible_records':eligible,
       'merchant_resolution_methods':resolution_methods.most_common(),
-      'excluded_reasons':reasons.most_common()
+      'excluded_reasons':reasons.most_common(),
+      'dynamic_saturated_merchants':saturated,
+      'price_integrity_policy':'no automatic cents/EUR conversion; suspicious merchant scales quarantined before commission',
+      'safety_profile_path':'product-feed-safety-profile.json'
     }
 
 
-def iter_best_offers(db,max_offers_per_product=3):
+def iter_best_offers(db,max_offers_per_product=1):
     # Keep up to three eligible offers per canonical product; AI can choose merchant-aware best offer.
     q='''select payload from (
       select payload,canonical_key,preliminary_score,
@@ -194,7 +227,10 @@ def build_ai_item(p,context):
 
 def process_batch(items,stats):
     wire=[{k:v for k,v in x.items() if not k.startswith('_')} for x in items]
-    enriched=gateway('enrich',items=wire).get('items',[])
+    enrich_res=gateway('enrich',items=wire,thinking='auto')
+    decision=enrich_res.get('thinking') or {}
+    stats['enrich_thinking_on' if decision.get('enabled') else 'enrich_thinking_off']+=1
+    enriched=enrich_res.get('items',[])
     by_hash={str(x.get('source_record_hash')):x for x in enriched}
     audit_input=[]
     for x in items:
@@ -202,7 +238,11 @@ def process_batch(items,stats):
         if h not in by_hash:
             stats['ai_enrichment_missing']+=1;continue
         audit_input.append({**{k:v for k,v in x.items() if not k.startswith('_')},'enrichment':by_hash[h]})
-    audited=gateway('audit',items=audit_input).get('items',[])
+    if not audit_input:return 0
+    audit_res=gateway('audit',items=audit_input,thinking='auto')
+    decision=audit_res.get('thinking') or {}
+    stats['audit_thinking_on' if decision.get('enabled') else 'audit_thinking_off']+=1
+    audited=audit_res.get('items',[])
     audit_by={str(x.get('source_record_hash')):x for x in audited}
     saves=[]
     for x in items:
@@ -224,6 +264,17 @@ def process_batch(items,stats):
           expected_commission=p['expected_commission_eur'],discount=p.get('discount_pct'),evidence_confidence=evidence_conf)
         verdict=str(audit.get('verdict') or 'needs_review').lower()
         if verdict not in ('validated','needs_review','rejected'):verdict='needs_review'
+        stats['audited_'+verdict]+=1
+        if verdict!='validated':
+            stats['not_persisted_nonvalidated']+=1;continue
+        if not selected_pains:
+            stats['not_persisted_no_validated_pain']+=1;continue
+        if float(audit.get('overall_score') or 0)<MIN_AUDIT_OVERALL:
+            stats['not_persisted_audit_score']+=1;continue
+        if pain<MIN_PAIN_FIT:
+            stats['not_persisted_pain_fit']+=1;continue
+        if evidence_conf<MIN_PRODUCT_EVIDENCE:
+            stats['not_persisted_evidence_confidence']+=1;continue
         saves.append({
           'source_feed':SOURCE_FEED,'canonical_key':p['canonical_key'],'source_record_hash':h,
           'external_product_id':p.get('external_product_id'),'merchant_id':p['merchant_context']['merchant_id'],
@@ -238,15 +289,14 @@ def process_batch(items,stats):
           'expected_commission_eur':p.get('expected_commission_eur'),'commission_rule':p.get('commission_rule'),
           'commission_confidence':p.get('commission_confidence'),'tracking_url':p.get('tracking_url'),'image_url':p.get('image_url'),
           'thumb_url':p.get('thumb_url'),'in_stock':p.get('in_stock'),'availability':p.get('availability'),'times_bought':p.get('times_bought'),
-          'valid_from':p.get('valid_from'),'valid_to':p.get('valid_to'),'pain_matches':[
+          'valid_from':p.get('valid_from'),'valid_to':p.get('valid_to'),'price_integrity':p.get('price_integrity'),'pain_matches':[
               {'id':c['id'],'score':float(audit.get('pain_scores',{}).get(str(c['id']),pain)),'confidence':c.get('confidence'),'rationale':audit.get('pain_rationale')} for c in selected_pains],
           'theme_matches':[{'id':t['id'],'relevance_score':float(audit.get('theme_scores',{}).get(str(t['id']),t.get('retrieval_score') or 0)),'seasonal_score':t.get('seasonal_curve_score'),'rationale':audit.get('theme_rationale')} for t in selected_themes],
-          'scores':{**components,'final_opportunity_score':final},'validation_status':verdict,
+          'scores':{**components,'final_opportunity_score':final},'validation_status':'validated',
           'audit_summary':audit.get('audit_summary'),'audit':audit,'enrichment':enrich,
           'evidence_count':sum(int(c.get('evidence_count') or 0) for c in selected_pains),
           'resolution':{'method':p.get('merchant_resolution_method'),'target_domain':p.get('target_domain'),'linkwise_route':p.get('linkwise_route')}
         })
-        stats['audited_'+verdict]+=1
     if saves:
         res=gateway('save_batch',items=saves)
         stats['saved']+=int(res.get('saved') or 0)
@@ -258,25 +308,44 @@ def main(feed):
     if not health.get('deepseek_configured'):
         raise SystemExit('Product Intelligence requires DeepSeek configuration for Phase B; refusing non-AI persistence fallback.')
     context=gateway('context')
-    print(json.dumps({'phase':'context','programs':len(context.get('programs',[])),'pain_clusters':len(context.get('pain_clusters',[])),'themes':len(context.get('themes',[])),'deepseek_model':health.get('deepseek_model')}),flush=True)
-    db,stream_stats=stage_feed(feed,context)
+    pain_count=len(context.get('pain_clusters',[]))
+    if pain_count<MIN_VALIDATED_PAIN_CLUSTERS:
+        raise SystemExit(f'Product Intelligence requires at least {MIN_VALIDATED_PAIN_CLUSTERS} validated pain clusters; found {pain_count}.')
+    print(json.dumps({'phase':'context','programs':len(context.get('programs',[])),'pain_clusters':pain_count,'themes':len(context.get('themes',[])),'deepseek_model':health.get('deepseek_model'),'ai_max_candidates':AI_MAX_CANDIDATES}),flush=True)
+    reused=False
+    if REUSE_STAGE and Path(STAGE_DB).exists():
+        try:
+            db=init_stage(STAGE_DB,reset=False)
+            staged=db.execute('select count(*) from candidates').fetchone()[0]
+            reused=staged>0
+        except Exception:
+            reused=False
+    if reused:
+        stream_stats={'stage_reused_from_phase_a':True,'commission_eligible_records':staged}
+    else:
+        db,stream_stats=stage_feed(feed,context)
     stats=collections.Counter(); batch=[]; submitted=0
-    for p in iter_best_offers(db):
+    for p in iter_best_offers(db,AI_OFFERS_PER_PRODUCT):
+        if submitted+len(batch)>=AI_MAX_CANDIDATES:break
         batch.append(build_ai_item(p,context))
         if len(batch)>=AI_BATCH:
             process_batch(batch,stats);submitted+=len(batch);batch=[]
-            if submitted%100==0:print(json.dumps({'phase':'ai','submitted':submitted,**stats}),flush=True)
+            print(json.dumps({'phase':'ai','submitted':submitted,**stats}),flush=True)
     if batch:process_batch(batch,stats);submitted+=len(batch)
     unique_products=db.execute('select count(distinct canonical_key) from candidates').fetchone()[0]
     profile={**stream_stats,'unique_commission_eligible_products':unique_products,'ai_offers_submitted':submitted,**stats,'policy':{
       'commission_gate_eur':MIN_COMMISSION,'merchant_trust_gate':MIN_MERCHANT_TRUST,
       'merchant_resolution':'Linkwise tracking_url destination domain -> authoritative merchant official_domain; exact program/alias only as secondary path',
-      'dominant_merchants':'excluded from product promotion; retained in merchant intelligence as demand beacons',
+      'dominant_merchants':'static + dynamic feed/candidate saturation excluded from promotion; evidence retained as demand beacons',
+      'price_integrity':'no automatic cents/EUR conversion; statistically suspicious scales are quarantined before commission',
+      'ai_max_candidates':AI_MAX_CANDIDATES,'ai_offers_per_product':AI_OFFERS_PER_PRODUCT,
+      'persistence':'VALIDATED only + validated pain + audit/pain/evidence thresholds',
       'ranking':'25 pain + 20 merchant whitespace + 15 Greek demand + 12 commission + 10 inverse competition + 8 seasonal + 5 trust + 3 discount + 2 evidence confidence',
       'raw_feed_imported':False,'ai_fallback_allowed':False
     }}
     PROFILE_PATH.write_text(json.dumps(profile,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
     print(json.dumps({'product_intelligence_final':profile},ensure_ascii=False,default=str),flush=True)
+    db.close()
 
 
 if __name__=='__main__':

@@ -35,6 +35,7 @@ def summarize(db,stream_stats,context):
               'effective_price':p.get('price'),
               'discount_pct':p.get('discount_pct'),
               'expected_commission_eur':p.get('expected_commission_eur'),
+              'price_integrity':p.get('price_integrity'),
               'potential_commission_eur':p.get('potential_commission_eur'),
               'commission_rule':p.get('commission_rule'),
               'merchant_solution_whitespace':p.get('merchant_context',{}).get('solution_whitespace_score'),
@@ -63,6 +64,8 @@ def summarize(db,stream_stats,context):
         'minimum_merchant_trust':MIN_MERCHANT_TRUST,
         'dominant_merchant_offers':'excluded; merchant intelligence retained as Demand Beacon/RAG evidence',
         'commission_range_policy':'conservative minimum for automatic eligibility',
+        'price_integrity':'no auto-scale; suspicious merchant price units quarantined before commission',
+        'dynamic_saturation':'feed-share + post-commission candidate-share gates',
         'next_phase':'AI Product Research + RAG + independent Skeptic Audit before persistence'
       },
       'top_candidate_sample_count':len(top)

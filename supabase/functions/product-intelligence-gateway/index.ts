@@ -115,6 +115,8 @@ const AUDIT_SYSTEM=`You are SocialMarket Product Skeptic/Audit Agent. Your job i
 async function upsertItem(x:any){
   const merchantId=String(x.merchant_id||''),programId=x.merchant_program_id||null,key=String(x.canonical_key||''),hash=String(x.source_record_hash||'')
   if(!merchantId||!key||!hash||Number(x.expected_commission_eur||0)<10)throw new Error('invalid_product_payload')
+  if(String(x.validation_status||'')!=='validated')throw new Error('nonvalidated_product_persistence_rejected')
+  if(!Array.isArray(x.pain_matches)||x.pain_matches.length<1)throw new Error('validated_pain_required')
   const policy=await sql`select promotion_mode,dominant_market from catalog.merchant_promotion_policy where merchant_id=${merchantId} limit 1`
   if(policy[0]?.dominant_market||['demand_beacon_only','blocked'].includes(policy[0]?.promotion_mode))throw new Error('dominant_merchant_offer_rejected')
   let pr=await sql`select id from catalog.products where canonical_key=${key} limit 1`
@@ -148,7 +150,7 @@ async function upsertItem(x:any){
 }
 
 Deno.serve(async(req)=>{
-  if(req.method==='GET')return json({ok:true,service:'product-intelligence-gateway',version:'1.1',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+  if(req.method==='GET')return json({ok:true,service:'product-intelligence-gateway',version:'1.2',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
   if(req.method!=='POST')return json({error:'method_not_allowed'},405)
   try{
     await auth(req);const b=await req.json();const action=String(b.action||'')
