@@ -4,12 +4,19 @@ import threading
 
 import consumer_evidence_v4 as consumer
 from consumer_source_expansion_v43 import apply as apply_source_expansion
-from consumer_direct_social_v44 import apply as apply_direct_social
+import consumer_direct_social_v44 as direct_social
+from niche_product_prior_v45 import apply as apply_niche_product_prior
 
-# Expand discovery/source families, then add independent direct public-social
-# acquisition. Neither layer changes the V4 skeptic/validation thresholds.
+# V4.5 source policy:
+# 1) expand crawlable Greek consumer communities,
+# 2) keep direct YouTube public-comment acquisition for product-bound pain,
+# 3) disable the Reddit JSON collector for this commercial research pipeline,
+# 4) prepend concrete niche-product intents and enforce social=pain-only.
+# None of these changes relax the V4 skeptic/validation thresholds.
 apply_source_expansion()
-apply_direct_social()
+direct_social.apply()
+direct_social._reddit=lambda aliases,keywords,limit=24: []
+apply_niche_product_prior()
 
 # libxml/lxml-backed extraction can abort the interpreter when several
 # Trafilatura parses run concurrently in the same GitHub runner process. Keep
