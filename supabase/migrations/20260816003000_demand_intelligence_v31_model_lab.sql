@@ -55,4 +55,20 @@ returns jsonb
 language plpgsql
 security definer
 set search_path=''
-as $$;
+as $$
+begin
+  if not public.socialmarket_is_admin() then raise exception 'admin_only'; end if;
+  return jsonb_build_object(
+    'engine_version','deep_demand_v31',
+    'runs',(select count(*) from intel.demand_model_lab_runs where geography='GR'),
+    'taxonomies',(select count(distinct taxonomy_id) from intel.demand_model_lab_runs where geography='GR'),
+    'completed',(select count(*) from intel.demand_model_lab_runs where geography='GR' and status='completed'),
+    'withheld',(select count(*) from intel.demand_model_lab_runs where geography='GR' and status='withheld'),
+    'failed',(select count(*) from intel.demand_model_lab_runs where geography='GR' and status='failed'),
+    'latest_generated_at',(select max(generated_at) from intel.demand_model_lab_runs where geography='GR')
+  );
+end;
+$$;
+
+revoke all on function public.admin_demand_model_lab_status_v31() from public;
+grant execute on function public.admin_demand_model_lab_status_v31() to authenticated;
