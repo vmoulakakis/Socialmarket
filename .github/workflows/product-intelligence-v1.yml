@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '40 1 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - '.github/product-intelligence-trigger'
+      - '.github/workflows/product-intelligence-v1.yml'
 
 concurrency:
   group: socialmarket-product-intelligence-v1
@@ -27,6 +32,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Preflight Product Intelligence gateway and DeepSeek
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          url='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway'
+          with urllib.request.urlopen(url, timeout=30) as r:
+              health=json.loads(r.read().decode())
+          print({k:health.get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')})
+          if not health.get('ok'):
+              raise SystemExit('Product Intelligence gateway unhealthy')
+          if not health.get('deepseek_configured'):
+              raise SystemExit('DEEPSEEK_API_KEY is not configured in Supabase Edge secrets; refusing feed download')
+          PY
 
       - uses: actions/setup-python@v5
         with:
