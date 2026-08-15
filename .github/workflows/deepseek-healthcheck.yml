@@ -29,3 +29,4 @@ jobs:
           if not h.get('deepseek_model'):
               raise SystemExit('DeepSeek model missing')
           PY
+# rerun: verify secret after user update
