@@ -12,6 +12,7 @@ PRICE_INTEGER_RATIO_RISK=float(os.getenv('PRODUCT_PRICE_INTEGER_RATIO_RISK','0.9
 PRICE_MINOR_RISK_MEDIAN=float(os.getenv('PRODUCT_PRICE_MINOR_RISK_MEDIAN','1200'))
 PRICE_MINOR_RISK_P90=float(os.getenv('PRODUCT_PRICE_MINOR_RISK_P90','3000'))
 PRICE_HIGH_VALUE_UNVERIFIED=float(os.getenv('PRODUCT_PRICE_HIGH_VALUE_UNVERIFIED','1000'))
+PRICE_EXTREME_OUTLIER_MULTIPLIER=float(os.getenv('PRODUCT_PRICE_EXTREME_OUTLIER_MULTIPLIER','10'))
 
 MAX_MERCHANT_FEED_SHARE=float(os.getenv('PRODUCT_MAX_MERCHANT_FEED_SHARE','0.08'))
 SECONDARY_FEED_SHARE=float(os.getenv('PRODUCT_SECONDARY_FEED_SHARE','0.03'))
@@ -158,6 +159,11 @@ def price_integrity_allows(price,merchant_safety):
         return False,'price_scale_unverified',info
     if status=='limited_evidence' and price>=PRICE_HIGH_VALUE_UNVERIFIED and _integerish(price):
         return False,'price_scale_insufficient_evidence_high_value',info
+    p90=float(info.get('p90') or 0)
+    # Per-record fail-closed gate: catches mixed-unit/outlier rows even when the merchant feed is mostly healthy.
+    # We never divide by 100 automatically; extreme values are quarantined for evidence-based review.
+    if p90>0 and _integerish(price) and price>=PRICE_HIGH_VALUE_UNVERIFIED and price>=p90*PRICE_EXTREME_OUTLIER_MULTIPLIER:
+        return False,'price_extreme_outlier_unverified',info
     return True,'price_major_unit_probable',info
 
 
