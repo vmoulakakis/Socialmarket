@@ -104,3 +104,5 @@ jobs:
           name: semantic-category-pain-v4-output
           retention-days: 30
           path: workers/market_intelligence/semantic-category-pain-output.json
+
+# manual-trigger: deploy Greece-first pain intelligence 2026-08-16
