@@ -1,0 +1,3 @@
+phase-a-real-feed-validation: 2026-08-15T12:24:00+03:00
+reason: validate Linkwise tracking_url destination-domain merchant resolution after PR-15
+persistence: phase-a-only-until-deepseek-secret-is-configured
