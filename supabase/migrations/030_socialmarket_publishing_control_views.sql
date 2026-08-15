@@ -23,5 +23,7 @@ left join content.brand_sites bs on bs.id = i.brand_site_id;
 
 revoke all on public.socialmarket_publishing_outbox from anon;
 revoke all on public.socialmarket_content_items from anon;
+revoke all on public.socialmarket_publishing_outbox from authenticated;
+revoke all on public.socialmarket_content_items from authenticated;
 grant select on public.socialmarket_publishing_outbox to authenticated;
 grant select on public.socialmarket_content_items to authenticated;
