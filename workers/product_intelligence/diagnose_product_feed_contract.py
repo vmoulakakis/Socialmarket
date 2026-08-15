@@ -5,21 +5,23 @@ import duckdb
 src=sys.argv[1] if len(sys.argv)>1 else 'part_0000.parquet'
 out=Path(sys.argv[2] if len(sys.argv)>2 else 'product-feed-contract.json')
 con=duckdb.connect()
-cols=con.execute(f"describe select * from read_parquet('{src}')").fetchall()
+
+def ident(name):
+    return '"'+str(name).replace('"','""')+'"'
+
+cols=con.execute("describe select * from read_parquet(?)",[src]).fetchall()
 column_names=[r[0] for r in cols]
 possible=[c for c in column_names if any(k in c.lower() for k in ('merchant','program','shop','store','advertiser','partner','network','campaign','site','url'))]
 
-sample=con.execute(f"select * from read_parquet('{src}') limit 5").fetchdf().fillna('').to_dict(orient='records')
+sample_rows=con.execute("select * from read_parquet(?) limit 5",[src]).fetchall()
+sample=[dict(zip(column_names,row)) for row in sample_rows]
 profiles={}
 for c in possible:
-    q=f'''select count(*) total,
-                 count({duckdb.escape_identifier(c)}) non_null,
-                 count(distinct {duckdb.escape_identifier(c)}) distinct_count
-          from read_parquet(?)'''
+    ci=ident(c)
+    q=f'''select count(*) total,count({ci}) non_null,count(distinct {ci}) distinct_count from read_parquet(?)'''
     total,non_null,distinct_count=con.execute(q,[src]).fetchone()
-    vals=con.execute(f'''select cast({duckdb.escape_identifier(c)} as varchar) value,count(*) n
-                         from read_parquet(?)
-                         where {duckdb.escape_identifier(c)} is not null
+    vals=con.execute(f'''select cast({ci} as varchar) value,count(*) n
+                         from read_parquet(?) where {ci} is not null
                          group by 1 order by n desc limit 30''',[src]).fetchall()
     profiles[c]={'total':total,'non_null':non_null,'distinct':distinct_count,'top_values':[{'value':v,'count':n} for v,n in vals]}
 
