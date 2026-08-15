@@ -84,5 +84,11 @@ class ProductIntelligencePolicyTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(reason,'price_major_unit_probable')
 
+    def test_price_integrity_quarantines_extreme_mixed_unit_row(self):
+        info=classify_price_sample([12.9,19.5,23.68,31.2,45.0,90.2]*30)
+        ok,reason,_=price_integrity_allows(3501,{'price_integrity':info})
+        self.assertFalse(ok)
+        self.assertEqual(reason,'price_extreme_outlier_unverified')
+
 
 if __name__=='__main__':unittest.main()

@@ -96,16 +96,25 @@ function chooseThinking(payload:any,action:'enrich'|'audit',requested:ThinkingMo
 async function deepseek(system:string,payload:unknown,action:'enrich'|'audit',requested:ThinkingMode='auto'){
   if(!DEEPSEEK_KEY)throw new Error('deepseek_not_configured')
   const decision=chooseThinking(payload,action,requested)
-  const body:any={model:DEEPSEEK_MODEL,temperature:0.1,max_tokens:decision.enabled?5000:2200,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:`Return JSON only. Input:
+  const call=async(maxTokens:number,retry=false)=>{
+    const body:any={model:DEEPSEEK_MODEL,temperature:0.1,max_tokens:maxTokens,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:`Return one complete JSON object only. Do not truncate strings. ${retry?'This is a retry because the previous JSON was incomplete. Be concise. ':''}Input:
 ${JSON.stringify(payload)}`}] }
-  if(decision.enabled){body.thinking={type:'enabled'};body.reasoning_effort='high'}
-  else{body.thinking={type:'disabled'};body.reasoning_effort='low'}
-  const r=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${DEEPSEEK_KEY}`},body:JSON.stringify(body)})
-  const raw=await r.text()
-  if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,800)}`)
-  const j=JSON.parse(raw);const content=j?.choices?.[0]?.message?.content
-  if(!content)throw new Error('deepseek_empty_content')
-  return {data:JSON.parse(content),thinking:decision}
+    if(decision.enabled){body.thinking={type:'enabled'};body.reasoning_effort='high'}
+    else{body.thinking={type:'disabled'};body.reasoning_effort='low'}
+    const r=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${DEEPSEEK_KEY}`},body:JSON.stringify(body)})
+    const raw=await r.text()
+    if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,800)}`)
+    const j=JSON.parse(raw);const content=j?.choices?.[0]?.message?.content
+    if(!content)throw new Error('deepseek_empty_content')
+    return content
+  }
+  const first=await call(decision.enabled?5200:3000,false)
+  try{return {data:JSON.parse(first),thinking:{...decision,json_retry:false}}}
+  catch(firstError){
+    const second=await call(decision.enabled?6200:4200,true)
+    try{return {data:JSON.parse(second),thinking:{...decision,json_retry:true}}}
+    catch(secondError){throw new Error(`deepseek_invalid_json_after_retry:${String(secondError).slice(0,240)}`)}
+  }
 }
 
 const ENRICH_SYSTEM=`You are SocialMarket Product Research Agent. Analyze only the supplied product facts, merchant context and RAG evidence. Never invent product features, prices, commission, merchant facts, pain evidence or IDs. A product is useful only when it plausibly solves one or more supplied validated pain/unmet-need clusters. Large/dominant merchant offers have already been removed. Produce JSON {"items":[...]}. For every input source_record_hash return: source_record_hash, canonical_title, brand_name, model_name, category, subcategory, human_description (Greek, evidence-grounded, no hype), semantic_text, pain_cluster_ids (ONLY IDs supplied in pain_rag), theme_ids (ONLY IDs supplied in theme_rag), pain_gap_fit_score 0-100, seasonal_theme_score 0-100, product_evidence_confidence 0-100, pain_rationale, theme_rationale, unsupported_claims[]. If evidence is weak, use low scores and empty IDs.`
@@ -150,7 +159,7 @@ async function upsertItem(x:any){
 }
 
 Deno.serve(async(req)=>{
-  if(req.method==='GET')return json({ok:true,service:'product-intelligence-gateway',version:'1.2',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+  if(req.method==='GET')return json({ok:true,service:'product-intelligence-gateway',version:'1.3',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
   if(req.method!=='POST')return json({error:'method_not_allowed'},405)
   try{
     await auth(req);const b=await req.json();const action=String(b.action||'')
@@ -168,5 +177,5 @@ Deno.serve(async(req)=>{
       return json({ok:true,saved,ids})
     }
     throw new Error('action_not_allowed')
-  }catch(e){console.error(e);return json({error:String(e instanceof Error?e.message:e)},401)}
+  }catch(e){const msg=String(e instanceof Error?e.message:e);console.error(e);const status=['missing_oidc','oidc_not_allowed'].some(x=>msg.includes(x))?401:500;return json({error:msg},status)}
 })
