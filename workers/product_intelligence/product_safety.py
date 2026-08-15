@@ -14,6 +14,8 @@ PRICE_MINOR_RISK_P90=float(os.getenv('PRODUCT_PRICE_MINOR_RISK_P90','3000'))
 PRICE_HIGH_VALUE_UNVERIFIED=float(os.getenv('PRODUCT_PRICE_HIGH_VALUE_UNVERIFIED','1000'))
 PRICE_EXTREME_OUTLIER_MULTIPLIER=float(os.getenv('PRODUCT_PRICE_EXTREME_OUTLIER_MULTIPLIER','10'))
 
+# These thresholds describe source-feed concentration only. They must never be
+# interpreted as Greek market share or used by themselves as product kill-switches.
 MAX_MERCHANT_FEED_SHARE=float(os.getenv('PRODUCT_MAX_MERCHANT_FEED_SHARE','0.08'))
 SECONDARY_FEED_SHARE=float(os.getenv('PRODUCT_SECONDARY_FEED_SHARE','0.03'))
 FEED_COMPETITION_GATE=float(os.getenv('PRODUCT_FEED_COMPETITION_GATE','85'))
@@ -66,7 +68,12 @@ def classify_price_sample(values):
 
 
 def build_feed_safety_profile(feed,context,iter_records,normalize,resolve_merchant,merchant_maps):
-    """Read-only first pass that profiles merchant share and price-scale risk."""
+    """Read-only first pass that profiles feed concentration and price-scale risk.
+
+    Feed concentration is provenance about the Linkwise source, not observed market
+    share. It is exposed for diversification/diagnostics and never rejects a product
+    by itself.
+    """
     by_program,aliases,by_domain=merchant_maps(context)
     counts=collections.Counter()
     resolution=collections.Counter()
@@ -113,7 +120,7 @@ def build_feed_safety_profile(feed,context,iter_records,normalize,resolve_mercha
         row=by_mid.get(mid,{})
         share=(count/resolved) if resolved else 0.0
         competition=float(row.get('competition_score') or 50)
-        saturated=(
+        concentrated=(
             share>=MAX_MERCHANT_FEED_SHARE
             or (share>=SECONDARY_FEED_SHARE and competition>=FEED_COMPETITION_GATE)
         )
@@ -124,12 +131,14 @@ def build_feed_safety_profile(feed,context,iter_records,normalize,resolve_mercha
             'resolved_records':int(count),
             'resolved_feed_share':round(share,6),
             'competition_score':competition,
-            'feed_saturated':saturated,
-            'feed_saturation_reason':(
+            'feed_concentrated':concentrated,
+            'feed_concentration_reason':(
                 'feed_share'
                 if share>=MAX_MERCHANT_FEED_SHARE
-                else ('feed_share_plus_competition' if saturated else None)
+                else ('feed_share_plus_observed_competition' if concentrated else None)
             ),
+            'feed_saturated':False,
+            'feed_saturation_policy':'disabled_as_kill_switch; Linkwise feed share is not Greek market share',
             'price_integrity':classify_price_sample(samples.get(mid,[])),
         }
 
@@ -146,6 +155,7 @@ def build_feed_safety_profile(feed,context,iter_records,normalize,resolve_mercha
             'price_minor_risk_median':PRICE_MINOR_RISK_MEDIAN,
             'price_minor_risk_p90':PRICE_MINOR_RISK_P90,
         },
+        'feed_concentration_semantics':'diagnostic/source-diversity only; never market share and never a standalone product rejection',
         'merchants':merchants,
     }
     SAFETY_PROFILE_PATH.write_text(json.dumps(profile,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
@@ -167,35 +177,42 @@ def price_integrity_allows(price,merchant_safety):
     return True,'price_major_unit_probable',info
 
 
-def prune_dynamic_candidate_saturation(db,reasons):
+def candidate_concentration_profile(db):
+    """Describe candidate concentration without deleting candidates.
+
+    V2 handles concentration through merchant/category shortlist caps. This keeps
+    source-feed composition from masquerading as market saturation while preserving
+    concentration as an auditable diagnostic.
+    """
     rows=db.execute(
         'select merchant_id,max(merchant_name),max(competition_score),count(*) '
         'from candidates group by merchant_id'
     ).fetchall()
     total=sum(int(row[3]) for row in rows)
-    removed=[]
-    removed_count=0
+    flagged=[]
     for mid,name,competition,count in rows:
         share=(count/total) if total else 0.0
         competition=float(competition or 50)
-        saturated=(
+        concentrated=(
             share>=MAX_ELIGIBLE_MERCHANT_SHARE
             or (share>=SECONDARY_ELIGIBLE_SHARE and competition>=ELIGIBLE_COMPETITION_GATE)
             or (count>=ELIGIBLE_ABSOLUTE_COUNT and competition>=ELIGIBLE_ABSOLUTE_COMPETITION)
         )
-        if not saturated:
+        if not concentrated:
             continue
-        db.execute('delete from candidates where merchant_id=?',(mid,))
-        removed_count+=int(count)
-        removed.append({
+        flagged.append({
             'merchant_id':mid,
             'merchant_name':name,
             'candidate_count':int(count),
             'candidate_share':round(share,6),
             'competition_score':competition,
+            'action':'diversify_shortlist_not_delete',
         })
-    if removed_count:
-        reasons['dynamic_candidate_saturation']+=removed_count
-        db.commit()
-    removed.sort(key=lambda x:x['candidate_count'],reverse=True)
-    return removed_count,removed
+    flagged.sort(key=lambda x:x['candidate_count'],reverse=True)
+    return flagged
+
+
+def prune_dynamic_candidate_saturation(db,reasons):
+    """Backward-compatible V1 hook; V2 no longer deletes on feed/candidate share."""
+    flagged=candidate_concentration_profile(db)
+    return 0,flagged
