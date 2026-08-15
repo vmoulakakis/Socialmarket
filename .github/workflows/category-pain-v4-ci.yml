@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'workers/market_intelligence/category_pain_intelligence_v4.py'
+      - 'workers/market_intelligence/category_pain_intelligence_v42.py'
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'workers/market_intelligence/test_*v4.py'
@@ -15,6 +16,7 @@ on:
     branches: [main]
     paths:
       - 'workers/market_intelligence/category_pain_intelligence_v4.py'
+      - 'workers/market_intelligence/category_pain_intelligence_v42.py'
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'supabase/functions/evidence-gateway/**'
@@ -37,7 +39,7 @@ jobs:
       - name: Install evidence dependencies
         run: pip install requests trafilatura
       - name: Compile V4 workers
-        run: python -m py_compile workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py
+        run: python -m py_compile workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
       - name: Test consumer extraction and market/context invariants
         working-directory: workers/market_intelligence
         run: python -m unittest -v test_consumer_evidence_v4.py test_category_pain_v4.py
@@ -50,3 +52,4 @@ jobs:
           grep -R "context_only" workers/market_intelligence/authoritative_context_v3.py
           grep -R "SERP snippets are discovery-only" workers/market_intelligence/category_pain_intelligence_v4.py
           grep -R "not search volume" workers/market_intelligence/category_pain_intelligence_v4.py
+          grep -R "_EXTRACT_LOCK" workers/market_intelligence/category_pain_intelligence_v42.py

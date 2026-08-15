@@ -13,6 +13,7 @@ on:
     branches: [main]
     paths:
       - 'workers/market_intelligence/category_pain_intelligence_v4.py'
+      - 'workers/market_intelligence/category_pain_intelligence_v42.py'
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'workers/market_intelligence/market_query_aliases.py'
@@ -69,14 +70,14 @@ jobs:
           done
           docker logs socialmarket-searxng || true
           exit 1
-      - name: Compile Category Pain V4 workers
-        run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py
-      - name: Run canonical Greek Category Pain V4
+      - name: Compile Category Pain V4.2 workers
+        run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
+      - name: Run canonical Greek Category Pain V4.2
         working-directory: workers/market_intelligence
         shell: bash
         run: |
           set -euo pipefail
-          python category_pain_intelligence_v4.py | tee semantic-category-pain-output.json
+          python category_pain_intelligence_v42.py | tee semantic-category-pain-output.json
       - name: Assert structured research completion
         working-directory: workers/market_intelligence
         run: |
