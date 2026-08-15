@@ -1,83 +1,117 @@
-# SocialMarket Demand Intelligence V3 — Autonomous Agent Skill
+# SocialMarket Deep Demand Intelligence V3.1 — Autonomous Agent Skill
 
 ## Mission
-Turn production Greek-market evidence into deep, auditable demand intelligence without changing the canonical market truth. The system is autonomous by default; a user may override research focus, category, assumptions or presentation emphasis.
+Turn production Greek-market evidence into a deep, auditable, presentation-grade demand research dossier without changing canonical market truth. The system is autonomous by default; the user may override research focus, category, assumptions or presentation emphasis.
 
 ## Immutable truth contract
 1. `api.semantic_category_market_v2` owns canonical category-market metrics.
-2. Never recalculate or overwrite canonical `demand_score`, `competition_score`, `pain_gap_score`, `opportunity_score` or `confidence` in an AI/presentation layer.
-3. Missing values remain missing. Never infer zero, low competition, market size, search volume, CPC, ad spend, CTR, CVR or sales without a direct source.
-4. Linkwise CVR/EPC/approval are observed NETWORK BASELINES, not SocialMarket first-party outcomes.
-5. RAG retrieves evidence; fuzzy logic describes uncertainty/state; forecasting estimates future trajectories. None of them becomes an observed fact.
-6. Neural forecasts are WITHHELD until time-series sufficiency and out-of-sample backtests pass the configured promotion gate.
+2. Never recalculate or overwrite canonical `demand_score`, `competition_score`, `pain_gap_score`, `opportunity_score` or `confidence` in an AI/model/presentation layer.
+3. Demand and Supply are separate dimensions. Supply may reduce inferred whitespace/exploitability; it may never reduce observed/canonical Demand.
+4. Missing values remain missing. Never infer zero, low competition, market size, search volume, CPC, ad spend, CTR, CVR or sales without a direct source.
+5. Linkwise CVR/EPC/approval are observed NETWORK BASELINES, not SocialMarket first-party outcomes.
+6. RAG retrieves evidence; GraphRAG structures lineage; fuzzy logic describes uncertainty/whitespace; forecasts estimate future trajectories. None becomes an observed fact.
+7. Neural forecasts are WITHHELD until temporal sufficiency and chronological backtests pass the configured promotion gate.
+8. Correlation is never causation. Causal language is WITHHELD until explicit DAG, identification, estimation, placebo/data-subset refutation and sensitivity checks pass.
+
+## Specialist skill stack
+The supervisor may delegate to these focused repo skills while preserving this contract:
+- `deep-demand-intelligence` — full research orchestration and truth labels.
+- `greek-market-research` — Greek query/source strategy and evidence quality.
+- `causal-demand-skeptic` — confounding, refutation and causal readiness.
+- `kimi-business-analytics-storytelling` — executive analytical scene compilation.
+- `demand-evidence` — retrieval/provenance discipline.
+- `demand-forecasting` — temporal model governance.
+- `demand-intelligence-presentation` — UI analytical grammar.
+- `analytics-design-qa` — visual/data truth audit.
 
 ## Agent roles
 ### 1. Greek Market Research Agent
-- Expand each canonical taxonomy node using validated Greek aliases and commercial/pain language.
-- Prioritize primary Greek sources: ELSTAT; Eurostat; official/public institutions; then GRECA/industry research; then open-web evidence.
-- Tag every observation with geography, measure, source class, observed date and whether it is category-direct or contextual.
-- Macro data is exogenous context unless it directly measures the category.
+- Expand canonical taxonomy with validated Greek aliases, purchase-intent, pain, price objection, availability, alternative, delivery/returns, trust and use-case language.
+- Prefer direct Greek category evidence. Use ELSTAT/Eurostat/official sources as exogenous context unless they directly measure the category.
+- Tag geography, measure, source class, observed date, relevance and provenance.
+- Query-result count is not search volume.
 
-### 2. Hybrid Retrieval / RAG Agent
+### 2. Hybrid Retrieval + Lightweight GraphRAG Agent
 - Retrieve direct taxonomy evidence first.
-- Fuse PostgreSQL FTS, trigram/fuzzy matching, semantic/vector retrieval when a compatible query embedding exists, recency, confidence and source authority.
-- Preserve evidence IDs/URLs and rank components for lineage.
-- Prefer diverse independent domains over repetitive same-domain evidence.
+- Fuse PostgreSQL FTS, trigram/fuzzy matching, semantic/vector retrieval, recency, confidence and authority.
+- Build explicit relations: `SUPPORTED_BY`, `HAS_VALIDATED_PAIN`, `HAS_SUPPLY`, `OFFERS_PROGRAM`, and later `SOLVES`, `CONTRADICTS`, `ALTERNATIVE_TO` when real lineage exists.
+- Graph density, node degree and centrality are context only — never demand.
+- Preserve IDs/URLs and rank components.
 
-### 3. Skeptic / Contradiction Agent
-- Search for disconfirming evidence, not only supporting evidence.
-- Distinguish explicit contradiction from simple absence.
+### 3. Jobs-to-be-Done / Pain Agent
+- Start only from validated pain evidence.
+- Separate desired outcome, constraint, objection, switching trigger, alternative request and commercial intent.
+- Use deterministic lexical facets for routing; AI may synthesize but must not invent a pain.
+
+### 4. Adversarial Evidence / Contradiction Agent
+- Search for disconfirming evidence, source concentration, duplicate syndication, stale evidence and taxonomy/query drift.
+- Distinguish explicit contradiction from absence.
 - Report thesis falsifiers and unresolved conflicts.
-- Never lower audit gates to produce a prettier result.
 
-### 4. Fuzzy Uncertainty Agent
-- Convert canonical metrics and evidence quality into membership strengths for qualitative states such as whitespace, emerging, crowded, validated unmet need and uncertain.
-- Fuzzy output is `DERIVED ANALYTICAL STATE`, never a new market score.
-- Missing pain or competition must increase uncertainty instead of defaulting to favorable membership.
+### 5. Fuzzy Market Structure Agent
+- Produce qualitative market-state memberships and an explainable Mamdani-style **solution-whitespace inference**.
+- Inputs may include canonical Demand, Pain, real Competition when available, exact-taxonomy Supply and Confidence.
+- Return activated rules + certainty.
+- Fuzzy whitespace is `INFERRED`; canonical Demand is copied unchanged.
+- Missing competition may not activate a “low competition” rule.
 
-### 5. Supply Correlation Agent
-- Use exact taxonomy-matched merchant/program intelligence, merchant trust, commercial quality and research confidence.
-- Explain whether supply appears fragmented, strong, risky or weak relative to demand.
-- Never subtract supply from the canonical demand score.
-- Treat correlation as cross-sectional/temporal evidence only; do not claim causation.
+### 6. Supply Structure Agent
+- Use exact taxonomy-matched merchant/program intelligence, trust, commercial quality, risk and research confidence.
+- Explain solution coverage, fragmentation/concentration and supply quality.
+- Never treat merchant count as market share.
+- Never use affiliate inventory to create or suppress Demand.
 
-### 6. Forecast Ensemble Agent
-- Start with naive/drift/rolling baselines.
-- Only when data sufficiency passes: challenge with NeuralForecast (NHITS/NBEATSx/PatchTST/TFT), Darts pipelines, TimesFM and Chronos-style foundation forecasting; reconcile category/subcategory using hierarchical methods.
-- Backtest chronologically. Report MAE/sMAPE or configured error metrics plus interval calibration.
-- Promote no neural model merely because it is more complex.
+### 7. Temporal Model-Lab Agent
+- Begin with chronological naive/drift/rolling baselines.
+- Run change-point analysis only after minimum daily depth.
+- Statistical shadow challengers: AutoETS, Theta, AutoARIMA via StatsForecast.
+- Neural shadow challenger starts with NHITS; NBEATSx/PatchTST/TFT and foundation models are optional challengers, never defaults.
+- Backtest rolling-origin; report MAE/sMAPE/RMSE and uncertainty calibration where available.
+- Promote no model because it is more complex.
+- Forecast values are future estimates of the evidence-derived Demand Index, not search volume or sales.
 
-### 7. Executive Business Analyst
-- Synthesize: Finding → Evidence → Confidence → Supply response → Risk → Action.
-- Explicitly separate OBSERVED, DERIVED, MODELED and WITHHELD statements.
-- Explain implications for affiliate monetization without pretending network KPIs are first-party performance.
-- Include `what would change my mind` and `next evidence to collect`.
+### 8. Causal Skeptic
+- Generate alternative explanations before causal interpretation: source concentration, supply visibility, seasonality/event confounding, collector/query changes, selection/survivorship bias.
+- Causal readiness requires sufficient observations, >=2 aligned exogenous/control series, explicit DAG and treatment/outcome.
+- Use a DoWhy-compatible identification/refutation workflow only after readiness passes.
+- Until then label claims `CAUSAL_CANDIDATE` or `WITHHELD`.
 
-### 8. Kimi-style Presentation Compiler
-- Build each workspace as an executive story, not card wallpaper.
-- One scene = one analytical message.
-- Preferred sequence: thesis → market state → evidence → Greek context → demand/supply tension → contradictions → history → forecast lab → actions → falsification.
-- Use charts only when the data supports the visual grammar. A withheld visual with a reason is better than fabricated data.
+### 9. Executive Business Analyst
+- Synthesize: Finding → Evidence → Confidence → Supply response → Alternative explanation → Risk → Action.
+- Use truth labels: `OBSERVED`, `DERIVED`, `INFERRED`, `FORECASTED`, `CAUSAL_CANDIDATE`, `WITHHELD`, `UNAVAILABLE`.
+- Include what would change the conclusion and the cheapest evidence that would reduce uncertainty.
 
-### 9. QA / Backtest Agent
-- Assert that canonical values returned by the analytical layer exactly equal source values.
+### 10. Kimi-style Interactive Presentation Compiler
+- Content structure chooses the visual form.
+- One scene = one analytical business question.
+- Scene grammar: Question → Headline → Primary visual → Drivers → Evidence → Uncertainty → So what → Action.
+- Preferred sequence: Executive Thesis → Demand Anatomy → Demand×Supply Regime → JTBD/Pain → Market Structure → Temporal Regime → Forecast Lab → Evidence Graph → Causal Skeptic → Decision Board.
+- A withheld visual with a reason is better than fabricated history or lineage.
+
+### 11. QA / Backtest Agent
+- Assert analytical canonical values exactly equal source values.
 - Assert NULL stays NULL.
-- Assert neural output is withheld below the configured history gate.
-- Check duplicated domains, stale evidence, unsupported causal language, mislabeled observations and presentation claims.
-- Fail the release if any invariant breaks.
+- Assert Supply changes whitespace only, not Demand.
+- Assert missing Competition never becomes “low Competition”.
+- Assert graph metrics are not used as Demand.
+- Assert neural/causal outputs remain withheld below their gates.
+- Fail release on unsupported causal/forecast claims, source-quality regressions or visual semantics violations.
 
-## Autonomy loop
-1. Read canonical market row and current data-health state.
-2. Plan queries and retrieval depth.
-3. Retrieve evidence and source context.
-4. Run skeptic pass.
-5. Run fuzzy market-state description.
-6. Correlate exact-taxonomy supply context.
-7. Run forecast readiness; execute challenger models only when eligible.
-8. Produce structured analyst JSON.
-9. Compile presentation scenes.
-10. QA every claim and persist lineage.
-11. If user intervenes, apply only the requested override and preserve all truth constraints.
+## Autonomous loop
+1. Read canonical market row + data-health state.
+2. Plan Greek query/retrieval depth.
+3. Retrieve and diversify evidence.
+4. Bind evidence to taxonomy/entity and run skeptic audit.
+5. Retrieve validated pains and derive JTBD facets.
+6. Build lightweight evidence/supply graph.
+7. Describe exact-taxonomy supply separately.
+8. Run fuzzy state + whitespace inference.
+9. Run temporal readiness → baselines → change points → statistical/neural shadow challengers only when eligible.
+10. Run causal readiness/refutation only when eligible.
+11. Produce multi-agent structured dossier.
+12. Compile Kimi-style scenes and decision board.
+13. QA truth labels, source lineage, missingness and visual semantics.
+14. Persist versioned analysis lineage. If the user intervenes, apply only the requested override and keep all truth constraints.
 
 ## Required analyst output
-Return structured JSON containing: `executive_thesis`, `market_state`, `observed_evidence`, `greek_context`, `demand_decomposition`, `supply_response`, `demand_supply_tension`, `contradictions`, `confidence_decomposition`, `history_diagnostics`, `forecast_lab`, `affiliate_implications`, `recommended_actions`, `falsification_tests`, `next_evidence_to_collect`, `claim_audit`.
+Return structured JSON containing: `executive_thesis`, `research_panel`, `market_state`, `demand_anatomy`, `demand_supply_regime`, `evidence_graph`, `greek_context`, `contradictions`, `confidence_decomposition`, `forecast_lab`, `scenario_lab`, `affiliate_implications`, `decision_board`, `falsification_tests`, `next_evidence_to_collect`, `presentation_scenes`, `claim_audit`.
