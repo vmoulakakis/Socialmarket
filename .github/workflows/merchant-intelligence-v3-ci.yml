@@ -2,14 +2,20 @@ name: Merchant Intelligence V4 CI
 
 on:
   push:
-    branches: [feat/merchant-audit-agent, fix/social-evidence-v4]
+    branches: [main, feat/merchant-audit-agent, fix/social-evidence-v4]
+    paths:
+      - 'workers/market_intelligence/**'
+      - 'agents/skills/category-discovery/**'
+      - 'agents/skills/subcategory-discovery/**'
+      - '.github/workflows/merchant-intelligence-v3*.yml'
+      - 'supabase/migrations/**'
+      - 'supabase/functions/merchant-research-gateway/**'
   pull_request:
     paths:
-      - 'workers/market_intelligence/merchant_intelligence_v3.py'
-      - 'workers/market_intelligence/merchant_intelligence_v4.py'
-      - 'workers/market_intelligence/evidence_collectors.py'
-      - 'workers/market_intelligence/audit_agent.py'
-      - '.github/workflows/merchant-intelligence-v3.yml'
+      - 'workers/market_intelligence/**'
+      - 'agents/skills/category-discovery/**'
+      - 'agents/skills/subcategory-discovery/**'
+      - '.github/workflows/merchant-intelligence-v3*.yml'
       - 'supabase/migrations/**'
       - 'supabase/functions/**'
 
@@ -24,38 +30,45 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install worker dependencies
+        run: pip install requests beautifulsoup4 trafilatura scrapy yt-dlp gallery-dl playwright
       - name: Compile workers
         run: |
+          python -m py_compile workers/market_intelligence/semantic_taxonomy.py
           python -m py_compile workers/market_intelligence/merchant_intelligence_v3.py
           python -m py_compile workers/market_intelligence/merchant_intelligence_v4.py
           python -m py_compile workers/market_intelligence/evidence_collectors.py
           python -m py_compile workers/market_intelligence/audit_agent.py
+      - name: Semantic taxonomy regression suite
+        working-directory: workers/market_intelligence
+        run: python -m unittest -v test_semantic_taxonomy.py
       - name: Audit entity relevance and pain gates
         run: |
           cd workers/market_intelligence
           python - <<'PY'
           from audit_agent import audit_research, pain_language
-          good = {'merchant_name':'Example Shop','official_url':'https://example.gr','category':'Home','subcategory':'Storage','demand_score':75,'competition_score':35,'pain_gap_score':80}
+          good = {'merchant_name':'Example Shop','official_url':'https://example.gr','category':'Home & Garden','subcategory':'Home Decor','demand_score':75,'competition_score':35,'pain_gap_score':80}
           evidence=[
-            {'source_url':'https://example.gr','source_kind':'official_site','collector':'trafilatura','confidence':.95,'body':'Example Shop storage solutions'},
-            {'source_url':'https://reddit.com/a','source_kind':'social_comment','platform':'reddit','collector':'searxng_social','confidence':.65,'body':'Example Shop is too expensive, looking for alternative'},
-            {'source_url':'https://youtube.com/watch?v=x','source_kind':'social_public_observation','platform':'youtube','collector':'searxng_social','confidence':.65,'body':'Example Shop review and storage test'},
-            {'source_url':'https://competitor1.gr','source_kind':'demand','collector':'searxng','confidence':.65,'body':'Example Shop storage demand Greece'},
-            {'source_url':'https://competitor2.gr','source_kind':'alternatives','collector':'searxng','confidence':.65,'body':'Example Shop alternative storage'},
+            {'source_url':'https://example.gr','source_kind':'official_site','collector':'trafilatura','confidence':.95,'body':'Example Shop home decor solutions'},
+            {'source_url':'https://reddit.com/a','source_kind':'social_comment','platform':'reddit','collector':'searxng_social','confidence':.65,'body':'Example Shop is too expensive, looking for alternative home decor'},
+            {'source_url':'https://youtube.com/watch?v=x','source_kind':'social_public_observation','platform':'youtube','collector':'searxng_social','confidence':.65,'body':'Example Shop review and decor test'},
+            {'source_url':'https://competitor1.gr','source_kind':'demand','collector':'searxng','confidence':.65,'body':'Example Shop home decor demand Greece'},
+            {'source_url':'https://competitor2.gr','source_kind':'alternatives','collector':'searxng','confidence':.65,'body':'Example Shop alternative home decor'},
             {'source_url':'https://reviews.gr','source_kind':'complaints','collector':'searxng','confidence':.65,'body':'Example Shop πρόβλημα και ακριβό'},
           ]
           a=audit_research(good,evidence,'https://example.gr')
           assert a['identity_score']==100
           assert a['entity_relevance_score']>=80
+          assert a['taxonomy_score']==100
           assert a['verdict'] in {'validated','needs_review'}
           pains=pain_language(evidence,'Example Shop','https://example.gr')
           assert pains and all('Example Shop' in p for p in pains)
           noisy=[{'source_url':'https://news.gr/x','source_kind':'complaints','collector':'searxng','confidence':.8,'body':'Πρόστιμο μαμούθ και γενικό πρόβλημα χώρας'}]
           assert pain_language(noisy,'Mamouth','https://mamouth.gr') == []
-          bad=dict(good,official_url='https://wrong.gr',subcategory='EXTRA ΕΚΠΤΩΣΗ 30% • ΚΟΥΠΟΝΙ HOT30')
+          bad=dict(good,subcategory='Sign Up')
           b=audit_research(bad,evidence,'https://example.gr')
           assert b['verdict']!='validated'
-          assert b['contradictions']
+          assert any('invalid_taxonomy_role' in x for x in b['contradictions'])
           PY
       - name: Validate workflow stack
         run: |
