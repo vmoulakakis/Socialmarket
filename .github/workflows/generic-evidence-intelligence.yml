@@ -28,8 +28,8 @@ jobs:
       EVIDENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/evidence-gateway
       SEARXNG_BASE_URL: http://127.0.0.1:8080
       CATEGORY_PAIN_LIMIT: '80'
-      CATEGORY_PAIN_WORKERS: '6'
-      CATEGORY_PAIN_AI_BATCH: '6'
+      CATEGORY_PAIN_WORKERS: '3'
+      CATEGORY_PAIN_AI_BATCH: '4'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,6 +37,16 @@ jobs:
           python-version: '3.12'
       - name: Install evidence dependencies
         run: pip install requests
+      - name: Preflight evidence gateway and AI skeptic
+        run: |
+          HEALTH=$(curl -fsS "$EVIDENCE_GATEWAY")
+          echo "$HEALTH"
+          python - <<'PY' "$HEALTH"
+          import json,sys
+          h=json.loads(sys.argv[1])
+          assert h.get('ok') is True
+          assert h.get('deepseek_configured') is True, 'DeepSeek audit must be configured; fail closed instead of silently accepting un-audited pains'
+          PY
       - name: Start ephemeral SearXNG
         run: |
           docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
