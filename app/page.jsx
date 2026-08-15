@@ -22,10 +22,9 @@ export default function Home(){
   const [forecast,setForecast]=useState(null); const [promo,setPromo]=useState(null); const [selectedProduct,setSelectedProduct]=useState(null); const [aiBusy,setAiBusy]=useState(false);
 
   useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session||null);setAuthReady(true)}); const {data:sub}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>sub.subscription.unsubscribe()},[]);
-  const email=session?.user?.email?.toLowerCase(); const provider=String(session?.user?.app_metadata?.provider||'').toLowerCase(); const isAdmin=email===ADMIN_EMAIL&&provider==='google';
+  const email=session?.user?.email?.toLowerCase(); const isAdmin=email===ADMIN_EMAIL;
   useEffect(()=>{if(isAdmin&&!data)loadSnapshot()},[isAdmin]);
 
-  async function googleLogin(){setError(''); const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}}); if(error)setError(error.message)}
   async function logout(){await supabase.auth.signOut();setData(null);setForecast(null);setPromo(null)}
   async function loadSnapshot(){setLoading(true);setError('');const {data:payload,error}=await supabase.rpc('admin_dashboard_snapshot');if(error)setError(error.message);else setData(payload);setLoading(false)}
   async function logAction(type,entityType=null,entityId=null,metadata={}){await supabase.rpc('admin_log_action',{p_action_type:type,p_entity_type:entityType,p_entity_id:entityId,p_metadata:metadata})}
@@ -43,8 +42,8 @@ export default function Home(){
   const platformCounts=useMemo(()=>social.reduce((a,x)=>(a[x.platform||'web']=(a[x.platform||'web']||0)+1,a),{}),[social]);
 
   if(!authReady)return <div className="center"><div className="loader"/><p>Loading secure console…</p></div>;
-  if(!session)return <div className="loginShell"><div className="loginCard"><div className="brandMark">S</div><h1>SocialMarket AI</h1><p>Affiliate Market Intelligence · Greece</p><div className="loginDivider"/><h2>Admin Intelligence Console</h2><p className="muted">Evidence-first demand, pain-gap, competition, product, social and audit intelligence.</p><button className="googleBtn" onClick={googleLogin}><span className="googleG">G</span> Continue with Google</button><small>Access is restricted to the approved administrator account.</small>{error&&<div className="error">{error}</div>}</div></div>;
-  if(!isAdmin)return <div className="loginShell"><div className="loginCard"><div className="brandMark danger">!</div><h2>Access denied</h2><p>Signed in as <b>{email}</b>.</p><p className="muted">This production console currently allows Google admin <b>{ADMIN_EMAIL}</b> only.</p><button onClick={logout} className="secondaryBtn">Sign out</button></div></div>;
+  if(!session)return <div className="loginShell"><div className="loginCard"><div className="brandMark">S</div><h1>SocialMarket AI</h1><p>Admin session required.</p></div></div>;
+  if(!isAdmin)return <div className="loginShell"><div className="loginCard"><div className="brandMark danger">!</div><h2>Access denied</h2><p>Signed in as <b>{email}</b>.</p><p className="muted">This production console allows only <b>{ADMIN_EMAIL}</b>.</p><button onClick={logout} className="secondaryBtn">Sign out</button></div></div>;
 
   return <div className="appShell">
     <aside className="sidebar"><div className="logo"><div className="brandMark small">S</div><div><b>SocialMarket AI</b><small>Affiliate Intelligence</small></div></div><nav>{tabs.map(([id,ic,label])=><button key={id} onClick={()=>setTab(id)} className={tab===id?'active':''}><span>{ic}</span>{label}</button>)}</nav><div className="sideFoot"><Badge tone="green">Production</Badge><small>{ADMIN_EMAIL}</small><button onClick={logout}>Sign out</button></div></aside>
