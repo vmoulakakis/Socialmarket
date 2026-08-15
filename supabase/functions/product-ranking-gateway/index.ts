@@ -32,9 +32,11 @@ function complexity(payload:any,action:'rank'|'audit'){
     const themes=Array.isArray(x?.theme_rag)?x.theme_rag.length:0
     const confidence=Number(x?.merchant?.confidence||0)
     const commission=Number(x?.product?.expected_commission_eur||0)
+    const deep=Number(x?.deep_demand_context?.score||0)
     let c=.18+Math.min(.18,pains*.025)+Math.min(.10,themes*.02)
     if(confidence>0&&confidence<.55)c+=.15
     if(commission>=40)c+=.10
+    if(deep>=70)c+=.08
     if(action==='audit')c+=.20
     total+=Math.min(1,c)
   }
@@ -62,13 +64,42 @@ async function deepseek(system:string,payload:any,action:'rank'|'audit',requeste
     if(!content.trim()||choice?.finish_reason==='length')throw new Error(`incomplete_ai_response:${choice?.finish_reason||'empty'}`)
     return JSON.parse(content)
   }
-  try{return {data:await call(decision.enabled?5000:3000,false),thinking:{...decision,retry:false}}}
-  catch(first){return {data:await call(decision.enabled?6500:4500,true),thinking:{...decision,retry:true,first_error:String(first).slice(0,160)}}}
+  try{return {data:await call(decision.enabled?5200:3200,false),thinking:{...decision,retry:false}}}
+  catch(first){return {data:await call(decision.enabled?6800:4700,true),thinking:{...decision,retry:true,first_error:String(first).slice(0,160)}}}
 }
 
-const RANK_SYSTEM=`You are SocialMarket Product Ranking Strategist for the Greek affiliate market. Your task is to identify which supplied products deserve promotion now. This is RANKING, not validation. Use only supplied product facts, merchant intelligence, deterministic metrics, optional pain RAG and seasonal themes. Missing pain evidence must NEVER automatically reject a product; it simply removes that supporting signal. Missing competition is UNKNOWN and must not be treated as low competition. Never invent demand, sales, reviews, features, commission, price or market share. Evaluate product-market fit, value proposition, creative/content potential, timing, purchase friction and channel fit. Produce JSON {"items":[...]}. For every input source_record_hash return: source_record_hash, category, subcategory, product_market_fit_score 0-100, creative_potential_score 0-100, value_score 0-100, confidence_score 0-100, promotion_angle in Greek, promotion_reason in Greek, audience in Greek, recommended_channels[] chosen from Facebook|Instagram|TikTok|YouTube|Search|Blog, risk_flags[], rationale in Greek. Prefer useful, specific, evidence-grounded promotion angles over hype.`
+const RANK_SYSTEM=`You are SocialMarket Product Ranking Strategist for the Greek affiliate market. Identify which supplied products deserve promotion now. This is RANKING, not validation. Use only supplied product facts, merchant intelligence, deterministic metrics, optional pain RAG, seasonal themes, and Deep Demand context. Deep Demand fields are DERIVED/MODELED context: never rewrite them as observed sales, search volume or causal truth. If temporal_decision says WITHHOLD_PRODUCTION_FORECAST, do not make a trend prediction from the temporal model. Missing pain evidence must NEVER automatically reject a product; it simply removes that supporting signal. Missing competition is UNKNOWN and must not be treated as low competition. Never invent demand, sales, reviews, features, commission, price or market share. Evaluate product-market fit, value proposition, creative/content potential, timing, purchase friction and channel fit. Produce JSON {"items":[...]}. For every input source_record_hash return: source_record_hash, category, subcategory, product_market_fit_score 0-100, creative_potential_score 0-100, value_score 0-100, confidence_score 0-100, promotion_angle in Greek, promotion_reason in Greek, audience in Greek, recommended_channels[] chosen from Facebook|Instagram|TikTok|YouTube|Search|Blog, risk_flags[], rationale in Greek. Prefer specific evidence-grounded promotion angles over hype.`
 
-const RANK_AUDIT_SYSTEM=`You are the independent SocialMarket Ranking Skeptic. Challenge a proposed promotion ranking without turning missing pain evidence into rejection. Use only supplied facts. Look for wrong merchant/product interpretation, weak value, high competition, low demand evidence, poor creative suitability, excessive purchase friction, suspicious pricing, weak confidence, or an AI promotion claim not supported by facts. Return JSON {"items":[...]}. For every source_record_hash return: source_record_hash, risk_score 0-100 where 100 is highest promotion risk, confidence_adjustment between -30 and 10, risk_flags[], reasons[], audit_summary in Greek. Do not change deterministic price or commission. Do not invent facts. The output is a risk adjustment for ranking, not a VALIDATED/REJECTED gate.`
+const RANK_AUDIT_SYSTEM=`You are the independent SocialMarket Ranking Skeptic. Challenge a proposed promotion ranking without turning missing pain evidence into rejection. Use only supplied facts and clearly distinguish observed from derived/model outputs. Look for wrong merchant/product interpretation, weak value, high competition, low demand support, over-read Deep Demand/forecast signals, poor creative suitability, excessive purchase friction, suspicious pricing, weak confidence, or unsupported AI claims. Return JSON {"items":[...]}. For every source_record_hash return: source_record_hash, risk_score 0-100 where 100 is highest promotion risk, confidence_adjustment between -30 and 10, risk_flags[], reasons[], audit_summary in Greek. Do not change deterministic price or commission. Do not invent facts. The output is a risk adjustment for ranking, not a VALIDATED/REJECTED gate.`
+
+async function decisionContext(){
+  const markets=await sql`
+    with latest as (
+      select distinct on (taxonomy_id) taxonomy_id,status,generated_at,analysis
+      from intel.demand_model_lab_runs
+      where geography='GR'
+      order by taxonomy_id,generated_at desc
+    )
+    select m.taxonomy_id,m.category_name,m.subcategory_name,m.taxonomy_name,
+           m.demand_score,m.competition_score,m.pain_gap_score,m.opportunity_score,m.confidence,m.observed_at,
+           l.status as model_status,l.generated_at as model_generated_at,
+           l.analysis->'market_structure'->'fuzzy'->'whitespace' as whitespace,
+           l.analysis->'market_structure'->'fuzzy'->'state' as fuzzy_state,
+           l.analysis->'temporal_lab'->>'decision' as temporal_decision,
+           l.analysis->'temporal_lab'->'gate' as temporal_gate,
+           l.analysis->'graph_rag'->'summary' as graph_summary,
+           l.analysis->'causal_skeptic'->'readiness' as causal_readiness
+    from api.semantic_category_market_v2 m
+    left join latest l on l.taxonomy_id=m.taxonomy_id
+    where m.taxonomy_id is not null
+  `
+  const merchants=await sql`
+    select id as merchant_id,primary_category,primary_subcategory
+    from catalog.merchants
+    where status is distinct from 'inactive'
+  `
+  return {markets,merchants,semantics:{deep_demand:'derived_context_not_observed_sales',temporal:'shadow_or_withheld_unless_explicitly_promoted',causal:'never_assumed',missing:'no_bonus'}}
+}
 
 async function startRun(b:any){
   const key=String(b.run_key||'').slice(0,160);if(!key)throw new Error('run_key_required')
@@ -84,14 +115,14 @@ async function saveRankings(runId:string,items:any[]){
     await sql`insert into intel.product_rankings(
       run_id,source_record_hash,canonical_key,external_product_id,merchant_id,merchant_program_id,merchant_name,product_name,brand_name,model_name,category,subcategory,
       effective_price,full_price,discount_pct,expected_commission_eur,tracking_url,image_url,in_stock,times_bought,merchant_demand_score,competition_score,merchant_whitespace_score,merchant_trust_score,
-      pain_signal_score,seasonal_score,commercial_score,purchase_signal_score,ai_product_fit_score,ai_creative_score,ai_value_score,ai_confidence,ai_risk_score,rank_score,rank_band,
+      pain_signal_score,seasonal_score,commercial_score,purchase_signal_score,deep_demand_score,deep_demand_status,deep_demand_context,ai_product_fit_score,ai_creative_score,ai_value_score,ai_confidence,ai_risk_score,rank_score,rank_band,
       promotion_angle,promotion_reason,audience,recommended_channels,risk_flags,evidence_summary,ai_summary
     ) values(
       ${runId}::uuid,${hash},${key},${x.external_product_id||null},${merchantId}::uuid,${x.merchant_program_id||null},${String(x.merchant_name||'Unknown').slice(0,500)},${String(x.product_name||'Product').slice(0,800)},${x.brand_name||null},${x.model_name||null},${x.category||null},${x.subcategory||null},
       ${x.effective_price??null},${x.full_price??null},${x.discount_pct??null},${x.expected_commission_eur??null},${x.tracking_url||null},${x.image_url||null},${x.in_stock??null},${x.times_bought??null},${x.merchant_demand_score??null},${x.competition_score??null},${x.merchant_whitespace_score??null},${x.merchant_trust_score??null},
-      ${x.pain_signal_score??null},${x.seasonal_score??null},${x.commercial_score??null},${x.purchase_signal_score??null},${x.ai_product_fit_score??null},${x.ai_creative_score??null},${x.ai_value_score??null},${x.ai_confidence??null},${x.ai_risk_score??null},${clamp(Number(x.rank_score||0))},${String(x.rank_band||'WATCHLIST')},
+      ${x.pain_signal_score??null},${x.seasonal_score??null},${x.commercial_score??null},${x.purchase_signal_score??null},${x.deep_demand_score??null},${x.deep_demand_status||null},${sql.json(x.deep_demand_context||{})},${x.ai_product_fit_score??null},${x.ai_creative_score??null},${x.ai_value_score??null},${x.ai_confidence??null},${x.ai_risk_score??null},${clamp(Number(x.rank_score||0))},${String(x.rank_band||'WATCHLIST')},
       ${x.promotion_angle||null},${x.promotion_reason||null},${x.audience||null},${sql.json(Array.isArray(x.recommended_channels)?x.recommended_channels:[])},${sql.json(Array.isArray(x.risk_flags)?x.risk_flags:[])},${sql.json(x.evidence_summary||{})},${x.ai_summary||null}
-    ) on conflict(run_id,source_record_hash) do update set rank_score=excluded.rank_score,rank_band=excluded.rank_band,ai_product_fit_score=excluded.ai_product_fit_score,ai_creative_score=excluded.ai_creative_score,ai_value_score=excluded.ai_value_score,ai_confidence=excluded.ai_confidence,ai_risk_score=excluded.ai_risk_score,promotion_angle=excluded.promotion_angle,promotion_reason=excluded.promotion_reason,audience=excluded.audience,recommended_channels=excluded.recommended_channels,risk_flags=excluded.risk_flags,evidence_summary=excluded.evidence_summary,ai_summary=excluded.ai_summary,ranked_at=now()`
+    ) on conflict(run_id,source_record_hash) do update set rank_score=excluded.rank_score,rank_band=excluded.rank_band,deep_demand_score=excluded.deep_demand_score,deep_demand_status=excluded.deep_demand_status,deep_demand_context=excluded.deep_demand_context,ai_product_fit_score=excluded.ai_product_fit_score,ai_creative_score=excluded.ai_creative_score,ai_value_score=excluded.ai_value_score,ai_confidence=excluded.ai_confidence,ai_risk_score=excluded.ai_risk_score,promotion_angle=excluded.promotion_angle,promotion_reason=excluded.promotion_reason,audience=excluded.audience,recommended_channels=excluded.recommended_channels,risk_flags=excluded.risk_flags,evidence_summary=excluded.evidence_summary,ai_summary=excluded.ai_summary,ranked_at=now()`
     saved++
   }
   return saved
@@ -103,11 +134,12 @@ async function completeRun(b:any){
 }
 
 Deno.serve(async req=>{
-  if(req.method==='GET')return json({ok:true,service:'product-ranking-gateway',version:'3.0',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+  if(req.method==='GET')return json({ok:true,service:'product-ranking-gateway',version:'3.1',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
   if(req.method!=='POST')return json({error:'method_not_allowed'},405)
   try{
     await auth(req);const b=await req.json(),action=String(b.action||'')
-    if(action==='health')return json({ok:true,version:'3.0',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+    if(action==='health')return json({ok:true,version:'3.1',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+    if(action==='decision_context')return json({ok:true,...await decisionContext()})
     if(action==='rank'){
       const items=(Array.isArray(b.items)?b.items:[]).slice(0,10),r=await deepseek(RANK_SYSTEM,{items},'rank',String(b.thinking||'auto') as ThinkingMode)
       return json({ok:true,thinking:r.thinking,items:Array.isArray(r.data?.items)?r.data.items:[]})
