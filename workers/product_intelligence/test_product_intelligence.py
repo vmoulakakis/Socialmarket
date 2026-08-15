@@ -1,5 +1,7 @@
 import unittest
 from product_agents import parse_commission_rule,commission_score,canonical_key,final_opportunity_score
+from stream_feed import normalize,target_domain,linkwise_route
+from product_intelligence_v1 import merchant_maps,resolve_merchant
 
 
 class ProductIntelligencePolicyTests(unittest.TestCase):
@@ -38,6 +40,34 @@ class ProductIntelligencePolicyTests(unittest.TestCase):
         low,_=final_opportunity_score(pain_gap_fit=80,merchant_opportunity=20,greek_demand=80,competition=40,seasonal_theme=60,merchant_trust=80,expected_commission=20,discount=20,evidence_confidence=80)
         high,_=final_opportunity_score(pain_gap_fit=80,merchant_opportunity=90,greek_demand=80,competition=40,seasonal_theme=60,merchant_trust=80,expected_commission=20,discount=20,evidence_confidence=80)
         self.assertGreater(high,low)
+
+    def test_real_linkwise_url_extracts_destination_and_route(self):
+        url='https://go.linkwi.se/z/205-0/CD104/?lnkurl=https%3A%2F%2Fwww.xenodoxeio.gr%2Fprosfores%2Fdeal%2Fsample%3Fafn%3DLW'
+        self.assertEqual(target_domain(url),'xenodoxeio.gr')
+        self.assertEqual(linkwise_route(url),'205-0/CD104')
+        p=normalize({'product_id':'1','product_name':'Test','tracking_url':url,'price':'400','image_url':'https://www.xenodoxeio.gr/a.jpg'})
+        self.assertEqual(p['target_domain'],'xenodoxeio.gr')
+        self.assertIsNone(p['program_name'])
+
+    def test_resolver_uses_authoritative_domain_before_name(self):
+        row={
+          'merchant_program_id':'program-1','merchant_id':'merchant-1','program_name':'Xenodoxeio',
+          'canonical_name':'Xenodoxeio','official_domain':'xenodoxeio.gr','aliases':[]
+        }
+        by_program,aliases,by_domain=merchant_maps({'programs':[row]})
+        merchant,method=resolve_merchant({'target_domain':'www.xenodoxeio.gr','program_name':None},by_program,aliases,by_domain)
+        self.assertEqual(merchant['merchant_id'],'merchant-1')
+        self.assertEqual(method,'target_domain_exact')
+
+    def test_resolver_does_not_use_broad_fuzzy_name_matching(self):
+        row={
+          'merchant_program_id':'program-1','merchant_id':'merchant-1','program_name':'Unique Shop',
+          'canonical_name':'Unique Shop','official_domain':'unique-shop.gr','aliases':[]
+        }
+        by_program,aliases,by_domain=merchant_maps({'programs':[row]})
+        merchant,method=resolve_merchant({'target_domain':None,'program_name':'Unique'},by_program,aliases,by_domain)
+        self.assertIsNone(merchant)
+        self.assertIsNone(method)
 
 
 if __name__=='__main__':unittest.main()
