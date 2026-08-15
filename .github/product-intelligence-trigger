@@ -1,3 +1,3 @@
-pain-solver-diagnostic: 2026-08-16T02:25:00+03:00
-reason: scan real Linkwise stage candidates using Excel-derived pain-solver priors; keep tracking URLs and product images; read-only diagnostic
-run: top-pain-solvers
+ranking-v3: 2026-08-16T02:58:00+03:00
+reason: full ranking-first production run over real Linkwise feed; validated pain is optional signal, not admission gate
+run: products-to-promote
