@@ -73,7 +73,28 @@ jobs:
         run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py
       - name: Run canonical Greek Category Pain V4
         working-directory: workers/market_intelligence
-        run: python category_pain_intelligence_v4.py | tee semantic-category-pain-output.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          python category_pain_intelligence_v4.py | tee semantic-category-pain-output.json
+      - name: Assert structured research completion
+        working-directory: workers/market_intelligence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          lines=[x for x in Path('semantic-category-pain-output.json').read_text(encoding='utf-8').splitlines() if x.strip()]
+          parsed=[]
+          for line in lines:
+              try: parsed.append(json.loads(line))
+              except Exception: pass
+          summaries=[x for x in parsed if x.get('status') in ('completed','completed_with_failures') and 'processed' in x]
+          assert summaries, 'Missing structured Category Pain V4 completion summary'
+          summary=summaries[-1]
+          assert summary.get('failed') == 0, f"Category Pain V4 reported failures: {summary}"
+          assert summary.get('status') == 'completed', f"Research did not complete cleanly: {summary}"
+          print(summary)
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import concurrent.futures
 import json
 
 import category_pain_intelligence as base
@@ -134,21 +135,86 @@ def collect_v4(job):
     return {'job_id':job['id'],'entity_id':job['entity_id'],'category':category,'subcategory':subcategory,'evidence':evidence,'market':market}
 
 
+def _fail_job(job,error,stage):
+    message=f'{stage}:{type(error).__name__}:{error}'[:1000]
+    try:
+        base.gateway('fail',job_id=job['id'],error=message)
+    except Exception:
+        pass
+    p=job.get('payload') or {}
+    return {'ok':False,'category':p.get('category') or p.get('name'),'subcategory':p.get('subcategory'),'stage':stage,'error':message[:300]}
+
+
+def process_batch_v4(jobs):
+    """Isolate collection/audit/save failures so one category never strands a whole lease batch."""
+    items=[];results=[]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(base.WORKERS,len(jobs))) as executor:
+        future_to_job={executor.submit(collect_v4,job):job for job in jobs}
+        for future in concurrent.futures.as_completed(future_to_job):
+            job=future_to_job[future]
+            try:
+                items.append(future.result())
+            except Exception as exc:
+                results.append(_fail_job(job,exc,'collect'))
+    if not items:
+        return results
+
+    try:
+        audit=base.gateway('audit_batch',items=items)
+    except Exception as exc:
+        for item in items:
+            job={'id':item['job_id'],'payload':{'category':item['category'],'subcategory':item['subcategory']}}
+            results.append(_fail_job(job,exc,'audit_batch'))
+        return results
+
+    audits={str(x.get('entity_id')):x for x in (audit.get('items') or [])}
+    for item in items:
+        audit_item=audits.get(str(item['entity_id']),{})
+        item['clusters']=audit_item.get('clusters') or []
+        item['market']['ai_audit_summary']=audit_item.get('audit_summary')
+        item['market']['rejected_patterns']=audit_item.get('rejected_patterns') or []
+        try:
+            saved=base.gateway('save',result=item).get('result') or {}
+            quality=item['market'].get('evidence_quality') or {}
+            results.append({
+                'ok':True,'category':item['category'],'subcategory':item['subcategory'],
+                'aliases':item['market']['query_aliases'],'evidence':len(item['evidence']),
+                'pain_candidates':quality.get('pain_consumer_rows',0),
+                'pain_domains':quality.get('pain_domains',0),
+                'pain_source_families':quality.get('pain_source_families',[]),
+                'channel_counts':quality.get('channel_counts',{}),
+                'official_context':len([e for e in item['evidence'] if e['source_kind']=='official_context']),
+                'industry_context':len([e for e in item['evidence'] if e['source_kind']=='industry_context']),
+                'validated_clusters':saved.get('validated_clusters',0),
+                'competition':item['market']['competition_score'],'demand':item['market']['demand_score'],
+            })
+        except Exception as exc:
+            job={'id':item['job_id'],'payload':{'category':item['category'],'subcategory':item['subcategory']}}
+            results.append(_fail_job(job,exc,'save'))
+    return results
+
+
 base.collect=collect_v4
-base.UA={'User-Agent':'Mozilla/5.0 SocialMarketSemanticPain/4.0'}
+base.process_batch=process_batch_v4
+base.UA={'User-Agent':'Mozilla/5.0 SocialMarketSemanticPain/4.1'}
 
 
 def main():
     seeded=base.gateway('seed')
     print(json.dumps({'seed':seeded},ensure_ascii=False),flush=True)
-    done=0
+    done=0;failed=0
     while done<base.LIMIT:
         jobs=(base.gateway('claim',limit=min(base.BATCH,base.LIMIT-done),worker='github-semantic-category-pain-v4').get('jobs') or [])
         if not jobs:break
-        for result in base.process_batch(jobs):
+        batch_results=process_batch_v4(jobs)
+        for result in batch_results:
             print(json.dumps(result,ensure_ascii=False),flush=True)
             done+=1
-    print(json.dumps({'status':'completed','processed':done,'limit':base.LIMIT,'retrieval':'greek_consumer_evidence_v4+direct_authoritative_context_v3'},ensure_ascii=False),flush=True)
+            if not result.get('ok'):failed+=1
+    summary={'status':'completed' if failed==0 else 'completed_with_failures','processed':done,'failed':failed,'limit':base.LIMIT,'retrieval':'greek_consumer_evidence_v4+direct_authoritative_context_v3','worker_version':'4.1'}
+    print(json.dumps(summary,ensure_ascii=False),flush=True)
+    if failed:
+        raise SystemExit(f'Category Pain V4 had {failed} failed jobs; see structured output and requeued job errors')
 
 
 if __name__=='__main__':
