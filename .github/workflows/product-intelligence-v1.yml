@@ -74,9 +74,9 @@ jobs:
       - name: Phase A — runtime-configured commercial scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Phase B — runtime-configured RAG + Product Research + Skeptic Audit
+      - name: Phase B — pain-first diversified RAG + Product Research + Skeptic Audit
         if: steps.preflight.outputs.deepseek_configured == 'true'
-        run: python workers/product_intelligence/product_intelligence_fresh_oidc.py "$PRODUCT_SOURCE_FEED"
+        run: python workers/product_intelligence/product_intelligence_v2.py "$PRODUCT_SOURCE_FEED"
 
       - name: AI phase intentionally blocked when DeepSeek is absent
         if: steps.preflight.outputs.deepseek_configured != 'true'
