@@ -6,17 +6,20 @@ import consumer_evidence_v4 as consumer
 from consumer_source_expansion_v43 import apply as apply_source_expansion
 import consumer_direct_social_v44 as direct_social
 from niche_product_prior_v45 import apply as apply_niche_product_prior
+from niche_keyword_binding_v45 import apply as apply_niche_keyword_binding
 
 # V4.5 source policy:
 # 1) expand crawlable Greek consumer communities,
 # 2) keep direct YouTube public-comment acquisition for product-bound pain,
 # 3) disable the Reddit JSON collector for this commercial research pipeline,
-# 4) prepend concrete niche-product intents and enforce social=pain-only.
-# None of these changes relax the V4 skeptic/validation thresholds.
+# 4) prepend concrete niche-product intents,
+# 5) bind exact product tokens/bigrams without relaxing any consumer/audit gate,
+# 6) enforce social evidence as PAIN ONLY, never demand proof from likes/views.
 apply_source_expansion()
 direct_social.apply()
 direct_social._reddit=lambda aliases,keywords,limit=24: []
 apply_niche_product_prior()
+apply_niche_keyword_binding()
 
 # libxml/lxml-backed extraction can abort the interpreter when several
 # Trafilatura parses run concurrently in the same GitHub runner process. Keep
