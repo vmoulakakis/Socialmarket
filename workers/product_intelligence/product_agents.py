@@ -7,6 +7,12 @@ def clamp(v,lo=0.0,hi=100.0):
     except:return lo
 
 
+def optional_score(v):
+    if v is None or v=='':return None
+    try:return clamp(v)
+    except:return None
+
+
 def fold(v):
     s=str(v or '').lower()
     s=''.join(c for c in unicodedata.normalize('NFKD',s) if not unicodedata.combining(c))
@@ -132,43 +138,56 @@ def select_theme_rag(product,themes,limit=5):
 
 def evidence_metrics(selected_pains,merchant):
     pains=selected_pains or []
-    if pains:
-        demand=max([clamp(x.get('demand_score') or 0) for x in pains]+[clamp(merchant.get('demand_score') or 0)])
-        comps=[clamp(x.get('competition_score') or 50) for x in pains if x.get('competition_score') is not None]
-        competition=sum(comps)/len(comps) if comps else clamp(merchant.get('competition_score') if merchant.get('competition_score') not in (None,0) else 50)
-        pain_conf=sum(float(x.get('confidence') or 0) for x in pains)/len(pains)
-    else:
-        demand=clamp(merchant.get('demand_score') or 0)
-        competition=clamp(merchant.get('competition_score') if merchant.get('competition_score') not in (None,0) else 50)
-        pain_conf=0
+    demand_values=[optional_score(x.get('demand_score')) for x in pains if x.get('demand_score') is not None]
+    merchant_demand=optional_score(merchant.get('demand_score'))
+    if merchant_demand is not None:demand_values.append(merchant_demand)
+    demand=max(demand_values) if demand_values else None
+
+    comps=[optional_score(x.get('competition_score')) for x in pains if x.get('competition_score') is not None]
+    comps=[x for x in comps if x is not None]
+    merchant_comp=optional_score(merchant.get('competition_score'))
+    competition=(sum(comps)/len(comps)) if comps else merchant_comp
+
+    pain_conf=sum(float(x.get('confidence') or 0) for x in pains)/len(pains) if pains else 0
     merchant_conf=float(merchant.get('confidence') or 0)
     confidence=clamp(((pain_conf+merchant_conf)/2.0)*100 if pains else merchant_conf*100)
-    return {'greek_demand_score':round(demand,2),'competition_score':round(competition,2),'evidence_confidence':round(confidence,2)}
+    return {
+      'greek_demand_score':round(demand,2) if demand is not None else None,
+      'competition_score':round(competition,2) if competition is not None else None,
+      'evidence_confidence':round(confidence,2),
+      'competition_missing':competition is None,
+      'demand_missing':demand is None,
+    }
 
 
 def final_opportunity_score(*,pain_gap_fit,merchant_opportunity,greek_demand,competition,seasonal_theme,merchant_trust,expected_commission,discount,evidence_confidence):
     values={
-      'pain_gap_fit_score':clamp(pain_gap_fit),
-      'merchant_opportunity_score':clamp(merchant_opportunity),
-      'greek_demand_score':clamp(greek_demand),
-      'competition_score':clamp(competition),
-      'seasonal_theme_score':clamp(seasonal_theme),
-      'merchant_trust_score':clamp(merchant_trust),
+      'pain_gap_fit_score':optional_score(pain_gap_fit),
+      'merchant_opportunity_score':optional_score(merchant_opportunity),
+      'greek_demand_score':optional_score(greek_demand),
+      'competition_score':optional_score(competition),
+      'seasonal_theme_score':optional_score(seasonal_theme),
+      'merchant_trust_score':optional_score(merchant_trust),
       'commission_score':commission_score(expected_commission),
       'discount_score':discount_score(discount),
-      'product_evidence_confidence':clamp(evidence_confidence),
+      'product_evidence_confidence':optional_score(evidence_confidence),
     }
+    positive=lambda key:(values[key] if values[key] is not None else 0.0)
+    inverse_comp=(100-values['competition_score']) if values['competition_score'] is not None else 0.0
     score=(
-      values['pain_gap_fit_score']*.25+
-      values['merchant_opportunity_score']*.20+
-      values['greek_demand_score']*.15+
+      positive('pain_gap_fit_score')*.25+
+      positive('merchant_opportunity_score')*.20+
+      positive('greek_demand_score')*.15+
       values['commission_score']*.12+
-      (100-values['competition_score'])*.10+
-      values['seasonal_theme_score']*.08+
-      values['merchant_trust_score']*.05+
+      inverse_comp*.10+
+      positive('seasonal_theme_score')*.08+
+      positive('merchant_trust_score')*.05+
       values['discount_score']*.03+
-      values['product_evidence_confidence']*.02
+      positive('product_evidence_confidence')*.02
     )
+    missing=[k for k,v in values.items() if v is None]
+    values['missing_components']=missing
+    values['competition_inverse_bonus_withheld']=values['competition_score'] is None
     return round(clamp(score),2),values
 
 
