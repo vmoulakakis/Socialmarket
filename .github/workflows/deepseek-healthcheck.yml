@@ -1,0 +1,31 @@
+name: DeepSeek Health Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deepseek-healthcheck.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Product Intelligence DeepSeek secret
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          url='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway'
+          with urllib.request.urlopen(url, timeout=30) as r:
+              h=json.loads(r.read().decode())
+          safe={k:h.get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')}
+          print(safe)
+          if not h.get('ok'):
+              raise SystemExit('gateway unhealthy')
+          if not h.get('deepseek_configured'):
+              raise SystemExit('DEEPSEEK_API_KEY is not configured')
+          if not h.get('deepseek_model'):
+              raise SystemExit('DeepSeek model missing')
+          PY
