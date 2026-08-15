@@ -39,18 +39,20 @@ jobs:
         run: pip install -r workers/product_intelligence/requirements.txt
       - name: Compile Product Intelligence workers
         run: python -m py_compile workers/product_intelligence/*.py
-      - name: Run deterministic policy tests
+      - name: Run deterministic policy and shortlist tests
         working-directory: workers/product_intelligence
-        run: python -m unittest -v test_product_intelligence.py
+        run: python -m unittest -v test_product_intelligence.py test_candidate_shortlist.py
       - name: Guard against legacy minimum-price policy
         run: |
           if grep -R "MIN_PRICE\|price_not_over_50\|price > 50\|price >= 50" workers/product_intelligence; then
-            echo 'Legacy product price gate detected in Product Intelligence V1'
+            echo 'Legacy product price gate detected in Product Intelligence'
             exit 1
           fi
-      - name: Verify safety floor and runtime configuration bridge
+      - name: Verify safety floor, pain-first shortlist and runtime configuration bridge
         run: |
           grep -R "PRODUCT_MIN_COMMISSION_EUR" workers/product_intelligence/product_intelligence_v1.py
           grep -R "dominant_or_blocked_merchant" workers/product_intelligence/product_intelligence_v1.py
           grep -R "min_expected_commission_eur" workers/product_intelligence/runtime_config.py
+          grep -R "pre_ai_no_validated_pain_match" workers/product_intelligence/candidate_shortlist.py
+          grep -R "pain_first_diversified_v2" workers/product_intelligence/product_intelligence_v2.py
           grep -R "validated_pain_required" supabase/functions/product-intelligence-gateway/index.ts
