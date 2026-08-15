@@ -47,7 +47,7 @@ jobs:
           python-version: '3.12'
       - name: Install deep evidence dependencies
         run: pip install requests trafilatura
-      - name: Preflight evidence gateway and AI skeptic
+      - name: Preflight exact V4 evidence gateway and AI skeptic
         run: |
           HEALTH=$(curl -fsS "$EVIDENCE_GATEWAY")
           echo "$HEALTH"
@@ -55,6 +55,9 @@ jobs:
           import json,sys
           h=json.loads(sys.argv[1])
           assert h.get('ok') is True
+          assert str(h.get('version')) == '4.0', f"Category Pain V4 requires evidence-gateway 4.0; got {h.get('version')}"
+          assert h.get('collection_type') == 'semantic_category_pain_v4', f"Wrong collection type: {h.get('collection_type')}"
+          assert h.get('retrieval') == 'greek_consumer_evidence_v4+direct_authoritative_context_v3', f"Wrong retrieval contract: {h.get('retrieval')}"
           assert h.get('deepseek_configured') is True, 'DeepSeek audit must be configured; fail closed instead of silently accepting un-audited pains'
           PY
       - name: Start ephemeral SearXNG discovery engine
