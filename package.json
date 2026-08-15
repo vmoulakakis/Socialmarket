@@ -1,6 +1,6 @@
 {
   "name": "socialmarket-ai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,6 +11,7 @@
     "@supabase/supabase-js": "^2.57.4",
     "next": "15.4.6",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "xlsx": "^0.18.5"
   }
 }
