@@ -4,28 +4,17 @@ from urllib.parse import quote, urlparse, urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from semantic_taxonomy import resolve_taxonomy, classify_label
+
 GATEWAY=os.environ['MERCHANT_RESEARCH_GATEWAY']
 SEARXNG=os.getenv('SEARXNG_BASE_URL','http://127.0.0.1:8080').rstrip('/')
 MAX=int(os.getenv('MERCHANT_RESEARCH_LIMIT','350'))
 WORKERS=max(1,min(int(os.getenv('MERCHANT_RESEARCH_WORKERS','6')),10))
-UA={'User-Agent':'Mozilla/5.0 SocialMarketMerchantResearch/3.2'}
+UA={'User-Agent':'Mozilla/5.0 SocialMarketMerchantResearch/4.2'}
 AUD='socialmarket-supabase-worker'
 BLOCK=('linkwi','facebook.','instagram.','youtube.','tiktok.','skroutz.','bestprice.','trustpilot.','linkedin.','wikipedia.','google.','bing.')
 POS=('excellent','recommended','reliable','trusted','great','γρηγορη','γρήγορη','αξιοπιστ','θετικ','ικανοποι','καλή εξυπηρέτηση')
 NEG=('scam','fraud','refund','complaint','fake','απατη','απάτη','καταγγε','δεν παρελαβα','δεν παρέλαβα','καθυστερ','προβλημα','πρόβλημα','παράπονο','παραπονο')
-RULES={
- 'Fashion':('fashion','ρούχα','clothing','shoes','παπούτσια','jewelry','κοσμήματα','eyewear','γυαλιά'),
- 'Beauty':('beauty','cosmetic','καλλυν','skincare','makeup','perfume','άρωμα'),
- 'Health':('health','medical','φαρμακ','supplement','wellness','ορθοπεδ'),
- 'Electronics':('electronics','technology','computer','laptop','mobile','κινητ','τηλεφων','gaming','gadget'),
- 'Home & Garden':('home','σπίτι','furniture','έπιπλ','garden','κήπο','decor','κουζίνα','μπάνιο'),
- 'Sports & Outdoors':('sport','fitness','outdoor','ποδήλα','scooter','camping','running'),
- 'Kids & Baby':('baby','kids','παιδ','βρεφ','toy','παιχνιδ'),
- 'Food & Drink':('food','coffee','καφέ','wine','κρασί','grocery','τροφ','restaurant'),
- 'Travel':('travel','hotel','flight','airline','tour','διακοπ','ταξιδ','booking'),
- 'Automotive':('auto','car','motor','αυτοκιν','μοτο','tyre','tire'),
- 'Pets':('pet','dog','cat','κατοικιδ'),
- 'Services':('service','insurance','finance','bank','education','course','software','hosting','delivery','courier')}
 _token=None; _token_at=0.; _lock=threading.Lock()
 
 def clamp(v,a=0,b=100): return max(a,min(b,float(v)))
@@ -84,24 +73,19 @@ def crawl(url):
         t=a.get_text(' ',strip=True)
         try:u=urljoin(r.url,a['href'])
         except:continue
-        if host(u)==base and 3<=len(t)<=60:
+        if host(u)==base and 3<=len(t)<=80:
             anchors.append(t); internal.append((u,t))
     text=soup.get_text(' ',strip=True)[:120000]; pages=1
     for u,t in internal:
         if pages>=5:break
-        if re.search(r'about|company|category|product|shop|collection|προιο|προϊόν|κατηγ|service|υπηρεσ',u+' '+t,re.I):
+        role=classify_label(t).get('role')
+        if role=='product_taxonomy' or re.search(r'category|product|shop|collection|προιο|προϊόν|κατηγ',u,re.I):
             x=fetch(u,10)
             if x:text+=' '+BeautifulSoup(x.text,'html.parser').get_text(' ',strip=True)[:40000];pages+=1
     origin=f'{urlparse(r.url).scheme}://{urlparse(r.url).netloc}'
     rob=fetch(origin+'/robots.txt',7); sm=fetch(origin+'/sitemap.xml',8)
     if sm:text+=' '+BeautifulSoup(sm.text,'html.parser').get_text(' ',strip=True)[:60000]
-    return {'ok':True,'url':r.url,'html':r.text[:500000],'text':text,'title':title,'description':desc,'anchors':list(dict.fromkeys(anchors))[:100],'pages':pages,'robots':bool(rob),'sitemap':bool(sm),'status':r.status_code}
-def categories(text):
-    low=text.lower(); out=[]
-    for name,keys in RULES.items():
-        n=sum(1 for k in keys if k in low)
-        if n:out.append({'name':name,'score':n})
-    return sorted(out,key=lambda x:x['score'],reverse=True)[:3]
+    return {'ok':True,'url':r.url,'html':r.text[:500000],'text':text,'title':title,'description':desc,'anchors':list(dict.fromkeys(anchors))[:120],'pages':pages,'robots':bool(rob),'sitemap':bool(sm),'status':r.status_code}
 def sentiment(rows):
     txt=' '.join((x.get('title','')+' '+x.get('snippet','')).lower() for x in rows);p=sum(1 for x in POS if x in txt);n=sum(1 for x in NEG if x in txt)
     return p,n,clamp(50+(p-n)*8)
@@ -122,22 +106,58 @@ def seo(c):
     if c['sitemap']:s+=10
     return clamp(s)
 def market(label):
+    # label is always a canonical product category/subcategory, never raw navigation text.
     sug=suggest(label); need=suggest(label+' πρόβλημα'); buy=search(label+' αγορά Ελλάδα',12); pain=search(label+' πρόβλημα παράπονα λύση',12)
     domains=sorted({host(x['url']) for x in buy if host(x['url']) and not any(b in host(x['url']) for b in BLOCK)})
     _,neg,_=sentiment(pain); demand=clamp(20+len(sug)*5+min(20,len(buy)*2.5)+min(10,len(need)*2)); comp=clamp(len(domains)*9); gap=clamp(25+neg*10+min(20,len(pain)*2)+min(15,len(need)*3))
     return demand,comp,gap,sug,need,buy,pain,domains
+
 def analyze(job):
     name=job['canonical_name']; mid=job['id']; url=discover(name,job.get('official_url')); c=crawl(url) if url else crawl('')
-    corpus=' '.join([name,c['title'],c['description'],c['text'],' '.join(c['anchors'])]); cats=categories(corpus); category=(cats[0]['name'] if cats else job.get('primary_category') or 'Other')
-    sub=next((x for x in c['anchors'] if 4<len(x)<36 and x.lower()!=category.lower() and not re.search(r'home|about|contact|blog|αρχική|επικοινων',x,re.I)),'')
+    corpus=' '.join([name,c['title'],c['description'],c['text'],' '.join(c['anchors'])])
+    tax=resolve_taxonomy(name,corpus,c['anchors'],job.get('primary_category'),job.get('primary_subcategory'))
+    category,sub=tax.category,tax.subcategory
+    taxonomy_labels=[x for x in tax.label_audit if x.get('role')=='product_taxonomy']
+    rejected_labels=[x for x in tax.label_audit if x.get('role') not in ('product_taxonomy','unknown')]
+
     reviews=search(f'"{name}" αξιολογήσεις κριτικές',12); complaints=search(f'"{name}" παράπονα καταγγελίες',12); allrev=reviews+complaints;pos,neg,sat=sentiment(allrev)
     seo_score=seo(c); identity=clamp(35+(20 if c['ok'] else 0)+(20 if c['title'] else 0)+(25 if re.search(r'contact|επικοινων|terms|όροι|επιστροφ|about|εταιρ',corpus,re.I) else 0)); complaint=clamp(100-sat+min(20,len(complaints)*2));trust=clamp(identity*.4+sat*.6)
-    demand,comp,gap,sug,need,buy,pain,domains=market(sub or category);opp=clamp(demand*.35+gap*.40+(100-comp)*.20+sat*.05);opp=min(opp,45) if trust<35 else opp
-    conf=clamp((.35 if c['ok'] else .10)+(.15 if allrev else 0)+(.15 if buy else 0)+(.15 if sug else 0)+(.10 if c['pages']>1 else 0)+(.10 if cats else 0),0,1)
-    evidence=allrev[:15]+[{'type':'official_site','url':c['url'],'title':c['title'],'snippet':c['description']}]
-    return {'job_id':job['job_id'],'merchant_id':mid,'merchant_name':name,'official_url':c['url'] or None,'official_domain':host(c['url']) or None,'http_status':c['status'],'site_title':c['title'] or None,'site_description':c['description'] or None,'category':category,'subcategory':sub or None,'category_candidates':cats,'subcategory_candidates':c['anchors'][:25],'seo_technical_score':seo_score,'seo_organic_visibility_score':clamp((100-comp)*.4+seo_score*.6),'seo_brand_serp_score':clamp(len(search(f'"{name}"',10))*10),'business_identity_score':identity,'review_footprint_score':clamp(len(allrev)*7),'satisfaction_score':sat,'complaint_risk_score':complaint,'trust_score':trust,'demand_score':demand,'competition_score':comp,'pain_gap_score':gap,'confidence':conf,'risk_flag':bool(trust<25 or complaint>80),'risk_reason':'low_trust' if trust<25 else ('high_complaint_risk' if complaint>80 else None),'competitors':domains,'demand_evidence':{'suggestions':sug,'problem_suggestions':need},'competition_evidence':buy[:12],'pain_evidence':pain[:12],'evidence':evidence,'evidence_count':len(evidence)+len(pain)+len(buy),'semantic_text':' | '.join(filter(None,[name,category,sub,c['title'],c['description'],f'Greek demand {demand}',f'competition {comp}',f'pain gap {gap}',f'satisfaction {sat}',f'trust {trust}'])),'summary':f'Demand {demand:.0f}; competition {comp:.0f}; pain gap {gap:.0f}; satisfaction {sat:.0f}; trust {trust:.0f}; opportunity {opp:.0f}.','strengths':[f'SEO {seo_score:.0f}',f'Demand {demand:.0f}',f'Pain gap {gap:.0f}'],'weaknesses':[f'Competition {comp:.0f}',f'Complaint risk {complaint:.0f}'],'metadata':{'pages_crawled':c['pages'],'search_backend':'searxng','methodology':'greek_gap_v2'}}
+    market_label=sub or category
+    if category=='Other':
+        # Unknown taxonomy does not receive synthetic market scores from a noisy label.
+        demand=comp=gap=0; sug=[]; need=[]; buy=[]; pain=[]; domains=[]
+    else:
+        demand,comp,gap,sug,need,buy,pain,domains=market(market_label)
+    opp=clamp(demand*.35+gap*.40+(100-comp)*.20+sat*.05) if category!='Other' else 0
+    opp=min(opp,45) if trust<35 else opp
+    conf=clamp((.35 if c['ok'] else .10)+(.15 if allrev else 0)+(.15 if buy else 0)+(.15 if sug else 0)+(.10 if c['pages']>1 else 0)+(.10 if tax.confidence>=.65 else 0),0,1)
+    conf=min(conf,max(.25,tax.confidence+.15))
+    evidence=allrev[:15]+([{'type':'official_site','url':c['url'],'title':c['title'],'snippet':c['description']}] if c['url'] else [])
+    semantic=' | '.join(filter(None,[name,category,sub,c['title'],c['description'],f'Greek demand {demand}',f'competition {comp}',f'pain gap {gap}',f'satisfaction {sat}',f'trust {trust}']))
+    metadata={
+        'pages_crawled':c['pages'],'search_backend':'searxng','methodology':'greek_gap_semantic_taxonomy_v4.2',
+        'taxonomy_resolution':tax.as_dict(),'taxonomy_market_label':market_label if category!='Other' else None,
+        'rejected_page_labels':rejected_labels[:40]
+    }
+    return {
+        'job_id':job['job_id'],'merchant_id':mid,'merchant_name':name,'official_url':c['url'] or None,'official_domain':host(c['url']) or None,
+        'http_status':c['status'],'site_title':c['title'] or None,'site_description':c['description'] or None,
+        'category':category,'subcategory':sub,'category_candidates':[{'name':category,'confidence':tax.confidence,'source':tax.source}] if category!='Other' else [],
+        'subcategory_candidates':taxonomy_labels[:25],
+        'seo_technical_score':seo_score,'seo_organic_visibility_score':clamp((100-comp)*.4+seo_score*.6) if category!='Other' else seo_score*.6,
+        'seo_brand_serp_score':clamp(len(search(f'"{name}"',10))*10),'business_identity_score':identity,'review_footprint_score':clamp(len(allrev)*7),
+        'satisfaction_score':sat,'complaint_risk_score':complaint,'trust_score':trust,'demand_score':demand,'competition_score':comp,'pain_gap_score':gap,
+        'confidence':conf,'risk_flag':bool(trust<25 or complaint>80 or category=='Other'),
+        'risk_reason':'unknown_taxonomy' if category=='Other' else ('low_trust' if trust<25 else ('high_complaint_risk' if complaint>80 else None)),
+        'competitors':domains,'demand_evidence':{'suggestions':sug,'problem_suggestions':need,'canonical_query':market_label if category!='Other' else None},
+        'competition_evidence':buy[:12],'pain_evidence':pain[:12],'evidence':evidence,'evidence_count':len(evidence)+len(pain)+len(buy),
+        'semantic_text':semantic,'summary':f'Taxonomy {category}{" / "+sub if sub else ""}; demand {demand:.0f}; competition {comp:.0f}; pain gap {gap:.0f}; satisfaction {sat:.0f}; trust {trust:.0f}; opportunity {opp:.0f}.',
+        'strengths':[f'SEO {seo_score:.0f}',f'Demand {demand:.0f}',f'Pain gap {gap:.0f}'],
+        'weaknesses':[f'Competition {comp:.0f}',f'Complaint risk {complaint:.0f}'] + (['Taxonomy unresolved'] if category=='Other' else []),
+        'metadata':metadata
+    }
 def process(job):
-    try:r=analyze(job);gateway('save',result=r);return {'ok':True,'merchant':job['canonical_name'],'url':r['official_url'],'category':r['category'],'subcategory':r['subcategory'],'demand':r['demand_score'],'competition':r['competition_score'],'pain_gap':r['pain_gap_score']}
+    try:r=analyze(job);gateway('save',result=r);return {'ok':True,'merchant':job['canonical_name'],'url':r['official_url'],'category':r['category'],'subcategory':r['subcategory'],'demand':r['demand_score'],'competition':r['competition_score'],'pain_gap':r['pain_gap_score'],'taxonomy_source':r['metadata']['taxonomy_resolution']['source']}
     except Exception as e:
         try:gateway('fail',job_id=job['job_id'],error=str(e)[:1200])
         except:pass
@@ -145,7 +165,7 @@ def process(job):
 def main():
     done=0
     while done<MAX:
-        batch=min(40,MAX-done);jobs=gateway('claim',limit=batch,worker='github-searxng-v3.2').get('jobs') or []
+        batch=min(40,MAX-done);jobs=gateway('claim',limit=batch,worker='github-semantic-taxonomy-v4.2').get('jobs') or []
         if not jobs:break
         with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as ex:
             for result in ex.map(process,jobs):print(json.dumps(result,ensure_ascii=False),flush=True);done+=1
