@@ -2,7 +2,7 @@ import json
 import os
 import urllib.request
 
-from product_agents import clamp, commission_score, discount_score
+from product_agents import clamp, commission_score, discount_score, optional_score
 
 CONFIG_GATEWAY = os.getenv(
     'PRODUCT_CONFIG_GATEWAY',
@@ -107,10 +107,14 @@ def apply_runtime_config(v1, cfg):
         pains = [c for c in pains if (
             int(c.get('evidence_count') or 0) >= min_ev
             and int(c.get('source_diversity') or 0) >= min_src
-            and float(c.get('pain_severity') or 0) >= min_severity
-            and float(c.get('commercial_intent') or 0) >= min_intent
-            and float(c.get('demand_score') or 0) >= min_demand
-            and float(c.get('competition_score') if c.get('competition_score') is not None else 50) <= max_comp
+            and c.get('pain_severity') is not None
+            and float(c.get('pain_severity')) >= min_severity
+            and c.get('commercial_intent') is not None
+            and float(c.get('commercial_intent')) >= min_intent
+            and c.get('demand_score') is not None
+            and float(c.get('demand_score')) >= min_demand
+            and c.get('competition_score') is not None
+            and float(c.get('competition_score')) <= max_comp
         )]
         themes = v1.select_theme_rag(p, context.get('themes', []), theme_limit) if theme_limit else []
         return {
@@ -132,27 +136,32 @@ def apply_runtime_config(v1, cfg):
                                 seasonal_theme, merchant_trust, expected_commission, discount,
                                 evidence_confidence):
         values = {
-            'pain_gap_fit_score': clamp(pain_gap_fit),
-            'merchant_opportunity_score': clamp(merchant_opportunity),
-            'greek_demand_score': clamp(greek_demand),
-            'competition_score': clamp(competition),
-            'seasonal_theme_score': clamp(seasonal_theme),
-            'merchant_trust_score': clamp(merchant_trust),
+            'pain_gap_fit_score': optional_score(pain_gap_fit),
+            'merchant_opportunity_score': optional_score(merchant_opportunity),
+            'greek_demand_score': optional_score(greek_demand),
+            'competition_score': optional_score(competition),
+            'seasonal_theme_score': optional_score(seasonal_theme),
+            'merchant_trust_score': optional_score(merchant_trust),
             'commission_score': commission_score(expected_commission),
             'discount_score': discount_score(discount),
-            'product_evidence_confidence': clamp(evidence_confidence),
+            'product_evidence_confidence': optional_score(evidence_confidence),
         }
+        positive=lambda key:(values[key] if values[key] is not None else 0.0)
+        inverse_comp=(100-values['competition_score']) if values['competition_score'] is not None else 0.0
         score = (
-            values['pain_gap_fit_score'] * float(weights.get('pain_gap_fit', 25))
-            + values['merchant_opportunity_score'] * float(weights.get('merchant_opportunity', 20))
-            + values['greek_demand_score'] * float(weights.get('greek_demand', 15))
+            positive('pain_gap_fit_score') * float(weights.get('pain_gap_fit', 25))
+            + positive('merchant_opportunity_score') * float(weights.get('merchant_opportunity', 20))
+            + positive('greek_demand_score') * float(weights.get('greek_demand', 15))
             + values['commission_score'] * float(weights.get('commission', 12))
-            + (100 - values['competition_score']) * float(weights.get('inverse_competition', 10))
-            + values['seasonal_theme_score'] * float(weights.get('seasonal', 8))
-            + values['merchant_trust_score'] * float(weights.get('merchant_trust', 5))
+            + inverse_comp * float(weights.get('inverse_competition', 10))
+            + positive('seasonal_theme_score') * float(weights.get('seasonal', 8))
+            + positive('merchant_trust_score') * float(weights.get('merchant_trust', 5))
             + values['discount_score'] * float(weights.get('discount', 3))
-            + values['product_evidence_confidence'] * float(weights.get('evidence_confidence', 2))
+            + positive('product_evidence_confidence') * float(weights.get('evidence_confidence', 2))
         ) / 100.0
+        missing=[k for k,v in values.items() if v is None]
+        values['missing_components']=missing
+        values['competition_inverse_bonus_withheld']=values['competition_score'] is None
         return round(clamp(score), 2), values
 
     v1.preliminary_score = preliminary_score
