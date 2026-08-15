@@ -1,0 +1,87 @@
+name: Patch Product AI Resilience
+
+on:
+  push:
+    branches: [hardening/product-ai-resilience-circuit-breaker]
+    paths:
+      - '.github/workflows/patch-product-ai-resilience.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hardening/product-ai-resilience-circuit-breaker
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Product Intelligence dependencies
+        run: pip install -r workers/product_intelligence/requirements.txt
+      - name: Apply resilience patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path,old,new,count=1):
+              p=Path(path); s=p.read_text(encoding='utf-8')
+              if s.count(old)<count:
+                  raise SystemExit(f'{path}: pattern missing: {old[:120]!r}')
+              p.write_text(s.replace(old,new,count),encoding='utf-8')
+
+          p='workers/product_intelligence/product_intelligence_v1.py'
+          replace(p,
+          "MIN_PRODUCT_EVIDENCE=float(os.getenv('PRODUCT_MIN_PRODUCT_EVIDENCE','60'))\nSOURCE_FEED=",
+          "MIN_PRODUCT_EVIDENCE=float(os.getenv('PRODUCT_MIN_PRODUCT_EVIDENCE','60'))\nMAX_AI_BATCH_FAILURE_RATE=max(0.0,min(float(os.getenv('PRODUCT_MAX_AI_BATCH_FAILURE_RATE','0.25')),1.0))\nSOURCE_FEED=")
+
+          replace(p,
+          "def process_batch(items,stats):\n    wire=[{k:v for k,v in x.items() if not k.startswith('_')} for x in items]\n    enrich_res=gateway('enrich',items=wire,thinking='auto')\n",
+          "def process_batch(items,stats):\n    stats['ai_batches_attempted']+=1\n    wire=[{k:v for k,v in x.items() if not k.startswith('_')} for x in items]\n    try:\n        enrich_res=gateway('enrich',items=wire,thinking='auto')\n    except Exception as exc:\n        stats['ai_batch_failures']+=1;stats['enrich_batch_failures']+=1;stats['ai_items_quarantined']+=len(items)\n        print(json.dumps({'warning':'ai_enrich_batch_quarantined','items':len(items),'error':str(exc)[:500]}),flush=True)\n        return 0\n")
+
+          replace(p,
+          "    if not audit_input:return 0\n    audit_res=gateway('audit',items=audit_input,thinking='auto')\n",
+          "    if not audit_input:return 0\n    try:\n        audit_res=gateway('audit',items=audit_input,thinking='auto')\n    except Exception as exc:\n        stats['ai_batch_failures']+=1;stats['audit_batch_failures']+=1;stats['ai_items_quarantined']+=len(audit_input)\n        print(json.dumps({'warning':'ai_audit_batch_quarantined','items':len(audit_input),'error':str(exc)[:500]}),flush=True)\n        return 0\n")
+
+          replace(p,
+          "    unique_products=db.execute('select count(distinct canonical_key) from candidates').fetchone()[0]\n    profile={**stream_stats,'unique_commission_eligible_products':unique_products,'ai_offers_submitted':submitted,**stats,'policy':{",
+          "    unique_products=db.execute('select count(distinct canonical_key) from candidates').fetchone()[0]\n    attempted=int(stats.get('ai_batches_attempted') or 0); failures=int(stats.get('ai_batch_failures') or 0)\n    failure_rate=(failures/attempted) if attempted else 0.0\n    stats['ai_batch_failure_rate']=round(failure_rate,4)\n    profile={**stream_stats,'unique_commission_eligible_products':unique_products,'ai_offers_submitted':submitted,**stats,'policy':{")
+
+          replace(p,
+          "      'ai_max_candidates':AI_MAX_CANDIDATES,'ai_offers_per_product':AI_OFFERS_PER_PRODUCT,\n      'persistence':",
+          "      'ai_max_candidates':AI_MAX_CANDIDATES,'ai_offers_per_product':AI_OFFERS_PER_PRODUCT,\n      'max_ai_batch_failure_rate':MAX_AI_BATCH_FAILURE_RATE,\n      'persistence':")
+
+          replace(p,
+          "    print(json.dumps({'product_intelligence_final':profile},ensure_ascii=False,default=str),flush=True)\n    db.close()\n",
+          "    print(json.dumps({'product_intelligence_final':profile},ensure_ascii=False,default=str),flush=True)\n    db.close()\n    if failure_rate>MAX_AI_BATCH_FAILURE_RATE:\n        raise SystemExit(f'AI batch circuit breaker: failure_rate={failure_rate:.3f} exceeds {MAX_AI_BATCH_FAILURE_RATE:.3f}')\n")
+
+          g='supabase/functions/product-intelligence-gateway/index.ts'
+          replace(g,
+          "    const raw=await r.text()\n    if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,800)}`)\n    const j=JSON.parse(raw);const content=j?.choices?.[0]?.message?.content\n    if(!content)throw new Error('deepseek_empty_content')\n    return content\n  }\n  const first=await call(decision.enabled?5200:3000,false)\n  try{return {data:JSON.parse(first),thinking:{...decision,json_retry:false}}}\n  catch(firstError){\n    const second=await call(decision.enabled?6200:4200,true)\n    try{return {data:JSON.parse(second),thinking:{...decision,json_retry:true}}}\n    catch(secondError){throw new Error(`deepseek_invalid_json_after_retry:${String(secondError).slice(0,240)}`)}\n  }\n}",
+          "    const raw=await r.text()\n    if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,800)}`)\n    const j=JSON.parse(raw);const choice=j?.choices?.[0]||{};const content=choice?.message?.content\n    return {content:String(content||''),finish_reason:String(choice?.finish_reason||''),reasoning_present:Boolean(choice?.message?.reasoning_content),usage:j?.usage||null}\n  }\n  const parse=async(result:any,retry:boolean)=>{\n    if(!result.content.trim())throw new Error(`empty_content:${result.finish_reason||'unknown'}`)\n    if(result.finish_reason==='length'||result.finish_reason==='insufficient_system_resource')throw new Error(`incomplete_finish:${result.finish_reason}`)\n    return {data:JSON.parse(result.content),thinking:{...decision,json_retry:retry,finish_reason:result.finish_reason,reasoning_present:result.reasoning_present}}\n  }\n  const first=await call(decision.enabled?5200:3000,false)\n  try{return await parse(first,false)}\n  catch(firstError){\n    const second=await call(decision.enabled?6800:4800,true)\n    try{return await parse(second,true)}\n    catch(secondError){throw new Error(`deepseek_structured_output_failed:${String(firstError).slice(0,160)}|retry:${String(secondError).slice(0,200)}`)}\n  }\n}")
+
+          replace(g,"version:'1.3'","version:'1.4'")
+
+          # Add regression assertions to existing deterministic suite.
+          t='workers/product_intelligence/test_product_intelligence.py'
+          s=Path(t).read_text(encoding='utf-8')
+          marker="if __name__ == '__main__':\n    unittest.main()\n"
+          if marker in s:
+              block="""    def test_ai_resilience_policy_defaults_are_fail_closed(self):\n        src=Path('product_intelligence_v1.py').read_text(encoding='utf-8')\n        self.assertIn(\"PRODUCT_MAX_AI_BATCH_FAILURE_RATE','0.25'\",src)\n        self.assertIn('ai_audit_batch_quarantined',src)\n        self.assertIn('AI batch circuit breaker',src)\n\n"""
+              s=s.replace(marker,block+marker)
+              Path(t).write_text(s,encoding='utf-8')
+          PY
+      - name: Validate code and tests
+        run: |
+          python -m py_compile workers/product_intelligence/product_intelligence_v1.py workers/product_intelligence/product_safety.py
+          cd workers/product_intelligence
+          python -m unittest -v test_product_intelligence.py
+      - name: Commit code only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add workers/product_intelligence/product_intelligence_v1.py workers/product_intelligence/test_product_intelligence.py supabase/functions/product-intelligence-gateway/index.ts
+          git commit -m 'Harden Product AI structured-output resilience and circuit breaker'
+          git push origin HEAD:hardening/product-ai-resilience-circuit-breaker
