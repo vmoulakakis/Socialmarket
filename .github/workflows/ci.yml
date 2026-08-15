@@ -15,4 +15,6 @@ jobs:
         with:
           node-version: '22'
       - run: npm install
+      - run: npm run test:design-v2
+      - run: npm run test:demand-v3
       - run: npm run build
