@@ -14,18 +14,28 @@ function Kpi({label,value,sub}){return <div className="semanticKpi"><span>{label
 function Meter({label,value,sub}){const s=score(value);return <div className="semanticMeter"><div><b>{label}</b><span>{s===null?'—':fmt(s,0)}</span></div><i>{s!==null&&<em style={{width:`${s}%`}}/>}</i>{sub&&<small>{sub}</small>}</div>}
 function Empty({title,children}){return <div className="semanticEmpty"><b>{title}</b><p>{children}</p></div>}
 
+async function adminRequest(path,{method='GET',body}={}){
+ const {data:{session}}=await supabase.auth.getSession();
+ const token=session?.access_token;
+ if(!token)throw new Error('Admin session expired. Sign in again.');
+ const r=await fetch(path,{method,headers:{authorization:`Bearer ${token}`,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,cache:'no-store'});
+ const text=await r.text();let j=null;try{j=text?JSON.parse(text):null}catch{j={error:text||`HTTP ${r.status}`}}
+ if(!r.ok||j?.error)throw new Error(j?.detail||j?.error||`HTTP ${r.status}`);
+ return j;
+}
+
 export default function SemanticConsole(){
  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[aiBusy,setAiBusy]=useState(false),[forecast,setForecast]=useState(null);
- async function load(){setLoading(true);setError('');const {data,error}=await supabase.rpc('admin_dashboard_snapshot');if(error)setError(error.message);else setData(data);setLoading(false)}
+ async function load(){setLoading(true);setError('');try{setData(await adminRequest('/api/admin-dashboard'))}catch(e){setError(String(e.message||e));setData(null)}finally{setLoading(false)}}
  useEffect(()=>{load()},[]);
  const categories=useMemo(()=>[...(data?.category_market||[])].sort((a,b)=>Number(b.opportunity_score??-1)-Number(a.opportunity_score??-1)||Number(b.demand_score??-1)-Number(a.demand_score??-1)),[data]);
  const pains=data?.pain_gaps||[];const merchants=data?.merchants||[];const products=data?.products||[];const tax=data?.taxonomy_health||{};
  const completeMarket=categories.filter(x=>valid(x.demand_score)&&valid(x.competition_score));
  const incompleteMarket=categories.filter(x=>!valid(x.competition_score)||!valid(x.demand_score));
- async function runForecast(){setAiBusy(true);setError('');try{const {data:{session}}=await supabase.auth.getSession();const r=await fetch('https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/admin-intelligence-gateway',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${session?.access_token||''}`},body:JSON.stringify({action:'forecast',generated_at:data?.generated_at,category_market:categories,pain_gaps:pains,merchants,social:data?.social||[]})});const j=await r.json();if(!r.ok||j.error)throw new Error(j.error||`HTTP ${r.status}`);setForecast(j.forecast)}catch(e){setError(String(e.message||e))}finally{setAiBusy(false)}}
+ async function runForecast(){setAiBusy(true);setError('');try{const j=await adminRequest('/api/admin-intelligence',{method:'POST',body:{action:'forecast',generated_at:data?.generated_at,category_market:categories,pain_gaps:pains,merchants,social:data?.social||[]}});setForecast(j.forecast)}catch(e){setError(String(e.message||e))}finally{setAiBusy(false)}}
  if(loading)return <main className="semanticConsole"><div className="semanticLoading">Loading production semantic intelligence…</div></main>;
  return <main className="semanticConsole">
-  <header className="semanticHero"><div><span>PRODUCTION · SEMANTIC INTELLIGENCE V1</span><h1>AI Evidence Console</h1><p>Canonical taxonomy, real evidence, affiliate economics and audited forecasts. Missing data remains missing — never converted to a favorable score.</p></div><div><button onClick={load}>↻ Refresh</button><button className="semanticPrimary" onClick={runForecast} disabled={aiBusy}>{aiBusy?'Forecasting…':'✦ AI Forecast'}</button></div></header>
+  <header className="semanticHero"><div><span>PRODUCTION · SEMANTIC INTELLIGENCE V1</span><h1>AI Evidence Console</h1><p>Canonical taxonomy, real evidence, affiliate economics and audited forecasts. Missing data remains missing — never converted to a favorable score.</p></div><div><button onClick={load}>↻ Refresh</button><button className="semanticPrimary" onClick={runForecast} disabled={aiBusy||!data}>{aiBusy?'Forecasting…':'✦ AI Forecast'}</button></div></header>
   {error&&<div className="semanticError">{error}</div>}
 
   <section className="semanticKpis">
