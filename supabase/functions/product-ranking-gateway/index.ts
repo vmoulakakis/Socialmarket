@@ -1,0 +1,124 @@
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
+import { createRemoteJWKSet, jwtVerify } from 'npm:jose@6.1.0'
+import postgres from 'https://deno.land/x/postgresjs@v3.4.5/mod.js'
+
+const sql=postgres(Deno.env.get('SUPABASE_DB_URL')!,{prepare:false,max:1})
+const ISSUER='https://token.actions.githubusercontent.com'
+const AUDIENCE='socialmarket-supabase-worker'
+const REPOSITORY_ID='1329707883'
+const REPOSITORY='vmoulakakis/Socialmarket'
+const ALLOWED=new Set(['vmoulakakis/Socialmarket/.github/workflows/product-intelligence-v1.yml@refs/heads/main'])
+const JWKS=createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks`))
+const DEEPSEEK_KEY=Deno.env.get('DEEPSEEK_API_KEY')||Deno.env.get('DEEP_SEEK_API_KEY')||''
+const DEEPSEEK_MODEL=Deno.env.get('DEEPSEEK_MODEL')||'deepseek-v4-pro'
+const json=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{'content-type':'application/json','cache-control':'no-store'}})
+const clamp=(n:number,a=0,b=100)=>Math.max(a,Math.min(b,Number.isFinite(n)?n:0))
+
+async function auth(req:Request){
+  const h=req.headers.get('authorization')||''
+  if(!h.startsWith('Bearer '))throw new Error('missing_oidc')
+  const {payload}=await jwtVerify(h.slice(7),JWKS,{issuer:ISSUER,audience:AUDIENCE})
+  if(String(payload.repository_id||'')!==REPOSITORY_ID||String(payload.repository||'')!==REPOSITORY||String(payload.ref||'')!=='refs/heads/main'||!ALLOWED.has(String(payload.workflow_ref||'')))throw new Error('oidc_not_allowed')
+  return payload
+}
+
+type ThinkingMode='off'|'on'|'auto'
+function complexity(payload:any,action:'rank'|'audit'){
+  const items=Array.isArray(payload?.items)?payload.items:[]
+  if(!items.length)return 0
+  let total=0
+  for(const x of items){
+    const pains=Array.isArray(x?.pain_rag)?x.pain_rag.length:0
+    const themes=Array.isArray(x?.theme_rag)?x.theme_rag.length:0
+    const confidence=Number(x?.merchant?.confidence||0)
+    const commission=Number(x?.product?.expected_commission_eur||0)
+    let c=.18+Math.min(.18,pains*.025)+Math.min(.10,themes*.02)
+    if(confidence>0&&confidence<.55)c+=.15
+    if(commission>=40)c+=.10
+    if(action==='audit')c+=.20
+    total+=Math.min(1,c)
+  }
+  return total/items.length
+}
+function chooseThinking(payload:any,action:'rank'|'audit',requested:ThinkingMode='auto'){
+  if(requested==='on')return {enabled:true,complexity:1,reason:'forced'}
+  if(requested==='off')return {enabled:false,complexity:0,reason:'forced_off'}
+  const c=complexity(payload,action),threshold=action==='audit'?.55:.68
+  return {enabled:c>=threshold,complexity:Number(c.toFixed(3)),reason:c>=threshold?'complex_case':'standard_case'}
+}
+
+async function deepseek(system:string,payload:any,action:'rank'|'audit',requested:ThinkingMode='auto'){
+  if(!DEEPSEEK_KEY)throw new Error('deepseek_not_configured')
+  const decision=chooseThinking(payload,action,requested)
+  const call=async(maxTokens:number,retry=false)=>{
+    const body:any={model:DEEPSEEK_MODEL,temperature:.08,max_tokens:maxTokens,response_format:{type:'json_object'},messages:[
+      {role:'system',content:system},
+      {role:'user',content:`Return one complete JSON object only. ${retry?'Previous JSON was incomplete; be concise. ':''}Input:\n${JSON.stringify(payload)}`}
+    ]}
+    if(decision.enabled){body.thinking={type:'enabled'};body.reasoning_effort='high'}else{body.thinking={type:'disabled'};body.reasoning_effort='low'}
+    const r=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${DEEPSEEK_KEY}`},body:JSON.stringify(body)})
+    const raw=await r.text();if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,600)}`)
+    const j=JSON.parse(raw),choice=j?.choices?.[0]||{},content=String(choice?.message?.content||'')
+    if(!content.trim()||choice?.finish_reason==='length')throw new Error(`incomplete_ai_response:${choice?.finish_reason||'empty'}`)
+    return JSON.parse(content)
+  }
+  try{return {data:await call(decision.enabled?5000:3000,false),thinking:{...decision,retry:false}}}
+  catch(first){return {data:await call(decision.enabled?6500:4500,true),thinking:{...decision,retry:true,first_error:String(first).slice(0,160)}}}
+}
+
+const RANK_SYSTEM=`You are SocialMarket Product Ranking Strategist for the Greek affiliate market. Your task is to identify which supplied products deserve promotion now. This is RANKING, not validation. Use only supplied product facts, merchant intelligence, deterministic metrics, optional pain RAG and seasonal themes. Missing pain evidence must NEVER automatically reject a product; it simply removes that supporting signal. Missing competition is UNKNOWN and must not be treated as low competition. Never invent demand, sales, reviews, features, commission, price or market share. Evaluate product-market fit, value proposition, creative/content potential, timing, purchase friction and channel fit. Produce JSON {"items":[...]}. For every input source_record_hash return: source_record_hash, category, subcategory, product_market_fit_score 0-100, creative_potential_score 0-100, value_score 0-100, confidence_score 0-100, promotion_angle in Greek, promotion_reason in Greek, audience in Greek, recommended_channels[] chosen from Facebook|Instagram|TikTok|YouTube|Search|Blog, risk_flags[], rationale in Greek. Prefer useful, specific, evidence-grounded promotion angles over hype.`
+
+const RANK_AUDIT_SYSTEM=`You are the independent SocialMarket Ranking Skeptic. Challenge a proposed promotion ranking without turning missing pain evidence into rejection. Use only supplied facts. Look for wrong merchant/product interpretation, weak value, high competition, low demand evidence, poor creative suitability, excessive purchase friction, suspicious pricing, weak confidence, or an AI promotion claim not supported by facts. Return JSON {"items":[...]}. For every source_record_hash return: source_record_hash, risk_score 0-100 where 100 is highest promotion risk, confidence_adjustment between -30 and 10, risk_flags[], reasons[], audit_summary in Greek. Do not change deterministic price or commission. Do not invent facts. The output is a risk adjustment for ranking, not a VALIDATED/REJECTED gate.`
+
+async function startRun(b:any){
+  const key=String(b.run_key||'').slice(0,160);if(!key)throw new Error('run_key_required')
+  const rows=await sql`insert into intel.product_ranking_runs(run_key,engine_version,status,metadata) values(${key},${String(b.engine_version||'ranking_v3')},'running',${sql.json(b.metadata||{})}) on conflict(run_key) do update set engine_version=excluded.engine_version,status='running',started_at=now(),completed_at=null,metadata=intel.product_ranking_runs.metadata||excluded.metadata returning id`
+  return rows[0]
+}
+
+async function saveRankings(runId:string,items:any[]){
+  let saved=0
+  for(const x of items.slice(0,40)){
+    const merchantId=String(x.merchant_id||''),hash=String(x.source_record_hash||''),key=String(x.canonical_key||'')
+    if(!merchantId||!hash||!key)continue
+    await sql`insert into intel.product_rankings(
+      run_id,source_record_hash,canonical_key,external_product_id,merchant_id,merchant_program_id,merchant_name,product_name,brand_name,model_name,category,subcategory,
+      effective_price,full_price,discount_pct,expected_commission_eur,tracking_url,image_url,in_stock,times_bought,merchant_demand_score,competition_score,merchant_whitespace_score,merchant_trust_score,
+      pain_signal_score,seasonal_score,commercial_score,purchase_signal_score,ai_product_fit_score,ai_creative_score,ai_value_score,ai_confidence,ai_risk_score,rank_score,rank_band,
+      promotion_angle,promotion_reason,audience,recommended_channels,risk_flags,evidence_summary,ai_summary
+    ) values(
+      ${runId}::uuid,${hash},${key},${x.external_product_id||null},${merchantId}::uuid,${x.merchant_program_id||null},${String(x.merchant_name||'Unknown').slice(0,500)},${String(x.product_name||'Product').slice(0,800)},${x.brand_name||null},${x.model_name||null},${x.category||null},${x.subcategory||null},
+      ${x.effective_price??null},${x.full_price??null},${x.discount_pct??null},${x.expected_commission_eur??null},${x.tracking_url||null},${x.image_url||null},${x.in_stock??null},${x.times_bought??null},${x.merchant_demand_score??null},${x.competition_score??null},${x.merchant_whitespace_score??null},${x.merchant_trust_score??null},
+      ${x.pain_signal_score??null},${x.seasonal_score??null},${x.commercial_score??null},${x.purchase_signal_score??null},${x.ai_product_fit_score??null},${x.ai_creative_score??null},${x.ai_value_score??null},${x.ai_confidence??null},${x.ai_risk_score??null},${clamp(Number(x.rank_score||0))},${String(x.rank_band||'WATCHLIST')},
+      ${x.promotion_angle||null},${x.promotion_reason||null},${x.audience||null},${sql.json(Array.isArray(x.recommended_channels)?x.recommended_channels:[])},${sql.json(Array.isArray(x.risk_flags)?x.risk_flags:[])},${sql.json(x.evidence_summary||{})},${x.ai_summary||null}
+    ) on conflict(run_id,source_record_hash) do update set rank_score=excluded.rank_score,rank_band=excluded.rank_band,ai_product_fit_score=excluded.ai_product_fit_score,ai_creative_score=excluded.ai_creative_score,ai_value_score=excluded.ai_value_score,ai_confidence=excluded.ai_confidence,ai_risk_score=excluded.ai_risk_score,promotion_angle=excluded.promotion_angle,promotion_reason=excluded.promotion_reason,audience=excluded.audience,recommended_channels=excluded.recommended_channels,risk_flags=excluded.risk_flags,evidence_summary=excluded.evidence_summary,ai_summary=excluded.ai_summary,ranked_at=now()`
+    saved++
+  }
+  return saved
+}
+
+async function completeRun(b:any){
+  const rows=await sql`update intel.product_ranking_runs set status='completed',completed_at=now(),records_seen=${Number(b.records_seen||0)},eligible_candidates=${Number(b.eligible_candidates||0)},ai_ranked=${Number(b.ai_ranked||0)},saved_count=${Number(b.saved_count||0)},metadata=metadata||${sql.json(b.metadata||{})} where id=${String(b.run_id)}::uuid returning id`
+  if(!rows[0])throw new Error('ranking_run_not_found')
+}
+
+Deno.serve(async req=>{
+  if(req.method==='GET')return json({ok:true,service:'product-ranking-gateway',version:'3.0',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+  if(req.method!=='POST')return json({error:'method_not_allowed'},405)
+  try{
+    await auth(req);const b=await req.json(),action=String(b.action||'')
+    if(action==='health')return json({ok:true,version:'3.0',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+    if(action==='rank'){
+      const items=(Array.isArray(b.items)?b.items:[]).slice(0,10),r=await deepseek(RANK_SYSTEM,{items},'rank',String(b.thinking||'auto') as ThinkingMode)
+      return json({ok:true,thinking:r.thinking,items:Array.isArray(r.data?.items)?r.data.items:[]})
+    }
+    if(action==='rank_audit'){
+      const items=(Array.isArray(b.items)?b.items:[]).slice(0,10),r=await deepseek(RANK_AUDIT_SYSTEM,{items},'audit',String(b.thinking||'auto') as ThinkingMode)
+      return json({ok:true,thinking:r.thinking,items:Array.isArray(r.data?.items)?r.data.items:[]})
+    }
+    if(action==='ranking_start'){const r=await startRun(b);return json({ok:true,run_id:r.id})}
+    if(action==='save_rankings'){const saved=await saveRankings(String(b.run_id||''),Array.isArray(b.items)?b.items:[]);return json({ok:true,saved})}
+    if(action==='ranking_complete'){await completeRun(b);return json({ok:true})}
+    throw new Error('action_not_allowed')
+  }catch(e){const message=String(e instanceof Error?e.message:e);console.error(e);return json({error:message},message.includes('oidc')?401:500)}
+})
