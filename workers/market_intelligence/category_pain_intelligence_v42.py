@@ -4,10 +4,12 @@ import threading
 
 import consumer_evidence_v4 as consumer
 from consumer_source_expansion_v43 import apply as apply_source_expansion
+from consumer_direct_social_v44 import apply as apply_direct_social
 
-# Expand discovery/source families before the V4 collector imports the consumer
-# module. This changes coverage only; all V4 evidence and skeptic gates remain.
+# Expand discovery/source families, then add independent direct public-social
+# acquisition. Neither layer changes the V4 skeptic/validation thresholds.
 apply_source_expansion()
+apply_direct_social()
 
 # libxml/lxml-backed extraction can abort the interpreter when several
 # Trafilatura parses run concurrently in the same GitHub runner process. Keep
