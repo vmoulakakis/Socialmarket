@@ -28,8 +28,8 @@ async function context(taxonomyId:string){
   const history=await sql`select observed_at,demand_score,competition_score,pain_gap_score,satisfaction_score,opportunity_score,confidence,methodology_version from intel.category_market_snapshots where taxonomy_id=${taxonomyId}::uuid order by observed_at desc limit 365`
   const evidence=await sql`select id,entity_type,source_kind,platform,source_url,source_domain,title,left(body,1600) body,published_at,collected_at,confidence,validation_status,metrics,metadata from evidence.observations where entity_type='taxonomy' and entity_id=${taxonomyId}::uuid order by coalesce(published_at,collected_at) desc limit 80`
   const supply=await sql`select g.merchant_id,g.canonical_name,g.taxonomy_id,g.taxonomy_name,g.primary_category,g.primary_subcategory,g.opportunity_score,g.trust_score,g.complaint_risk_score,g.confidence,g.observed_at,mr.program_id,mr.program_name,mr.commercial_score,mr.commercial_confidence,mr.competition_intensity_score,mr.greek_market_fit_score,mr.deep_research_score,mr.research_confidence,mr.risk_flag,mr.risk_reason,mr.evidence_count,mr.researched_at from api.merchant_gap_rankings g left join api.merchant_rankings mr on mr.merchant_id=g.merchant_id where g.taxonomy_id=${taxonomyId}::uuid order by g.opportunity_score desc nulls last,g.trust_score desc nulls last limit 50`
-  const pains=await sql`select id,canonical_text,category,subcategory,evidence_count,source_diversity,pain_severity,commercial_intent,audit_score,confidence,validation_status,metadata from public.validated_pain_clusters where category=${market[0].category_name} and (${market[0].subcategory_name}::text is null or subcategory=${market[0].subcategory_name}) order by pain_severity desc nulls last,evidence_count desc nulls last limit 40`
-  return {taxonomy_id:taxonomyId,market:market[0],history:[...history].reverse(),retrieved_evidence:evidence,supply_context:supply,validated_pains:pains,retrieval_semantics:{method:'direct audited taxonomy evidence for autonomous model lab',does_not_modify_scores:true,missing_remains_missing:true}}
+  const pains=await sql`select id,entity_type,entity_id,cluster_type,canonical_text,category,subcategory,evidence_count,source_diversity,frequency_score,engagement_score,demand_score,competition_score,pain_severity,commercial_intent,audit_score,confidence,updated_at from public.validated_pain_clusters where category=${market[0].category_name} and (${market[0].subcategory_name}::text is null or subcategory=${market[0].subcategory_name}) order by pain_severity desc nulls last,evidence_count desc nulls last limit 40`
+  return {taxonomy_id:taxonomyId,market:market[0],history:[...history].reverse(),retrieved_evidence:evidence,supply_context:supply,validated_pains:pains,retrieval_semantics:{method:'direct audited taxonomy evidence for autonomous model lab',does_not_modify_scores:true,missing_remains_missing:true,pain_view:'public.validated_pain_clusters is already validation-filtered'}}
 }
 
 async function save(taxonomyId:string,analysis:any){
@@ -43,7 +43,7 @@ async function save(taxonomyId:string,analysis:any){
 }
 
 Deno.serve(async req=>{
-  if(req.method==='GET') return json({ok:true,service:'demand-model-lab-gateway',version:'3.1',max_db_connections_per_instance:1})
+  if(req.method==='GET') return json({ok:true,service:'demand-model-lab-gateway',version:'3.1.1',max_db_connections_per_instance:1})
   if(req.method!=='POST') return json({error:'method_not_allowed'},405)
   try{
     await auth(req)

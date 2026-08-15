@@ -57,10 +57,35 @@ jobs:
           import json
           h=json.load(open('demand-model-lab-health.json'))
           assert h.get('ok') is True
-          assert str(h.get('version')) == '3.1'
+          assert str(h.get('version')).startswith('3.1')
           PY
       - name: Run Deep Demand V3.1 across Greek taxonomy
-        run: python workers/demand_intelligence_v3/run_autonomous.py | tee deep-demand-v31.jsonl
+        run: |
+          set -euo pipefail
+          python workers/demand_intelligence_v3/run_autonomous.py | tee deep-demand-v31.jsonl
+          python - <<'PY'
+          import json
+          lines=[x.strip() for x in open('deep-demand-v31.jsonl',encoding='utf-8') if x.strip()]
+          summary=None
+          for line in reversed(lines):
+              try:
+                  row=json.loads(line)
+              except Exception:
+                  continue
+              if 'summary' in row:
+                  summary=row['summary']; break
+          if not summary:
+              raise SystemExit('Deep Demand produced no structured completion summary')
+          total=int(summary.get('total') or 0)
+          completed=int(summary.get('completed') or 0)
+          withheld=int(summary.get('withheld') or 0)
+          failed=int(summary.get('failed') or 0)
+          if total < 1 or completed + withheld < 1:
+              raise SystemExit(f'Deep Demand persisted no usable taxonomy result: {summary}')
+          if failed >= total:
+              raise SystemExit(f'Deep Demand failed every taxonomy: {summary}')
+          print({'deep_demand_asserted':True,'summary':summary})
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
