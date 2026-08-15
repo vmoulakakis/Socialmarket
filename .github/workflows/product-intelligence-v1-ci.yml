@@ -10,7 +10,17 @@ on:
       - 'agents/skills/seasonal-demand-theme/**'
       - 'agents/ORCHESTRATOR.md'
       - 'supabase/functions/product-intelligence-gateway/**'
+      - 'supabase/functions/product-config-gateway/**'
       - 'supabase/migrations/031_product_intelligence_v1.sql'
+      - 'supabase/migrations/*product_intelligence*.sql'
+      - '.github/workflows/product-intelligence-v1*.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'workers/product_intelligence/**'
+      - 'supabase/functions/product-intelligence-gateway/**'
+      - 'supabase/functions/product-config-gateway/**'
+      - 'supabase/migrations/*product_intelligence*.sql'
       - '.github/workflows/product-intelligence-v1*.yml'
 
 permissions:
@@ -37,8 +47,9 @@ jobs:
             echo 'Legacy product price gate detected in Product Intelligence V1'
             exit 1
           fi
-      - name: Verify hard commercial gate and dominant merchant policy are present
+      - name: Verify safety floor and runtime configuration bridge
         run: |
           grep -R "PRODUCT_MIN_COMMISSION_EUR" workers/product_intelligence/product_intelligence_v1.py
           grep -R "dominant_or_blocked_merchant" workers/product_intelligence/product_intelligence_v1.py
-          grep -R "demand_beacon_only" supabase/migrations/031_product_intelligence_v1.sql
+          grep -R "min_expected_commission_eur" workers/product_intelligence/runtime_config.py
+          grep -R "validated_pain_required" supabase/functions/product-intelligence-gateway/index.ts
