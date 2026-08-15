@@ -9,6 +9,15 @@ on:
         default: '8'
   schedule:
     - cron: '15 2 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'workers/market_intelligence/category_pain_intelligence.py'
+      - 'workers/market_intelligence/category_pain_intelligence_v31.py'
+      - 'workers/market_intelligence/authoritative_context_v2.py'
+      - 'workers/market_intelligence/semantic_taxonomy.py'
+      - '.github/workflows/generic-evidence-intelligence.yml'
+      - 'supabase/functions/evidence-gateway/**'
 
 permissions:
   contents: read
@@ -25,7 +34,7 @@ jobs:
     env:
       EVIDENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/evidence-gateway
       SEARXNG_BASE_URL: http://127.0.0.1:8080
-      CATEGORY_PAIN_LIMIT: ${{ inputs.limit || '80' }}
+      CATEGORY_PAIN_LIMIT: ${{ github.event_name == 'push' && '4' || inputs.limit || '80' }}
       CATEGORY_PAIN_WORKERS: '3'
       CATEGORY_PAIN_AI_BATCH: '4'
     steps:
