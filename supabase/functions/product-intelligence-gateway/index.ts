@@ -104,16 +104,20 @@ ${JSON.stringify(payload)}`}] }
     const r=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${DEEPSEEK_KEY}`},body:JSON.stringify(body)})
     const raw=await r.text()
     if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,800)}`)
-    const j=JSON.parse(raw);const content=j?.choices?.[0]?.message?.content
-    if(!content)throw new Error('deepseek_empty_content')
-    return content
+    const j=JSON.parse(raw);const choice=j?.choices?.[0]||{};const content=choice?.message?.content
+    return {content:String(content||''),finish_reason:String(choice?.finish_reason||''),reasoning_present:Boolean(choice?.message?.reasoning_content),usage:j?.usage||null}
+  }
+  const parse=async(result:any,retry:boolean)=>{
+    if(!result.content.trim())throw new Error(`empty_content:${result.finish_reason||'unknown'}`)
+    if(result.finish_reason==='length'||result.finish_reason==='insufficient_system_resource')throw new Error(`incomplete_finish:${result.finish_reason}`)
+    return {data:JSON.parse(result.content),thinking:{...decision,json_retry:retry,finish_reason:result.finish_reason,reasoning_present:result.reasoning_present}}
   }
   const first=await call(decision.enabled?5200:3000,false)
-  try{return {data:JSON.parse(first),thinking:{...decision,json_retry:false}}}
+  try{return await parse(first,false)}
   catch(firstError){
-    const second=await call(decision.enabled?6200:4200,true)
-    try{return {data:JSON.parse(second),thinking:{...decision,json_retry:true}}}
-    catch(secondError){throw new Error(`deepseek_invalid_json_after_retry:${String(secondError).slice(0,240)}`)}
+    const second=await call(decision.enabled?6800:4800,true)
+    try{return await parse(second,true)}
+    catch(secondError){throw new Error(`deepseek_structured_output_failed:${String(firstError).slice(0,160)}|retry:${String(secondError).slice(0,200)}`)}
   }
 }
 
@@ -159,7 +163,7 @@ async function upsertItem(x:any){
 }
 
 Deno.serve(async(req)=>{
-  if(req.method==='GET')return json({ok:true,service:'product-intelligence-gateway',version:'1.3',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+  if(req.method==='GET')return json({ok:true,service:'product-intelligence-gateway',version:'1.4',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
   if(req.method!=='POST')return json({error:'method_not_allowed'},405)
   try{
     await auth(req);const b=await req.json();const action=String(b.action||'')
