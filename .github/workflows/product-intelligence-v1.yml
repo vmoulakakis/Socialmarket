@@ -1,0 +1,65 @@
+name: Product Intelligence V1
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '40 1 * * 1'
+
+concurrency:
+  group: socialmarket-product-intelligence-v1
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  product-intelligence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
+      PRODUCT_SOURCE_FEED: linkwise-products.json
+      PRODUCT_MIN_COMMISSION_EUR: '10'
+      PRODUCT_MIN_MERCHANT_TRUST: '30'
+      PRODUCT_AI_BATCH: '8'
+      PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: workers/product_intelligence/requirements.txt
+
+      - name: Install streaming dependencies
+        run: pip install -r workers/product_intelligence/requirements.txt
+
+      - name: Download source feed read-only from Drive
+        run: |
+          gdown "$DRIVE_FILE_ID" -O "$PRODUCT_SOURCE_FEED"
+          test -s "$PRODUCT_SOURCE_FEED"
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('linkwise-products.json')
+          print({'feed_bytes':p.stat().st_size})
+          if p.stat().st_size < 3_000_000_000:
+              raise SystemExit('Source feed unexpectedly small; refusing incomplete product run')
+          PY
+
+      - name: Stream commercial gate + Merchant RAG + Product Agents + Skeptic Audit
+        run: python workers/product_intelligence/product_intelligence_v1.py "$PRODUCT_SOURCE_FEED"
+
+      - name: Upload run profile only
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: product-intelligence-v1-profile
+          retention-days: 30
+          path: product-intelligence-profile.json
+
+      - name: Remove raw feed from runner
+        if: always()
+        run: rm -f "$PRODUCT_SOURCE_FEED" product-stage.sqlite3 product-stage.sqlite3-wal product-stage.sqlite3-shm
