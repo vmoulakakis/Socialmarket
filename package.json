@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:design-v2": "node scripts/validate-design-v2.mjs"
+    "test:design-v2": "node scripts/validate-design-v2.mjs",
+    "test:demand-v3": "node scripts/validate-demand-v3.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
