@@ -29,6 +29,7 @@ const checks=[
  [demand,'useReactTable','audit grid'],
  [demand,'FORECAST GATED','forecast guard'],
  [demand,'MISSING stays missing','missing-data UI contract'],
+ [demand,'valid(x.demand_score)||valid(x.competition_score)||valid(x.opportunity_score)','selector includes evidence-backed rows even when opportunity is missing'],
  [engine,'canonical_metrics_read_only:true','canonical score immutability'],
  [engine,"status:reasons.length?'WITHHELD'",'neural history guard'],
  [skill,'Missing values remain missing','agent truth contract'],

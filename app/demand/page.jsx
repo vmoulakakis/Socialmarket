@@ -46,7 +46,7 @@ export default function DemandIntelligence(){
  const allRows=useMemo(()=>list(data?.category_market),[data]);
  const selected=useMemo(()=>allRows.find(x=>x.taxonomy_id===selectedId)||allRows[0]||null,[allRows,selectedId]);
  const comparable=useMemo(()=>allRows.filter(x=>valid(x.demand_score)&&valid(x.competition_score)),[allRows]);
- const ranked=useMemo(()=>[...allRows].filter(x=>valid(x.opportunity_score)).sort((a,b)=>Number(b.opportunity_score)-Number(a.opportunity_score)),[allRows]);
+ const ranked=useMemo(()=>[...allRows].filter(x=>valid(x.demand_score)||valid(x.competition_score)||valid(x.opportunity_score)).sort((a,b)=>Number(b.opportunity_score??b.demand_score??-1)-Number(a.opportunity_score??a.demand_score??-1)),[allRows]);
 
  const loadDeep=useCallback(async(action='context')=>{
   if(!selectedId)return;setDeepBusy(true);setDeepError('');
