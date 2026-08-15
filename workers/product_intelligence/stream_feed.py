@@ -107,13 +107,53 @@ def valid_url(v):
     return s if s and (s.startswith('https://') or s.startswith('http://')) else None
 
 
+def normalize_domain(v):
+    s=str(v or '').strip().lower().rstrip('.')
+    if '://' in s:
+        try:s=urllib.parse.urlparse(s).hostname or ''
+        except:s=''
+    s=s.split(':',1)[0].removeprefix('www.')
+    return s or None
+
+
+def target_url(tracking_url):
+    """Return the decoded merchant destination carried by a Linkwise tracking URL.
+
+    The real 3.84 GB feed has no program_name field; merchant identity is carried by
+    tracking_url query parameters such as lnkurl. Decode conservatively and never
+    follow the URL over the network.
+    """
+    try:
+        raw=str(tracking_url or '').strip()
+        if not raw:return None
+        u=urllib.parse.urlparse(raw)
+        q=urllib.parse.parse_qs(u.query,keep_blank_values=False)
+        target=(q.get('lnkurl') or q.get('url') or q.get('redirect') or [None])[0]
+        if not target:return None
+        for _ in range(3):
+            decoded=urllib.parse.unquote(target)
+            if decoded==target:break
+            target=decoded
+        t=urllib.parse.urlparse(target)
+        if t.scheme in ('http','https') and t.hostname:return target
+    except:pass
+    return None
+
+
 def target_domain(tracking_url):
+    t=target_url(tracking_url)
+    if not t:return None
+    try:return normalize_domain(urllib.parse.urlparse(t).hostname)
+    except:return None
+
+
+def linkwise_route(tracking_url):
+    """Extract stable Linkwise route hints, e.g. /z/205-0/CD104/ -> 205-0/CD104."""
     try:
         u=urllib.parse.urlparse(str(tracking_url or ''))
-        q=urllib.parse.parse_qs(u.query)
-        target=(q.get('lnkurl') or q.get('url') or [None])[0]
-        if target:
-            return urllib.parse.urlparse(target).netloc.lower().removeprefix('www.')
+        parts=[urllib.parse.unquote(x) for x in u.path.split('/') if x]
+        if len(parts)>=3 and parts[0].lower()=='z':
+            return '/'.join(parts[1:3])
     except:pass
     return None
 
@@ -150,12 +190,15 @@ def normalize(raw):
     description=clean(raw.get('description'))
     gtin=clean(raw.get('gtin') or raw.get('ean'))
     mpn=clean(raw.get('mpn') or raw.get('sku'))
+    destination=target_url(tracking)
+    destination_domain=target_domain(tracking)
+    route=linkwise_route(tracking)
 
     unknown={k:raw.get(k) for k in raw.keys() if k not in KNOWN_FIELDS}
     if raw.get('custom') is not None:unknown['custom']=raw.get('custom')
 
     identity='|'.join(str(x or '') for x in (
-        program,raw.get('product_id') or raw.get('id'),gtin,mpn,name,raw.get('model_name'),price,tracking
+        program,destination_domain,route,raw.get('product_id') or raw.get('id'),gtin,mpn,name,raw.get('model_name'),price,tracking
     ))
     record_hash=hashlib.sha256(identity.encode('utf-8','ignore')).hexdigest()
 
@@ -166,7 +209,8 @@ def normalize(raw):
       'category_raw':category,'price':price,'full_price':full,'discount_pct':discount,
       'currency':clean(raw.get('currency')) or 'EUR','in_stock':stock,'availability':availability,
       'valid_from':iso_datetime(raw.get('valid_from')),'valid_to':iso_datetime(raw.get('valid_to')),
-      'times_bought':as_int(raw.get('times_bought')),'tracking_url':tracking,'target_domain':target_domain(tracking),
+      'times_bought':as_int(raw.get('times_bought')),'tracking_url':tracking,'target_url':destination,
+      'target_domain':destination_domain,'linkwise_route':route,
       'image_url':image,'thumb_url':thumb,'extra_images':extra,'colour':clean(raw.get('colour')),
       'size':clean(raw.get('size')),'gtin':gtin,'mpn':mpn,'extra_json':unknown,'source_record_hash':record_hash
     }
