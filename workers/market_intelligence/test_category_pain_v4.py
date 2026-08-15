@@ -59,6 +59,28 @@ class CategoryPainV4Tests(unittest.TestCase):
         with_context=v4.collect_v4(self.job)['market']['demand_score']
         self.assertEqual(baseline,with_context)
 
+    @patch.object(v4,'authoritative_context_rows')
+    @patch.object(v4,'collect_consumer_evidence')
+    @patch.object(v4.base,'useful_rows')
+    def test_serp_flood_cannot_crow_consumer_pain_out_of_bundle(self,m_useful,m_consumer,m_context):
+        def flood(query,keys,term,kind,limit):
+            # Deliberately return hundreds of unique market rows per query: the
+            # consumer channel must still survive because channels have independent budgets.
+            count=35 if kind=='demand' else 45
+            return [row(kind,f'https://{kind}-{abs(hash(query))}-{i}.example.gr/p/{i}',query) for i in range(count)]
+        m_useful.side_effect=flood
+        m_consumer.return_value=consumer_rows()
+        m_context.return_value=[{'source_kind':'industry_context','source_url':'https://greekecommerce.gr/x','title':'GRECA','body':'context','collector':'test','confidence':.85,'metadata':{'context_only':True,'authority_weight':.88,'source_class':'industry_primary'}}]
+        result=v4.collect_v4(self.job)
+        kinds=[e['source_kind'] for e in result['evidence']]
+        self.assertEqual(kinds[:3],['pain_candidate','pain_candidate','pain_candidate'])
+        self.assertEqual(result['market']['evidence_quality']['pain_consumer_rows'],3)
+        counts=result['market']['evidence_quality']['channel_counts']
+        self.assertGreater(counts['demand_raw'],v4.CHANNEL_BUDGETS['demand'])
+        self.assertEqual(counts['demand_retained'],v4.CHANNEL_BUDGETS['demand'])
+        self.assertEqual(counts['pain_candidate_retained'],3)
+        self.assertEqual(counts['context_retained'],1)
+
 
 if __name__=='__main__':
     unittest.main()
