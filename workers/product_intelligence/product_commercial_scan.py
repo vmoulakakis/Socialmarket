@@ -9,6 +9,9 @@ SAMPLE=Path(os.getenv('PRODUCT_SCAN_SAMPLE_PATH','product-commercial-scan-sample
 
 
 def summarize(db,stream_stats,context,cfg):
+    stream_stats=dict(stream_stats)
+    concentration=stream_stats.pop('dynamic_saturated_merchants',[])
+    stream_stats['candidate_concentration_flags']=concentration
     unique_products=db.execute('select count(distinct canonical_key) from candidates').fetchone()[0]
     offers=db.execute('select count(*) from candidates').fetchone()[0]
     commission_bands=collections.Counter(); merchants=collections.Counter(); categories=collections.Counter(); top=[]
@@ -47,11 +50,11 @@ def summarize(db,stream_stats,context,cfg):
         'phase':'A deterministic read-only commercial scan','raw_feed_imported':False,'supabase_products_written':False,
         'minimum_product_price':None,'minimum_expected_commission_eur':v1.MIN_COMMISSION,
         'minimum_merchant_trust':v1.MIN_MERCHANT_TRUST,
-        'dominant_merchant_offers':'excluded; merchant intelligence retained as Demand Beacon/RAG evidence',
+        'dominant_merchant_offers':'excluded only by explicit merchant policy/dominant-market evidence; merchant intelligence retained as Demand Beacon/RAG evidence',
         'commission_range_policy':'conservative minimum for automatic eligibility',
         'price_integrity':'no auto-scale; suspicious merchant price units quarantined before commission',
-        'dynamic_saturation':'feed-share + post-commission candidate-share gates',
-        'next_phase':'AI Product Research + RAG + independent Skeptic Audit before persistence'
+        'feed_concentration':'diagnostic only; Linkwise feed share is not market share and is handled by V2 shortlist diversity caps, never as a standalone rejection',
+        'next_phase':'validated-pain shortlist -> AI Product Research -> independent Skeptic Audit before persistence'
       },'top_candidate_sample_count':len(top)
     },top
 
