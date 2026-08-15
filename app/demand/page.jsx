@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect,useMemo,useState} from 'react';
+import {useCallback,useEffect,useMemo,useState} from 'react';
 import {motion} from 'motion/react';
 import {flexRender,getCoreRowModel,getSortedRowModel,useReactTable} from '@tanstack/react-table';
 import {supabase} from '@/lib/supabase';
@@ -8,50 +8,73 @@ import EChart from '@/components/analytics/EChart';
 import styles from './demand.module.css';
 
 const valid=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
-const num=v=>valid(v)?Number(v):null;
 const fmt=(v,d=0)=>valid(v)?Number(v).toLocaleString('el-GR',{maximumFractionDigits:d}):'—';
 const pct=v=>valid(v)?`${fmt(Number(v)*100,0)}%`:'—';
-const label=x=>x.subcategory_name||x.category_name||x.taxonomy_name||'Unclassified';
-const palette={text:'#e9eef7',muted:'#7f8ba0',line:'rgba(148,163,184,.16)',violet:'#8b5cf6',cyan:'#22d3ee',emerald:'#34d399',amber:'#fbbf24',red:'#fb7185'};
+const label=x=>x?.subcategory_name||x?.category_name||x?.taxonomy_name||'Unclassified';
+const list=v=>Array.isArray(v)?v:[];
+const palette={text:'#edf3fb',muted:'#7f8ba0',line:'rgba(148,163,184,.16)',violet:'#8b5cf6',cyan:'#22d3ee',emerald:'#34d399',amber:'#fbbf24',red:'#fb7185',blue:'#60a5fa'};
 
 function Stat({label,value,meta,tone='violet'}){return <div className={styles.stat}><span>{label}</span><strong data-tone={tone}>{value}</strong><small>{meta}</small></div>}
-function EmptyVisual({title,children,code}){return <div className={styles.emptyVisual}>{code&&<span>{code}</span>}<b>{title}</b><p>{children}</p></div>}
-function Panel({eyebrow,title,aside,children,className=''}){return <section className={`${styles.panel} ${className}`}><header className={styles.panelHead}><div><span>{eyebrow}</span><h2>{title}</h2></div>{aside}</header>{children}</section>}
+function Empty({title,children,code}){return <div className={styles.emptyVisual}>{code&&<span>{code}</span>}<b>{title}</b><p>{children}</p></div>}
+function Scene({index,eyebrow,title,aside,children,className=''}){return <section className={`${styles.scene} ${className}`}><header className={styles.sceneHead}><div className={styles.sceneIndex}>{String(index).padStart(2,'0')}</div><div><span>{eyebrow}</span><h2>{title}</h2></div>{aside&&<aside>{aside}</aside>}</header>{children}</section>}
+function TruthChip({tone='derived',children}){return <span className={styles.truthChip} data-tone={tone}>{children}</span>}
+function ErrorBox({children}){return children?<div className={styles.error}>{children}</div>:null}
 
 export default function DemandIntelligence(){
  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
- const [category,setCategory]=useState('All'),[sorting,setSorting]=useState([]),[aiBusy,setAiBusy]=useState(false),[ai,setAi]=useState(null);
- async function load(){setLoading(true);setError('');const {data,error}=await supabase.rpc('admin_dashboard_snapshot');if(error)setError(error.message);else setData(data);setLoading(false)}
- useEffect(()=>{load()},[]);
- const allRows=useMemo(()=>[...(data?.category_market||[])], [data]);
- const categoryNames=useMemo(()=>['All',...Array.from(new Set(allRows.map(x=>x.category_name||x.taxonomy_name).filter(Boolean))).sort()], [allRows]);
- const rows=useMemo(()=>allRows.filter(x=>category==='All'||(x.category_name||x.taxonomy_name)===category),[allRows,category]);
- const comparable=useMemo(()=>rows.filter(x=>valid(x.demand_score)&&valid(x.competition_score)),[rows]);
- const ranked=useMemo(()=>[...comparable].filter(x=>valid(x.opportunity_score)).sort((a,b)=>Number(b.opportunity_score)-Number(a.opportunity_score)),[comparable]);
- const top=ranked[0]||null;
- const missingCompetition=rows.filter(x=>!valid(x.competition_score)).length;
- const avgConfidence=rows.filter(x=>valid(x.confidence)).length?rows.filter(x=>valid(x.confidence)).reduce((s,x)=>s+Number(x.confidence),0)/rows.filter(x=>valid(x.confidence)).length:null;
- const evidenceTotal=rows.reduce((s,x)=>s+Number(x.evidence_entities||0),0);
- const painRows=data?.pain_gaps||[];
+ const [selectedId,setSelectedId]=useState(''),[sorting,setSorting]=useState([]),[deep,setDeep]=useState(null),[deepBusy,setDeepBusy]=useState(false),[deepError,setDeepError]=useState('');
 
- const scatter=useMemo(()=>({
-  backgroundColor:'transparent',animationDuration:650,textStyle:{color:palette.text,fontFamily:'Inter,system-ui,sans-serif'},
-  grid:{left:52,right:28,top:34,bottom:54},
-  xAxis:{name:'Competition →',min:0,max:100,nameLocation:'middle',nameGap:34,axisLine:{lineStyle:{color:palette.line}},axisLabel:{color:palette.muted},splitLine:{lineStyle:{color:'rgba(148,163,184,.08)'}}},
-  yAxis:{name:'Demand →',min:0,max:100,nameLocation:'middle',nameGap:40,axisLine:{lineStyle:{color:palette.line}},axisLabel:{color:palette.muted},splitLine:{lineStyle:{color:'rgba(148,163,184,.08)'}}},
-  tooltip:{trigger:'item',backgroundColor:'#0b1220',borderColor:'rgba(148,163,184,.2)',textStyle:{color:palette.text},formatter:p=>{const v=p.value;return `<b>${v[5]}</b><br/>Demand ${fmt(v[1])}<br/>Competition ${fmt(v[0])}<br/>Opportunity ${fmt(v[3])}<br/>Evidence ${fmt(v[2])}<br/>Confidence ${valid(v[4])?fmt(v[4]*100)+'%':'—'}`}},
-  visualMap:{show:false,min:0,max:100,dimension:3,inRange:{color:['#475569','#22d3ee','#8b5cf6','#34d399']}},
-  series:[{type:'scatter',data:comparable.map(x=>[Number(x.competition_score),Number(x.demand_score),Number(x.evidence_entities||0),Number(x.opportunity_score||0),num(x.confidence),label(x)]),symbolSize:v=>Math.max(11,Math.min(42,11+Math.sqrt(Math.max(0,v[2]))*3)),itemStyle:{opacity:.8,borderColor:'rgba(255,255,255,.32)',borderWidth:1},emphasis:{scale:1.18,itemStyle:{opacity:1}},markArea:{silent:true,label:{color:'rgba(226,232,240,.5)',fontSize:10},itemStyle:{opacity:.045},data:[[{name:'WHITESPACE',xAxis:0,yAxis:50,itemStyle:{color:palette.emerald}},{xAxis:50,yAxis:100}],[{name:'CROWDED DEMAND',xAxis:50,yAxis:50,itemStyle:{color:palette.amber}},{xAxis:100,yAxis:100}],[{name:'EMERGING',xAxis:0,yAxis:0,itemStyle:{color:palette.cyan}},{xAxis:50,yAxis:50}],[{name:'VALIDATE',xAxis:50,yAxis:0,itemStyle:{color:palette.red}},{xAxis:100,yAxis:50}]]}}]
- }),[comparable]);
+ const authFetch=useCallback(async(url,options={})=>{
+  const {data:{session}}=await supabase.auth.getSession();
+  if(!session?.access_token)throw new Error('Admin session expired. Sign in again.');
+  const r=await fetch(url,{...options,headers:{...(options.headers||{}),authorization:`Bearer ${session.access_token}`}});
+  const text=await r.text();let j;try{j=text?JSON.parse(text):null}catch{j={error:text||`HTTP ${r.status}`}}
+  if(!r.ok||j?.error)throw new Error(j?.detail||j?.error||`HTTP ${r.status}`);
+  return j;
+ },[]);
 
- const matrix=useMemo(()=>{
-  const topRows=[...rows].filter(x=>valid(x.demand_score)).sort((a,b)=>Number(b.opportunity_score??b.demand_score)-Number(a.opportunity_score??a.demand_score)).slice(0,14);
-  const dims=['Demand','Competition','Pain','Opportunity','Confidence'];
-  const heat=[];topRows.forEach((x,y)=>{[x.demand_score,x.competition_score,x.pain_gap_score,x.opportunity_score,valid(x.confidence)?Number(x.confidence)*100:null].forEach((v,xi)=>{if(valid(v))heat.push([xi,y,Number(v)])})});
-  return {topRows,dims,option:{backgroundColor:'transparent',animationDuration:500,textStyle:{color:palette.text,fontFamily:'Inter,system-ui,sans-serif'},grid:{left:145,right:26,top:18,bottom:38},xAxis:{type:'category',data:dims,axisLine:{lineStyle:{color:palette.line}},axisLabel:{color:palette.muted,fontSize:10}},yAxis:{type:'category',inverse:true,data:topRows.map(label),axisLine:{show:false},axisLabel:{color:'#aeb9ca',fontSize:10,width:125,overflow:'truncate'}},visualMap:{show:false,min:0,max:100,inRange:{color:['#111827','#164e63','#2563eb','#7c3aed','#34d399']}},tooltip:{position:'top',formatter:p=>`${topRows[p.value[1]]?label(topRows[p.value[1]]):''}<br/>${dims[p.value[0]]}: <b>${fmt(p.value[2])}</b>`},series:[{type:'heatmap',data:heat,itemStyle:{borderWidth:2,borderColor:'#090e17',borderRadius:4},emphasis:{itemStyle:{shadowBlur:16,shadowColor:'rgba(34,211,238,.18)'}}}]}};
- },[rows]);
+ const load=useCallback(async()=>{
+  setLoading(true);setError('');
+  try{
+   const j=await authFetch('/api/admin-dashboard',{cache:'no-store'});setData(j);
+   const rows=list(j?.category_market),first=[...rows].filter(x=>valid(x.demand_score)).sort((a,b)=>Number(b.opportunity_score??b.demand_score)-Number(a.opportunity_score??a.demand_score))[0];
+   if(first)setSelectedId(v=>v||first.taxonomy_id);
+  }catch(e){setError(String(e?.message||e))}finally{setLoading(false)}
+ },[authFetch]);
+ useEffect(()=>{void load()},[load]);
 
- const treemap=useMemo(()=>({backgroundColor:'transparent',animationDuration:650,tooltip:{backgroundColor:'#0b1220',borderColor:'rgba(148,163,184,.2)',textStyle:{color:palette.text},formatter:p=>`${p.name}<br/>Evidence footprint: <b>${fmt(p.value)}</b>`},series:[{type:'treemap',roam:false,nodeClick:false,breadcrumb:{show:false},label:{show:true,color:'#f8fafc',fontSize:11,formatter:'{b}'},upperLabel:{show:true,height:24,color:'#cbd5e1',fontWeight:700},itemStyle:{borderColor:'#090e17',borderWidth:3,gapWidth:3},levels:[{itemStyle:{borderWidth:0,gapWidth:4}},{colorSaturation:[.25,.7],itemStyle:{borderWidth:2,gapWidth:2,borderColorSaturation:.7}}],data:Object.entries(rows.reduce((acc,x)=>{const cat=x.category_name||x.taxonomy_name||'Other';const value=Number(x.evidence_entities||0);if(value<=0)return acc;(acc[cat]??=[]).push({name:x.subcategory_name||'Category level',value});return acc},{})).map(([name,children])=>({name,value:children.reduce((s,x)=>s+x.value,0),children}))}]}),[rows]);
+ const allRows=useMemo(()=>list(data?.category_market),[data]);
+ const selected=useMemo(()=>allRows.find(x=>x.taxonomy_id===selectedId)||allRows[0]||null,[allRows,selectedId]);
+ const comparable=useMemo(()=>allRows.filter(x=>valid(x.demand_score)&&valid(x.competition_score)),[allRows]);
+ const ranked=useMemo(()=>[...allRows].filter(x=>valid(x.opportunity_score)).sort((a,b)=>Number(b.opportunity_score)-Number(a.opportunity_score)),[allRows]);
+
+ const loadDeep=useCallback(async(action='context')=>{
+  if(!selectedId)return;setDeepBusy(true);setDeepError('');
+  try{
+   const j=await authFetch('/api/demand-intelligence',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,taxonomy_id:selectedId,limit:90})});
+   setDeep(j);if(j.ai_error)setDeepError(`AI synthesis unavailable: ${j.ai_error}`);
+  }catch(e){setDeepError(String(e?.message||e));if(action==='context')setDeep(null)}finally{setDeepBusy(false)}
+ },[authFetch,selectedId]);
+ useEffect(()=>{if(selectedId)void loadDeep('context')},[selectedId,loadDeep]);
+
+ const context=deep?.context||{},det=deep?.deterministic||{},analysis=deep?.analysis||null;
+ const evidence=list(context.retrieved_evidence),supply=list(context.supply_context),history=list(context.history),sourceMix=list(context.source_mix);
+ const fuzzy=det?.fuzzy_state||{},forecastGate=det?.forecast_gate||{},evidenceQuality=det?.evidence_quality||{},supplyDiag=det?.supply||{};
+ const headline=analysis?.executive_thesis?.headline||(selected?`${label(selected)}: demand signal under deep evidence review`:'Demand Intelligence V3');
+ const summary=analysis?.executive_thesis?.summary||(selected?`Canonical demand ${fmt(selected.demand_score)}, competition ${fmt(selected.competition_score)}, pain ${fmt(selected.pain_gap_score)} and opportunity ${fmt(selected.opportunity_score)} remain read-only. V3 adds evidence retrieval, uncertainty, supply context and forecast readiness around them.`:'Select a semantic market node to begin.');
+
+ const scatter=useMemo(()=>({backgroundColor:'transparent',animationDuration:650,grid:{left:55,right:30,top:34,bottom:54},xAxis:{name:'Competition →',min:0,max:100,nameLocation:'middle',nameGap:35,axisLabel:{color:palette.muted},axisLine:{lineStyle:{color:palette.line}},splitLine:{lineStyle:{color:'rgba(148,163,184,.07)'}}},yAxis:{name:'Demand →',min:0,max:100,nameLocation:'middle',nameGap:40,axisLabel:{color:palette.muted},axisLine:{lineStyle:{color:palette.line}},splitLine:{lineStyle:{color:'rgba(148,163,184,.07)'}}},tooltip:{backgroundColor:'#09111d',borderColor:palette.line,textStyle:{color:palette.text},formatter:p=>{const v=p.data;return `<b>${v[5]}</b><br/>Demand ${fmt(v[1])}<br/>Competition ${fmt(v[0])}<br/>Opportunity ${fmt(v[3])}<br/>Evidence ${fmt(v[2])}<br/>Confidence ${valid(v[4])?fmt(v[4]*100)+'%':'—'}`}},visualMap:{show:false,min:0,max:100,dimension:3,inRange:{color:['#475569',palette.cyan,palette.violet,palette.emerald]}},series:[{type:'scatter',data:comparable.map(x=>[Number(x.competition_score),Number(x.demand_score),Number(x.evidence_entities||0),Number(x.opportunity_score||0),valid(x.confidence)?Number(x.confidence):null,label(x),x.taxonomy_id]),symbolSize:v=>Math.max(11,Math.min(42,11+Math.sqrt(Math.max(0,v[2]))*3)),itemStyle:{opacity:.8,borderColor:'rgba(255,255,255,.3)',borderWidth:1},emphasis:{scale:1.18,itemStyle:{opacity:1}},markArea:{silent:true,label:{color:'rgba(226,232,240,.45)',fontSize:10},itemStyle:{opacity:.045},data:[[{name:'WHITESPACE',xAxis:0,yAxis:50,itemStyle:{color:palette.emerald}},{xAxis:50,yAxis:100}],[{name:'CROWDED DEMAND',xAxis:50,yAxis:50,itemStyle:{color:palette.amber}},{xAxis:100,yAxis:100}],[{name:'EMERGING',xAxis:0,yAxis:0,itemStyle:{color:palette.cyan}},{xAxis:50,yAxis:50}],[{name:'VALIDATE',xAxis:50,yAxis:0,itemStyle:{color:palette.red}},{xAxis:100,yAxis:50}]]}}]}),[comparable]);
+ const scatterEvents=useMemo(()=>({click:p=>{const id=p?.data?.[6];if(id)setSelectedId(String(id))}}),[]);
+
+ const signalChart=useMemo(()=>{if(!selected)return null;const pairs=[['Demand',selected.demand_score,palette.cyan],['Competition',selected.competition_score,palette.amber],['Pain gap',selected.pain_gap_score,palette.red],['Opportunity',selected.opportunity_score,palette.emerald],['Confidence',valid(selected.confidence)?Number(selected.confidence)*100:null,palette.violet]].filter(x=>valid(x[1]));return {backgroundColor:'transparent',grid:{left:88,right:24,top:8,bottom:22},xAxis:{type:'value',min:0,max:100,axisLabel:{color:palette.muted},splitLine:{lineStyle:{color:'rgba(148,163,184,.07)'}}},yAxis:{type:'category',inverse:true,data:pairs.map(x=>x[0]),axisLabel:{color:'#b9c5d5'},axisLine:{show:false},axisTick:{show:false}},tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:'#09111d',borderColor:palette.line,textStyle:{color:palette.text}},series:[{type:'bar',barMaxWidth:18,data:pairs.map(x=>({value:Number(x[1]),itemStyle:{color:x[2],borderRadius:[0,8,8,0]}}))}]};},[selected]);
+
+ const fuzzyChart=useMemo(()=>{const pairs=Object.entries(fuzzy.membership||{}).sort((a,b)=>b[1]-a[1]);if(!pairs.length)return null;return {backgroundColor:'transparent',grid:{left:135,right:24,top:8,bottom:22},xAxis:{type:'value',min:0,max:1,axisLabel:{color:palette.muted,formatter:v=>`${Math.round(v*100)}%`},splitLine:{lineStyle:{color:'rgba(148,163,184,.07)'}}},yAxis:{type:'category',inverse:true,data:pairs.map(x=>x[0].replaceAll('_',' ')),axisLabel:{color:'#b9c5d5',fontSize:10},axisLine:{show:false},axisTick:{show:false}},series:[{type:'bar',barMaxWidth:15,data:pairs.map(([k,v])=>({value:v,itemStyle:{color:k==='uncertain'?palette.amber:k===fuzzy.state?palette.violet:'#334155',borderRadius:[0,7,7,0]}}))}]};},[fuzzy]);
+
+ const sourceChart=useMemo(()=>{if(!sourceMix.length)return null;return {backgroundColor:'transparent',grid:{left:110,right:28,top:8,bottom:28},xAxis:{type:'value',axisLabel:{color:palette.muted},splitLine:{lineStyle:{color:'rgba(148,163,184,.07)'}}},yAxis:{type:'category',inverse:true,data:sourceMix.slice(0,12).map(x=>x.source_domain||'unknown'),axisLabel:{color:'#aeb9ca',fontSize:9,width:98,overflow:'truncate'},axisLine:{show:false},axisTick:{show:false}},tooltip:{trigger:'axis',axisPointer:{type:'shadow'},backgroundColor:'#09111d',borderColor:palette.line,textStyle:{color:palette.text}},series:[{type:'bar',barMaxWidth:14,data:sourceMix.slice(0,12).map(x=>({value:Number(x.observations||0),itemStyle:{color:Number(x.avg_authority||0)>=.9?palette.emerald:palette.cyan,borderRadius:[0,6,6,0]}}))}]};},[sourceMix]);
+
+ const historyChart=useMemo(()=>{const rows=[...history].sort((a,b)=>new Date(a.observed_at)-new Date(b.observed_at));if(rows.length<2)return null;const series=[['Demand','demand_score',palette.cyan],['Competition','competition_score',palette.amber],['Pain','pain_gap_score',palette.red],['Opportunity','opportunity_score',palette.emerald]].map(([name,key,color])=>({name,type:'line',showSymbol:rows.length<18,smooth:false,connectNulls:false,data:rows.map(x=>valid(x[key])?Number(x[key]):null),lineStyle:{width:2,color},itemStyle:{color}}));return {backgroundColor:'transparent',legend:{top:0,textStyle:{color:palette.muted,fontSize:10}},grid:{left:44,right:20,top:38,bottom:44},xAxis:{type:'category',data:rows.map(x=>new Date(x.observed_at).toLocaleString('el-GR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})),axisLabel:{color:palette.muted,fontSize:9,rotate:25},axisLine:{lineStyle:{color:palette.line}}},yAxis:{type:'value',min:0,max:100,axisLabel:{color:palette.muted},splitLine:{lineStyle:{color:'rgba(148,163,184,.07)'}}},tooltip:{trigger:'axis',backgroundColor:'#09111d',borderColor:palette.line,textStyle:{color:palette.text}},series};},[history]);
+
+ const supplyChart=useMemo(()=>{const rows=supply.filter(x=>valid(x.commercial_score)&&valid(x.trust_score));if(!rows.length)return null;return {backgroundColor:'transparent',grid:{left:48,right:24,top:24,bottom:44},xAxis:{name:'Commercial quality →',min:0,max:100,nameLocation:'middle',nameGap:30,axisLabel:{color:palette.muted},splitLine:{lineStyle:{color:'rgba(148,163,184,.07)'}}},yAxis:{name:'Trust →',min:0,max:100,nameLocation:'middle',nameGap:36,axisLabel:{color:palette.muted},splitLine:{lineStyle:{color:'rgba(148,163,184,.07)'}}},tooltip:{backgroundColor:'#09111d',borderColor:palette.line,textStyle:{color:palette.text},formatter:p=>`<b>${p.data[3]}</b><br/>Commercial ${fmt(p.data[0])}<br/>Trust ${fmt(p.data[1])}<br/>Evidence ${fmt(p.data[2])}`},series:[{type:'scatter',data:rows.map(x=>[Number(x.commercial_score),Number(x.trust_score),Number(x.evidence_count||0),x.canonical_name]),symbolSize:v=>Math.max(10,Math.min(30,10+Math.sqrt(Math.max(0,v[2]))*2)),itemStyle:{color:palette.blue,opacity:.78,borderColor:'rgba(255,255,255,.25)',borderWidth:1}}]};},[supply]);
 
  const columns=useMemo(()=>[
   {accessorFn:r=>r.category_name||r.taxonomy_name||'—',id:'category',header:'Category',cell:i=>String(i.getValue()??'—')},
@@ -61,59 +84,93 @@ export default function DemandIntelligence(){
   {accessorKey:'pain_gap_score',header:'Pain',cell:i=>fmt(i.getValue())},
   {accessorKey:'opportunity_score',header:'Opportunity',cell:i=><b>{fmt(i.getValue())}</b>},
   {accessorKey:'confidence',header:'Confidence',cell:i=>pct(i.getValue())},
-  {accessorKey:'evidence_entities',header:'Evidence',cell:i=>fmt(i.getValue())},
+  {accessorKey:'evidence_entities',header:'Evidence',cell:i=>fmt(i.getValue())}
  ],[]);
- const table=useReactTable({data:rows,columns,state:{sorting},onSortingChange:setSorting,getCoreRowModel:getCoreRowModel(),getSortedRowModel:getSortedRowModel()});
-
- async function runAnalyst(){setAiBusy(true);setError('');try{const {data:{session}}=await supabase.auth.getSession();const r=await fetch('https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/admin-intelligence-gateway',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${session?.access_token||''}`},body:JSON.stringify({action:'forecast',generated_at:data?.generated_at,category_market:rows,pain_gaps:painRows,merchants:data?.merchants||[],social:data?.social||[]})});const j=await r.json();if(!r.ok||j.error)throw new Error(j.error||`HTTP ${r.status}`);setAi(j.forecast)}catch(e){setError(String(e.message||e))}finally{setAiBusy(false)}}
+ const table=useReactTable({data:allRows,columns,state:{sorting},onSortingChange:setSorting,getCoreRowModel:getCoreRowModel(),getSortedRowModel:getSortedRowModel()});
 
  if(loading)return <main className={styles.page}><div className={styles.loading}>Loading production demand intelligence…</div></main>;
  return <main className={styles.page}>
-  <motion.header className={styles.hero} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{duration:.35}}>
-   <div className={styles.heroCopy}><span className={styles.kicker}>DEMAND INTELLIGENCE · PRODUCTION</span><h1>{top?<>Best comparable signal: <em>{label(top)}</em></>:<>Demand intelligence needs comparable market evidence</>}</h1><p>{top?`Observed demand ${fmt(top.demand_score)} · competition ${fmt(top.competition_score)} · opportunity ${fmt(top.opportunity_score)} · confidence ${pct(top.confidence)}. Scores are existing production metrics; this screen does not re-score them.`:'No synthetic trend, search volume or competition score is generated to fill gaps.'}</p></div>
-   <div className={styles.heroActions}><select value={category} onChange={e=>setCategory(e.target.value)} aria-label="Filter category">{categoryNames.map(x=><option key={x}>{x}</option>)}</select><button onClick={load}>Refresh</button><button className={styles.primary} onClick={runAnalyst} disabled={aiBusy}>{aiBusy?'Analyzing…':'AI Explain Demand'}</button></div>
+  <motion.header className={styles.hero} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}>
+   <div className={styles.heroCopy}>
+    <div className={styles.engineRow}><span className={styles.kicker}>DEMAND INTELLIGENCE V3 · GREECE</span><TruthChip tone="observed">PRODUCTION TRUTH</TruthChip><TruthChip tone="derived">AUTONOMOUS RAG + FUZZY</TruthChip><TruthChip tone={forecastGate.status==='SHADOW_BACKTEST_ELIGIBLE'?'modeled':'withheld'}>{forecastGate.status||'FORECAST GATED'}</TruthChip></div>
+    <h1>{headline}</h1><p>{summary}</p>
+    <div className={styles.truthRow}><TruthChip tone="observed">OBSERVED evidence</TruthChip><TruthChip tone="derived">DERIVED canonical indices</TruthChip><TruthChip tone="modeled">MODELED only after backtest</TruthChip><TruthChip tone="withheld">MISSING stays missing</TruthChip></div>
+   </div>
+   <div className={styles.heroActions}>
+    <select value={selectedId} onChange={e=>setSelectedId(e.target.value)} aria-label="Select market node">{ranked.map(x=><option key={x.taxonomy_id} value={x.taxonomy_id}>{x.category_name}{x.subcategory_name?` / ${x.subcategory_name}`:''}</option>)}</select>
+    <button onClick={load}>Refresh truth</button>
+    <button className={styles.primary} onClick={()=>loadDeep('analyze')} disabled={deepBusy||!selected}>{deepBusy?'Deep analysis running…':'✦ Deep AI Research'}</button>
+   </div>
   </motion.header>
-  {error&&<div className={styles.error}>{error}</div>}
+  <ErrorBox>{error}</ErrorBox><ErrorBox>{deepError}</ErrorBox>
 
   <section className={styles.stats}>
-   <Stat label="Trusted market rows" value={fmt(rows.length)} meta={`${fmt(comparable.length)} comparable`} tone="cyan"/>
-   <Stat label="Evidence footprint" value={fmt(evidenceTotal)} meta="row-level evidence entities" tone="violet"/>
-   <Stat label="Competition missing" value={fmt(missingCompetition)} meta="kept missing, never zero" tone={missingCompetition?'amber':'emerald'}/>
-   <Stat label="Average confidence" value={avgConfidence===null?'—':pct(avgConfidence)} meta="across rows that report confidence" tone="emerald"/>
-   <Stat label="Validated pains" value={fmt(painRows.length)} meta="audit-gated unmet needs" tone="amber"/>
+   <Stat label="Canonical demand" value={fmt(selected?.demand_score)} meta="evidence-density proxy · not search volume" tone="cyan"/>
+   <Stat label="Competition" value={fmt(selected?.competition_score)} meta={valid(selected?.competition_score)?'commercial-domain proxy':'missing remains missing'} tone="amber"/>
+   <Stat label="Pain gap" value={fmt(selected?.pain_gap_score)} meta={`${fmt(selected?.validated_pain_clusters)} validated clusters`} tone="red"/>
+   <Stat label="Opportunity" value={fmt(selected?.opportunity_score)} meta="existing production formula" tone="emerald"/>
+   <Stat label="Evidence RAG" value={fmt(evidenceQuality.observations)} meta={`${fmt(evidenceQuality.independent_domains)} independent domains`} tone="violet"/>
+   <Stat label="Supply context" value={fmt(supplyDiag.merchant_count)} meta={valid(supplyDiag.analytical_supply_strength)?`derived strength ${fmt(supplyDiag.analytical_supply_strength)}`:'exact-taxonomy merchants'} tone="blue"/>
   </section>
 
-  <Panel eyebrow="OPPORTUNITY LANDSCAPE" title="Demand × Competition" aside={<span className={styles.legend}>Bubble size = evidence footprint · color = existing opportunity score</span>} className={styles.heroPanel}>
-   {comparable.length?<EChart option={scatter} height={500} ariaLabel="Demand versus competition opportunity landscape"/>:<EmptyVisual code="NO COMPARABLE ROWS" title="Competition evidence is still incomplete">Rows without both demand and competition are intentionally excluded from the quadrant.</EmptyVisual>}
-  </Panel>
+  <Scene index={1} eyebrow="EXECUTIVE THESIS" title="What the Greek market is actually telling us" aside={<div className={styles.metaStack}><span>{label(selected)}</span><small>{selected?.observed_at?new Date(selected.observed_at).toLocaleString('el-GR'):'—'}</small></div>} className={styles.thesisScene}>
+   <div className={styles.thesisGrid}><div><h3>{analysis?.executive_thesis?.headline||headline}</h3><p>{analysis?.executive_thesis?.summary||'Run Deep AI Research to turn the deterministic evidence bundle into a skeptical executive thesis. The underlying scores will not change.'}</p></div><div className={styles.thesisFacts}><div><span>Fuzzy market state</span><b>{String(fuzzy.state||'awaiting context').replaceAll('_',' ')}</b><small>analytical description, not a new score</small></div><div><span>AI thesis confidence</span><b>{analysis?.executive_thesis?.confidence_0_100!=null?`${fmt(analysis.executive_thesis.confidence_0_100)}%`:'—'}</b><small>{analysis?.executive_thesis?.confidence_basis||`Canonical confidence ${pct(selected?.confidence)}`}</small></div></div></div>
+  </Scene>
 
-  <div className={styles.grid2}>
-   <Panel eyebrow="SIGNAL MATRIX" title="What is driving the landscape" aside={<span className={styles.legend}>Existing 0–100 metrics only</span>}>
-    {matrix.topRows.length?<EChart option={matrix.option} height={430} ariaLabel="Demand signal matrix heatmap"/>:<EmptyVisual title="No signal matrix yet">The semantic market run has not produced trusted demand rows.</EmptyVisual>}
-   </Panel>
-   <Panel eyebrow="EVIDENCE FOOTPRINT" title="Where market evidence concentrates" aside={<span className={styles.legend}>Area = evidence entities, not market size</span>}>
-    {evidenceTotal>0?<EChart option={treemap} height={430} ariaLabel="Market evidence footprint treemap"/>:<EmptyVisual title="No evidence footprint yet">Evidence entity counts are not available for these market rows.</EmptyVisual>}
-   </Panel>
+  <Scene index={2} eyebrow="MARKET LANDSCAPE" title="Demand × Competition · select any bubble" aside="Bubble = evidence footprint · color = canonical opportunity">
+   {comparable.length?<EChart option={scatter} onEvents={scatterEvents} height={510} ariaLabel="Demand and competition landscape"/>:<Empty code="NO COMPARABLE ROWS" title="Competition evidence is incomplete">Rows need both demand and competition to enter this landscape.</Empty>}
+  </Scene>
+
+  <div className={styles.sceneGrid2}>
+   <Scene index={3} eyebrow="SIGNAL DECOMPOSITION" title="Canonical signal, without AI rescore">{signalChart?<EChart option={signalChart} height={350} ariaLabel="Canonical market signal decomposition"/>:<Empty title="No canonical metrics">No comparable market metrics are available.</Empty>}</Scene>
+   <Scene index={4} eyebrow="FUZZY UNCERTAINTY" title="State memberships, not a replacement score">{fuzzyChart?<EChart option={fuzzyChart} height={350} ariaLabel="Fuzzy market state memberships"/>:<Empty code="CONTEXT REQUIRED" title="Fuzzy engine awaits deep context">Select a node and let the deterministic context load.</Empty>}</Scene>
   </div>
 
-  <div className={styles.grid3}>
-   <Panel eyebrow="TREND EXPLORER" title="7D · 30D · 90D">
-    <EmptyVisual code="FAIL-CLOSED" title="Historical demand series is not exposed by the current snapshot">No decorative sparkline is rendered. When production history is exposed, this module will compare real periods.</EmptyVisual>
-   </Panel>
-   <Panel eyebrow="PAIN LANDSCAPE" title="Validated unmet needs">
-    {painRows.length?<div className={styles.painList}>{painRows.slice(0,8).map(p=><div key={p.id}><span>{p.category||'Unclassified'}</span><b>{p.canonical_text}</b><small>Severity {fmt(p.pain_severity)} · {fmt(p.evidence_count)} evidence · {fmt(p.source_diversity)} sources</small></div>)}</div>:<EmptyVisual code="0 VALIDATED PAINS" title="The hardened audit is doing its job">Contaminated legacy pains remain excluded. Product promotion cannot use unvalidated need evidence.</EmptyVisual>}
-   </Panel>
-   <Panel eyebrow="LINEAGE" title="Evidence → Pain → Merchant → Product">
-    <EmptyVisual code="LINEAGE REQUIRED" title="Sankey withheld until entity-level lineage is available">Stage totals are not treated as conversion flows. This prevents a visually impressive but analytically false Sankey.</EmptyVisual>
-   </Panel>
+  <Scene index={5} eyebrow="HYBRID RAG" title="Evidence stack behind the thesis" aside={<div className={styles.metaStack}><span>{fmt(evidenceQuality.observations)} retrieved</span><small>direct + FTS + fuzzy + authority + recency</small></div>}>
+   {evidence.length?<div className={styles.evidenceGrid}>{evidence.slice(0,12).map((x,i)=><article className={styles.evidenceCard} key={x.id||`${x.source_url}-${i}`}><div><TruthChip tone="observed">{String(x.source_kind||'evidence').toUpperCase()}</TruthChip><span className={styles.rank}>RAG {valid(x?.retrieval?.score)?fmt(Number(x.retrieval.score)*100,0):'—'}</span></div><h3>{x.title||x.source_domain||'Evidence observation'}</h3><p>{String(x.body||'').slice(0,360)}</p><footer><span>{x.source_domain||'unknown domain'}</span><span>conf. {pct(x.confidence)}</span>{x.source_url&&<a href={x.source_url} target="_blank" rel="noreferrer">source ↗</a>}</footer></article>)}</div>:<Empty code={deepBusy?'RETRIEVING':'NO MATCHED EVIDENCE'} title={deepBusy?'Hybrid retrieval is running':'No retrievable evidence for this node'}>The engine will not synthesize a story without a retrievable evidence bundle.</Empty>}
+  </Scene>
+
+  <div className={styles.sceneGrid2}>
+   <Scene index={6} eyebrow="GREEK SOURCE CONTEXT" title="Authority and source diversity">
+    {sourceChart?<EChart option={sourceChart} height={360} ariaLabel="Greek market evidence source mix"/>:<Empty title="No source mix yet">Authority is calculated only from evidence actually retrieved for this node.</Empty>}
+    {list(analysis?.greek_context).length>0&&<div className={styles.insightList}>{analysis.greek_context.slice(0,6).map((x,i)=><div key={i}><TruthChip tone={x.classification==='OBSERVED'?'observed':'derived'}>{x.classification||'DERIVED'}</TruthChip><b>{x.finding}</b><p>{x.evidence}</p><small>{x.source} · {x.limits}</small></div>)}</div>}
+   </Scene>
+   <Scene index={7} eyebrow="DEMAND ↔ SUPPLY" title="Does affiliate supply answer the demand?">
+    {supplyChart?<EChart option={supplyChart} height={360} ariaLabel="Merchant supply commercial quality versus trust"/>:<Empty title="No exact-taxonomy supply rows">Supply is not inferred from unrelated merchants.</Empty>}
+    <div className={styles.supplySummary}><div><span>Unique merchants</span><b>{fmt(supplyDiag.merchant_count)}</b></div><div><span>Avg trust</span><b>{fmt(supplyDiag.avg_trust,1)}</b></div><div><span>Avg commercial</span><b>{fmt(supplyDiag.avg_commercial,1)}</b></div><div><span>Risk rate</span><b>{valid(supplyDiag.risk_rate)?pct(supplyDiag.risk_rate):'—'}</b></div></div>
+    {analysis?.supply_response&&<div className={styles.callout}><b>{analysis.supply_response.assessment}</b><p>{analysis.supply_response.relationship_to_demand}</p><small>{analysis.supply_response.causality_warning}</small></div>}
+   </Scene>
   </div>
 
-  <Panel eyebrow="AUDITABLE MARKET GRID" title="Every visual resolves back to production rows" aside={<span className={styles.legend}>Click headers to sort</span>}>
-   {rows.length?<div className={styles.tableWrap}><table><thead>{table.getHeaderGroups().map(g=><tr key={g.id}>{g.headers.map(h=><th key={h.id} onClick={h.column.getToggleSortingHandler()}>{flexRender(h.column.columnDef.header,h.getContext())}{h.column.getIsSorted()==='asc'?' ↑':h.column.getIsSorted()==='desc'?' ↓':''}</th>)}</tr>)}</thead><tbody>{table.getRowModel().rows.slice(0,60).map(r=><tr key={r.id}>{r.getVisibleCells().map(c=><td key={c.id}>{flexRender(c.column.columnDef.cell??c.column.columnDef.accessorKey,c.getContext())}</td>)}</tr>)}</tbody></table></div>:<EmptyVisual title="No trusted market rows">Run the semantic category evidence pipeline first.</EmptyVisual>}
-  </Panel>
+  <Scene index={8} eyebrow="SKEPTIC PASS" title="Contradictions, weak links and what would change the thesis">
+   <div className={styles.sceneGrid2}>
+    <div>{list(analysis?.contradictions).length?<div className={styles.insightList}>{analysis.contradictions.slice(0,7).map((x,i)=><div key={i}><TruthChip tone={x.status==='explicit_conflict'?'withheld':'derived'}>{x.status||'unresolved'}</TruthChip><b>{x.claim}</b><p><strong>Support:</strong> {x.supporting||'—'}</p><p><strong>Counter:</strong> {x.contradicting||'—'}</p></div>)}</div>:<Empty code="NO AI SKEPTIC PASS YET" title="Absence is not contradiction">Deep AI Research explicitly searches the retrieved bundle for disconfirming evidence.</Empty>}</div>
+    <div>{list(analysis?.falsification_tests).length?<div className={styles.insightList}>{analysis.falsification_tests.slice(0,7).map((x,i)=><div key={i}><TruthChip tone="withheld">FALSIFICATION</TruthChip><b>{x.thesis}</b><p>{x.test}</p><small>Would falsify: {x.would_falsify}</small></div>)}</div>:<Empty title="Falsification tests will appear here">A strong market thesis must say what evidence would prove it wrong.</Empty>}</div>
+   </div>
+  </Scene>
 
-  {ai&&<motion.section className={styles.aiPanel} initial={{opacity:0,y:14}} animate={{opacity:1,y:0}}><div><span>AI INTELLIGENCE ANALYST</span><h2>Evidence-bounded interpretation</h2><p>{ai.market_outlook||ai.executive_summary||'Forecast generated from the current production snapshot.'}</p></div><aside><b>Confidence {fmt(ai.confidence_0_100)}%</b><small>{ai.methodology_note||'Directional indices only.'}</small>{(ai.affiliate_actions||[]).slice(0,5).map((x,i)=><div key={i}>{typeof x==='string'?x:JSON.stringify(x)}</div>)}</aside></motion.section>}
+  <Scene index={9} eyebrow="TEMPORAL EVIDENCE" title="Observed history — descriptive, never decorative">
+   {historyChart?<EChart option={historyChart} height={410} ariaLabel="Observed category market history"/>:<Empty code="INSUFFICIENT HISTORY" title="No fake trend line">At least two persisted observations are required to draw a historical path.</Empty>}
+   <div className={styles.historyMeta}><span>{fmt(det?.history?.points)} points</span><span>{fmt(det?.history?.unique_days)} unique days</span><span>{fmt(det?.history?.span_days,1)} day span</span><span>Demand Δ {valid(det?.history?.descriptive_delta?.demand)?`${det.history.descriptive_delta.demand>=0?'+':''}${fmt(det.history.descriptive_delta.demand,1)}`:'—'}</span></div>
+  </Scene>
 
-  <footer className={styles.footer}>Production snapshot {data?.generated_at?new Date(data.generated_at).toLocaleString('el-GR'):'—'} · Existing intelligence preserved · Missing ≠ zero · Modeled ≠ observed</footer>
+  <Scene index={10} eyebrow="FORECAST LAB" title="Neural networks earn the right to forecast" aside={<TruthChip tone={forecastGate.status==='SHADOW_BACKTEST_ELIGIBLE'?'modeled':'withheld'}>{forecastGate.status||'WITHHELD'}</TruthChip>}>
+   <div className={styles.forecastLab}><div><span>History gate</span><b>{forecastGate.eligible?'Eligible for shadow backtest':'Forecast withheld'}</b><p>{forecastGate.eligible?'Neural/foundation challengers may now be evaluated against naive baselines. They are still not production forecasts.':`Current temporal evidence does not satisfy the production gate: ${list(forecastGate.reasons).join(', ')||'insufficient history'}.`}</p></div><div><span>Challenger stack</span><b>NHITS · NBEATSx · PatchTST · TFT</b><p>TimesFM · Chronos-2 · Darts validation · Hierarchical reconciliation. Complexity is promoted only after out-of-sample superiority.</p></div><div><span>Production rule</span><b>Backtest &gt; model prestige</b><p>{forecastGate.rule||'No neural model is promoted merely because it is more sophisticated.'}</p></div></div>
+   {analysis?.forecast_lab&&<div className={styles.callout}><b>{analysis.forecast_lab.status}</b><p>{analysis.forecast_lab.why}</p><small>Next gate: {analysis.forecast_lab.next_gate}</small></div>}
+  </Scene>
+
+  <Scene index={11} eyebrow="DECISION LAYER" title="Affiliate actions grounded in the evidence">
+   <div className={styles.sceneGrid3}>
+    <div><h3 className={styles.columnTitle}>Recommended actions</h3>{list(analysis?.recommended_actions).length?<div className={styles.insightList}>{analysis.recommended_actions.slice(0,7).map((x,i)=><div key={i}><TruthChip tone="derived">{x.priority||'PRIORITY'}</TruthChip><b>{x.action}</b><p>{x.why}</p><small>Watch: {x.metric_to_watch} · Need: {x.evidence_needed}</small></div>)}</div>:<Empty title="Run Deep AI Research">The analyst will recommend actions only after evidence retrieval and skeptical synthesis.</Empty>}</div>
+    <div><h3 className={styles.columnTitle}>Affiliate implications</h3>{list(analysis?.affiliate_implications).length?<div className={styles.insightList}>{analysis.affiliate_implications.slice(0,7).map((x,i)=><div key={i}><TruthChip tone="derived">{x.priority||'IMPLICATION'}</TruthChip><b>{x.implication}</b><p>{x.evidence}</p><small>Do not assume: {x.what_not_to_assume}</small></div>)}</div>:<Empty title="No implication invented">Network economics alone are not treated as first-party performance.</Empty>}</div>
+    <div><h3 className={styles.columnTitle}>Next evidence</h3>{list(analysis?.next_evidence_to_collect).length?<div className={styles.insightList}>{analysis.next_evidence_to_collect.slice(0,7).map((x,i)=><div key={i}><TruthChip tone="observed">{x.priority||'COLLECT'}</TruthChip><b>{x.evidence}</b><p>{x.why}</p><small>{x.source_family}</small></div>)}</div>:<Empty title="Evidence acquisition plan pending">The autonomous agent will identify the evidence with the highest decision value.</Empty>}</div>
+   </div>
+  </Scene>
+
+  <Scene index={12} eyebrow="AUDITABLE MARKET GRID" title="Every visual resolves back to canonical production rows" aside="Click headers to sort">
+   {allRows.length?<div className={styles.tableWrap}><table><thead>{table.getHeaderGroups().map(g=><tr key={g.id}>{g.headers.map(h=><th key={h.id} onClick={h.column.getToggleSortingHandler()}>{flexRender(h.column.columnDef.header,h.getContext())}{h.column.getIsSorted()==='asc'?' ↑':h.column.getIsSorted()==='desc'?' ↓':''}</th>)}</tr>)}</thead><tbody>{table.getRowModel().rows.map(r=><tr key={r.id} data-selected={r.original.taxonomy_id===selectedId} onClick={()=>setSelectedId(r.original.taxonomy_id)}>{r.getVisibleCells().map(c=><td key={c.id}>{flexRender(c.column.columnDef.cell,c.getContext())}</td>)}</tr>)}</tbody></table></div>:<Empty title="No semantic market rows">No category-market truth is available.</Empty>}
+  </Scene>
+
+  <footer className={styles.footer}>SocialMarket Demand Intelligence V3 · canonical truth immutable · RAG retrieves · fuzzy logic interprets uncertainty · neural forecasting stays gated · user override available</footer>
  </main>
 }
