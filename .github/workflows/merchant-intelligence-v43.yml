@@ -1,0 +1,74 @@
+name: Merchant Intelligence V4.3 Semantic
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '45 0 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'workers/market_intelligence/merchant_intelligence_v43.py'
+      - 'workers/market_intelligence/semantic_taxonomy.py'
+      - '.github/workflows/merchant-intelligence-v43.yml'
+      - 'supabase/functions/merchant-research-gateway/**'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: merchant-intelligence-v43-semantic
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      MERCHANT_RESEARCH_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-research-gateway
+      SEARXNG_BASE_URL: http://127.0.0.1:8080
+      MERCHANT_RESEARCH_LIMIT: '350'
+      MERCHANT_RESEARCH_WORKERS: '3'
+      MERCHANT_COLLECTOR_BUDGET_PER_KIND: '12'
+      MERCHANT_SOCIAL_MAX_ITEMS_PER_QUERY: '4'
+      MERCHANT_PLAYWRIGHT_MAX_PAGES: '1'
+      MERCHANT_GALLERYDL_MAX_ITEMS: '3'
+      MERCHANT_YTDLP_MAX_ITEMS: '3'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install merchant evidence stack
+        run: |
+          pip install requests beautifulsoup4 trafilatura scrapy yt-dlp gallery-dl playwright
+          python -m playwright install chromium
+      - name: Preflight v4.3 gateway
+        run: |
+          curl -fsS "$MERCHANT_RESEARCH_GATEWAY" | tee merchant-gateway-health.json
+          python - <<'PY'
+          import json
+          h=json.load(open('merchant-gateway-health.json'))
+          assert h.get('ok') is True
+          assert h.get('version') == '4.3'
+          assert h.get('category_market_owner') == 'semantic_category_pain_v2'
+          PY
+      - name: Start ephemeral SearXNG
+        run: |
+          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+          for i in $(seq 1 40); do
+            if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker logs socialmarket-searxng || true
+          exit 1
+      - name: Compile semantic merchant worker
+        run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/merchant_intelligence_v43.py
+      - name: Run Merchant Intelligence V4.3
+        run: python workers/market_intelligence/merchant_intelligence_v43.py | tee merchant-v43-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: merchant-intelligence-v43-output
+          retention-days: 30
+          path: merchant-v43-output.json
