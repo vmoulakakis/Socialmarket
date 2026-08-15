@@ -4,12 +4,13 @@ from product_ranking_v3 import deterministic_metrics
 
 
 class RankingV3Tests(unittest.TestCase):
-    def item(self, *, commission=15, demand=70, competition=40, pains=None):
+    def item(self, *, commission=15, demand=70, competition=40, pains=None, deep_score=0):
         return {
             '_raw': {'expected_commission_eur': commission, 'discount_pct': 10, 'times_bought': 5},
             'merchant': {'demand_score': demand, 'competition_score': competition, 'solution_whitespace_score': 65, 'trust_score': 80},
             '_pains': pains or [],
             '_themes': [],
+            '_deep_demand': {'matched': deep_score > 0, 'score': deep_score, 'status': 'completed' if deep_score > 0 else 'unavailable'},
         }
 
     def test_missing_pain_does_not_remove_ranking_score(self):
@@ -33,6 +34,13 @@ class RankingV3Tests(unittest.TestCase):
             'retrieval_score': 90, 'pain_severity': 85, 'demand_score': 80, 'commercial_intent': 90
         }]))['deterministic_rank_score']
         self.assertGreater(with_pain, no_pain)
+
+    def test_deep_demand_is_additive_context_not_a_gate(self):
+        without_lab = deterministic_metrics(self.item(deep_score=0))
+        with_lab = deterministic_metrics(self.item(deep_score=88))
+        self.assertEqual(without_lab['deep_demand_score'], 0)
+        self.assertGreater(without_lab['deterministic_rank_score'], 0)
+        self.assertGreater(with_lab['deterministic_rank_score'], without_lab['deterministic_rank_score'])
 
 
 if __name__ == '__main__':
