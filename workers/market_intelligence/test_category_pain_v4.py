@@ -22,8 +22,6 @@ class CategoryPainV4Tests(unittest.TestCase):
 
     def fake_useful(self,query,keys,term,kind,limit):
         if kind=='demand':
-            # Some, not every, planned query matches: evidence coverage should be
-            # meaningful but should not auto-saturate to 100.
             if 'σύγκριση τιμών' in query:return []
             suffix=abs(hash(query))%7
             return [row('demand',f'https://demand{suffix}.example.gr/p/{suffix}',query)]
@@ -64,8 +62,6 @@ class CategoryPainV4Tests(unittest.TestCase):
     @patch.object(v4.base,'useful_rows')
     def test_serp_flood_cannot_crow_consumer_pain_out_of_bundle(self,m_useful,m_consumer,m_context):
         def flood(query,keys,term,kind,limit):
-            # Deliberately return hundreds of unique market rows per query: the
-            # consumer channel must still survive because channels have independent budgets.
             count=35 if kind=='demand' else 45
             return [row(kind,f'https://{kind}-{abs(hash(query))}-{i}.example.gr/p/{i}',query) for i in range(count)]
         m_useful.side_effect=flood
@@ -80,6 +76,30 @@ class CategoryPainV4Tests(unittest.TestCase):
         self.assertEqual(counts['demand_retained'],v4.CHANNEL_BUDGETS['demand'])
         self.assertEqual(counts['pain_candidate_retained'],3)
         self.assertEqual(counts['context_retained'],1)
+
+    @patch.object(v4.base,'gateway')
+    @patch.object(v4,'collect_v4')
+    def test_one_collection_failure_is_requeued_without_stranding_other_job(self,m_collect,m_gateway):
+        jobs=[
+            {'id':'bad-job','entity_id':'bad-tax','payload':{'category':'Bad','subcategory':'Broken'}},
+            {'id':'good-job','entity_id':'good-tax','payload':{'category':'Good','subcategory':'Working'}},
+        ]
+        def collect(job):
+            if job['id']=='bad-job':raise RuntimeError('collector exploded')
+            return {'job_id':'good-job','entity_id':'good-tax','category':'Good','subcategory':'Working','evidence':[],'market':{'query_aliases':[],'evidence_quality':{},'competition_score':50,'demand_score':60}}
+        m_collect.side_effect=collect
+        def gateway(action,**payload):
+            if action=='fail':return {'ok':True}
+            if action=='audit_batch':return {'ok':True,'items':[{'entity_id':'good-tax','clusters':[],'audit_summary':'none','rejected_patterns':[]}]}
+            if action=='save':return {'ok':True,'result':{'validated_clusters':0}}
+            raise AssertionError(action)
+        m_gateway.side_effect=gateway
+        results=v4.process_batch_v4(jobs)
+        self.assertEqual(len(results),2)
+        self.assertEqual(sum(1 for x in results if x.get('ok')),1)
+        failed=[x for x in results if not x.get('ok')][0]
+        self.assertEqual(failed['stage'],'collect')
+        self.assertTrue(any(call.args and call.args[0]=='fail' for call in m_gateway.call_args_list))
 
 
 if __name__=='__main__':
