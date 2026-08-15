@@ -16,6 +16,7 @@ on:
       - 'workers/market_intelligence/category_pain_intelligence_v42.py'
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/consumer_source_expansion_v43.py'
+      - 'workers/market_intelligence/consumer_direct_social_v44.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'workers/market_intelligence/market_query_aliases.py'
       - 'workers/market_intelligence/semantic_taxonomy.py'
@@ -48,7 +49,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install deep evidence dependencies
-        run: pip install requests trafilatura
+        run: pip install requests trafilatura yt-dlp
       - name: Preflight exact V4 evidence gateway and AI skeptic
         run: |
           HEALTH=$(curl -fsS "$EVIDENCE_GATEWAY")
@@ -71,9 +72,9 @@ jobs:
           done
           docker logs socialmarket-searxng || true
           exit 1
-      - name: Compile Category Pain V4.3 workers
-        run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
-      - name: Run canonical Greek Category Pain V4.3
+      - name: Compile Category Pain V4.4 workers
+        run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
+      - name: Run canonical Greek Category Pain V4.4
         working-directory: workers/market_intelligence
         shell: bash
         run: |
