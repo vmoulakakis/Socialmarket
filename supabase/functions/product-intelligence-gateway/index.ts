@@ -9,7 +9,7 @@ const REPOSITORY_ID='1329707883'
 const REPOSITORY='vmoulakakis/Socialmarket'
 const ALLOWED=new Set(['vmoulakakis/Socialmarket/.github/workflows/product-intelligence-v1.yml@refs/heads/main'])
 const JWKS=createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks`))
-const DEEPSEEK_KEY=Deno.env.get('DEEPSEEK_API_KEY')||''
+const DEEPSEEK_KEY=Deno.env.get('DEEPSEEK_API_KEY')||Deno.env.get('DEEP_SEEK_API_KEY')||''
 const DEEPSEEK_MODEL=Deno.env.get('DEEPSEEK_MODEL')||'deepseek-v4-pro'
 const json=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{'content-type':'application/json'}})
 const clamp=(n:number,a=0,b=100)=>Math.max(a,Math.min(b,n))
@@ -60,17 +60,52 @@ async function context(){
   return {programs,pain_clusters:pains,themes}
 }
 
-async function deepseek(system:string,payload:unknown){
+type ThinkingMode='off'|'on'|'auto'
+
+function batchComplexity(payload:any,action:'enrich'|'audit'){
+  const items=Array.isArray(payload?.items)?payload.items:[]
+  if(!items.length)return 0
+  let total=0
+  for(const x of items){
+    const painCount=Array.isArray(x?.pain_rag)?x.pain_rag.length:0
+    const themeCount=Array.isArray(x?.theme_rag)?x.theme_rag.length:0
+    const confidence=Number(x?.merchant?.confidence ?? x?.product_evidence_confidence ?? 0)
+    const commission=Number(x?.expected_commission_eur ?? x?.product?.expected_commission_eur ?? 0)
+    const contradictions=Array.isArray(x?.contradictions)?x.contradictions.length:0
+    let score=0.20
+    score+=Math.min(0.20,painCount*0.03)
+    score+=Math.min(0.10,themeCount*0.02)
+    if(confidence>0 && confidence<0.55)score+=0.18
+    if(commission>=40)score+=0.10
+    if(commission>=75)score+=0.08
+    if(contradictions>0)score+=0.20
+    if(action==='audit')score+=0.18
+    total+=Math.min(1,score)
+  }
+  return total/items.length
+}
+
+function chooseThinking(payload:any,action:'enrich'|'audit',requested:ThinkingMode='auto'){
+  if(requested==='on')return {enabled:true,complexity:1,reason:'forced'}
+  if(requested==='off')return {enabled:false,complexity:0,reason:'forced_off'}
+  const complexity=batchComplexity(payload,action)
+  const threshold=action==='audit'?0.58:0.72
+  return {enabled:complexity>=threshold,complexity:Number(complexity.toFixed(3)),reason:complexity>=threshold?'complex_case':'standard_case'}
+}
+
+async function deepseek(system:string,payload:unknown,action:'enrich'|'audit',requested:ThinkingMode='auto'){
   if(!DEEPSEEK_KEY)throw new Error('deepseek_not_configured')
-  const r=await fetch('https://api.deepseek.com/chat/completions',{
-    method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${DEEPSEEK_KEY}`},
-    body:JSON.stringify({model:DEEPSEEK_MODEL,thinking:{type:'enabled'},reasoning_effort:'high',temperature:0.1,max_tokens:7000,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:`Return JSON only. Input:\n${JSON.stringify(payload)}`}]})
-  })
+  const decision=chooseThinking(payload,action,requested)
+  const body:any={model:DEEPSEEK_MODEL,temperature:0.1,max_tokens:decision.enabled?5000:2200,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:`Return JSON only. Input:
+${JSON.stringify(payload)}`}] }
+  if(decision.enabled){body.thinking={type:'enabled'};body.reasoning_effort='high'}
+  else{body.thinking={type:'disabled'};body.reasoning_effort='low'}
+  const r=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${DEEPSEEK_KEY}`},body:JSON.stringify(body)})
   const raw=await r.text()
   if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,800)}`)
   const j=JSON.parse(raw);const content=j?.choices?.[0]?.message?.content
   if(!content)throw new Error('deepseek_empty_content')
-  return JSON.parse(content)
+  return {data:JSON.parse(content),thinking:decision}
 }
 
 const ENRICH_SYSTEM=`You are SocialMarket Product Research Agent. Analyze only the supplied product facts, merchant context and RAG evidence. Never invent product features, prices, commission, merchant facts, pain evidence or IDs. A product is useful only when it plausibly solves one or more supplied validated pain/unmet-need clusters. Large/dominant merchant offers have already been removed. Produce JSON {"items":[...]}. For every input source_record_hash return: source_record_hash, canonical_title, brand_name, model_name, category, subcategory, human_description (Greek, evidence-grounded, no hype), semantic_text, pain_cluster_ids (ONLY IDs supplied in pain_rag), theme_ids (ONLY IDs supplied in theme_rag), pain_gap_fit_score 0-100, seasonal_theme_score 0-100, product_evidence_confidence 0-100, pain_rationale, theme_rationale, unsupported_claims[]. If evidence is weak, use low scores and empty IDs.`
@@ -113,17 +148,17 @@ async function upsertItem(x:any){
 }
 
 Deno.serve(async(req)=>{
-  if(req.method==='GET')return json({ok:true,service:'product-intelligence-gateway',version:'1.0',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
+  if(req.method==='GET')return json({ok:true,service:'product-intelligence-gateway',version:'1.1',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
   if(req.method!=='POST')return json({error:'method_not_allowed'},405)
   try{
     await auth(req);const b=await req.json();const action=String(b.action||'')
     if(action==='health')return json({ok:true,deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL})
     if(action==='context')return json({ok:true,...await context()})
     if(action==='enrich'){
-      const items=(Array.isArray(b.items)?b.items:[]).slice(0,12);const out=await deepseek(ENRICH_SYSTEM,{items});return json({ok:true,items:Array.isArray(out.items)?out.items:[]})
+      const items=(Array.isArray(b.items)?b.items:[]).slice(0,12);const r=await deepseek(ENRICH_SYSTEM,{items},'enrich',String(b.thinking||'auto') as ThinkingMode);const out=r.data;return json({ok:true,thinking:r.thinking,items:Array.isArray(out.items)?out.items:[]})
     }
     if(action==='audit'){
-      const items=(Array.isArray(b.items)?b.items:[]).slice(0,12);const out=await deepseek(AUDIT_SYSTEM,{items});return json({ok:true,items:Array.isArray(out.items)?out.items:[]})
+      const items=(Array.isArray(b.items)?b.items:[]).slice(0,12);const r=await deepseek(AUDIT_SYSTEM,{items},'audit',String(b.thinking||'auto') as ThinkingMode);const out=r.data;return json({ok:true,thinking:r.thinking,items:Array.isArray(out.items)?out.items:[]})
     }
     if(action==='save_batch'){
       const items=(Array.isArray(b.items)?b.items:[]).slice(0,40);let saved=0;const ids=[]
