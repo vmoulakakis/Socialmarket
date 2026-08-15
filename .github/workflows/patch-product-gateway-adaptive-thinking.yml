@@ -1,0 +1,62 @@
+name: Patch Product Gateway Adaptive Thinking
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-product-gateway-adaptive-thinking.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch Product Intelligence gateway
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('supabase/functions/product-intelligence-gateway/index.ts')
+          s=p.read_text()
+
+          s=s.replace(
+            "const DEEPSEEK_KEY=Deno.env.get('DEEPSEEK_API_KEY')||''",
+            "const DEEPSEEK_KEY=Deno.env.get('DEEPSEEK_API_KEY')||Deno.env.get('DEEP_SEEK_API_KEY')||''"
+          )
+
+          old=re.compile(r"async function deepseek\(system:string,payload:unknown\)\{.*?\n\}\n\nconst ENRICH_SYSTEM=", re.S)
+          new="""type ThinkingMode='off'|'on'|'auto'\n\nfunction batchComplexity(payload:any,action:'enrich'|'audit'){\n  const items=Array.isArray(payload?.items)?payload.items:[]\n  if(!items.length)return 0\n  let total=0\n  for(const x of items){\n    const painCount=Array.isArray(x?.pain_rag)?x.pain_rag.length:0\n    const themeCount=Array.isArray(x?.theme_rag)?x.theme_rag.length:0\n    const confidence=Number(x?.merchant?.confidence ?? x?.product_evidence_confidence ?? 0)\n    const commission=Number(x?.expected_commission_eur ?? x?.product?.expected_commission_eur ?? 0)\n    const contradictions=Array.isArray(x?.contradictions)?x.contradictions.length:0\n    let score=0.20\n    score+=Math.min(0.20,painCount*0.03)\n    score+=Math.min(0.10,themeCount*0.02)\n    if(confidence>0 && confidence<0.55)score+=0.18\n    if(commission>=40)score+=0.10\n    if(commission>=75)score+=0.08\n    if(contradictions>0)score+=0.20\n    if(action==='audit')score+=0.18\n    total+=Math.min(1,score)\n  }\n  return total/items.length\n}\n\nfunction chooseThinking(payload:any,action:'enrich'|'audit',requested:ThinkingMode='auto'){\n  if(requested==='on')return {enabled:true,complexity:1,reason:'forced'}\n  if(requested==='off')return {enabled:false,complexity:0,reason:'forced_off'}\n  const complexity=batchComplexity(payload,action)\n  const threshold=action==='audit'?0.58:0.72\n  return {enabled:complexity>=threshold,complexity:Number(complexity.toFixed(3)),reason:complexity>=threshold?'complex_case':'standard_case'}\n}\n\nasync function deepseek(system:string,payload:unknown,action:'enrich'|'audit',requested:ThinkingMode='auto'){\n  if(!DEEPSEEK_KEY)throw new Error('deepseek_not_configured')\n  const decision=chooseThinking(payload,action,requested)\n  const body:any={model:DEEPSEEK_MODEL,temperature:0.1,max_tokens:decision.enabled?5000:2200,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:`Return JSON only. Input:\\n${JSON.stringify(payload)}`}] }\n  if(decision.enabled){body.thinking={type:'enabled'};body.reasoning_effort='high'}\n  else{body.thinking={type:'disabled'};body.reasoning_effort='low'}\n  const r=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${DEEPSEEK_KEY}`},body:JSON.stringify(body)})\n  const raw=await r.text()\n  if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,800)}`)\n  const j=JSON.parse(raw);const content=j?.choices?.[0]?.message?.content\n  if(!content)throw new Error('deepseek_empty_content')\n  return {data:JSON.parse(content),thinking:decision}\n}\n\nconst ENRICH_SYSTEM="""
+          s,n=old.subn(new,s,1)
+          if n!=1:
+              raise SystemExit('deepseek function patch did not match')
+
+          s=s.replace(
+            "const items=(Array.isArray(b.items)?b.items:[]).slice(0,12);const out=await deepseek(ENRICH_SYSTEM,{items});return json({ok:true,items:Array.isArray(out.items)?out.items:[]})",
+            "const items=(Array.isArray(b.items)?b.items:[]).slice(0,12);const r=await deepseek(ENRICH_SYSTEM,{items},'enrich',String(b.thinking||'auto') as ThinkingMode);const out=r.data;return json({ok:true,thinking:r.thinking,items:Array.isArray(out.items)?out.items:[]})"
+          )
+          s=s.replace(
+            "const items=(Array.isArray(b.items)?b.items:[]).slice(0,12);const out=await deepseek(AUDIT_SYSTEM,{items});return json({ok:true,items:Array.isArray(out.items)?out.items:[]})",
+            "const items=(Array.isArray(b.items)?b.items:[]).slice(0,12);const r=await deepseek(AUDIT_SYSTEM,{items},'audit',String(b.thinking||'auto') as ThinkingMode);const out=r.data;return json({ok:true,thinking:r.thinking,items:Array.isArray(out.items)?out.items:[]})"
+          )
+          s=s.replace("version:'1.0'","version:'1.1'",2)
+
+          p.write_text(s)
+          PY
+      - name: Validate patch
+        run: |
+          grep -q "DEEP_SEEK_API_KEY" supabase/functions/product-intelligence-gateway/index.ts
+          grep -q "chooseThinking" supabase/functions/product-intelligence-gateway/index.ts
+          grep -q "version:'1.1'" supabase/functions/product-intelligence-gateway/index.ts
+      - name: Commit gateway patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/functions/product-intelligence-gateway/index.ts
+          git commit -m 'Make DeepSeek secret alias compatible and thinking adaptive'
+          git push origin HEAD:main
