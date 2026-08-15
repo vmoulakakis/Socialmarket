@@ -71,6 +71,8 @@ def main(feed):
         stream_stats = {'stage_reused_from_phase_a': True, 'commission_eligible_records': staged}
     else:
         db, stream_stats = v1.stage_feed(feed, context)
+        stream_stats = dict(stream_stats)
+        stream_stats['candidate_concentration_flags'] = stream_stats.pop('dynamic_saturated_merchants', [])
 
     max_per_merchant = max(1, int(cfg.get('ai_max_per_merchant', 20)))
     max_per_category = max(1, int(cfg.get('ai_max_per_category', 40)))
@@ -114,7 +116,8 @@ def main(feed):
             'commission_gate_eur': v1.MIN_COMMISSION,
             'merchant_trust_gate': v1.MIN_MERCHANT_TRUST,
             'merchant_resolution': 'Linkwise tracking_url destination domain -> authoritative merchant official_domain; exact program/alias only as secondary path',
-            'dominant_merchants': 'static + dynamic feed/candidate saturation excluded from promotion; evidence retained as demand beacons',
+            'dominant_merchants': 'excluded only by explicit merchant promotion policy/dominant-market evidence; feed concentration itself is not a kill-switch',
+            'feed_concentration': 'diagnostic only; Linkwise feed share is not Greek market share and is controlled by shortlist diversity caps',
             'price_integrity': 'no automatic cents/EUR conversion; statistically suspicious scales are quarantined before commission',
             'selection': 'all deterministic candidates -> validated pain RAG -> pain-first score -> merchant/category diversity -> AI Research -> independent Skeptic Audit',
             'ai_max_candidates': v1.AI_MAX_CANDIDATES,
