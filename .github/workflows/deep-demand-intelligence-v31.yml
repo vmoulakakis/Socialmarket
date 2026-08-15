@@ -1,0 +1,65 @@
+name: Deep Demand Intelligence V3.1
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_taxonomies:
+        description: Maximum taxonomy nodes to analyze
+        required: false
+        default: '120'
+  workflow_run:
+    workflows: ['Semantic Category Pain Intelligence']
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: '30 3 * * *'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deep-demand-intelligence-v31
+  cancel-in-progress: false
+
+jobs:
+  model-lab:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      DEMAND_MODEL_LAB_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/demand-model-lab-gateway
+      MAX_TAXONOMIES: ${{ inputs.max_taxonomies || '120' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: workers/demand_intelligence_v3/requirements-advanced.txt
+      - name: Install deterministic and statistical model-lab stack
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests -r workers/demand_intelligence_v3/requirements-advanced.txt
+      - name: Optional neural and causal challengers
+        continue-on-error: true
+        run: pip install neuralforecast dowhy
+      - name: Compile Demand V3.1
+        run: python -m py_compile workers/demand_intelligence_v3/fuzzy_fusion.py workers/demand_intelligence_v3/forecast_ensemble.py workers/demand_intelligence_v3/graph_rag.py workers/demand_intelligence_v3/causal_skeptic.py workers/demand_intelligence_v3/deep_lab.py workers/demand_intelligence_v3/run_autonomous.py
+      - name: Preflight model-lab gateway
+        run: |
+          curl -fsS "$DEMAND_MODEL_LAB_GATEWAY" | tee demand-model-lab-health.json
+          python - <<'PY'
+          import json
+          h=json.load(open('demand-model-lab-health.json'))
+          assert h.get('ok') is True
+          assert str(h.get('version')) == '3.1'
+          PY
+      - name: Run Deep Demand V3.1 across Greek taxonomy
+        run: python workers/demand_intelligence_v3/run_autonomous.py | tee deep-demand-v31.jsonl
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deep-demand-v31-audit
+          path: deep-demand-v31.jsonl
+          retention-days: 14

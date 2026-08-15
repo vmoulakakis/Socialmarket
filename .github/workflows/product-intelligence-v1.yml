@@ -1,16 +1,20 @@
-name: Product Intelligence V1
+name: Product Intelligence + Promotion Ranking
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '40 1 * * 1'
+    - cron: '20 4 * * *'
+  workflow_run:
+    workflows: ['Deep Demand Intelligence V3.1']
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:
       - '.github/product-intelligence-trigger'
 
 concurrency:
-  group: socialmarket-product-intelligence-v1
+  group: socialmarket-product-ranking-daily
   cancel-in-progress: false
 
 permissions:
@@ -19,6 +23,7 @@ permissions:
 
 jobs:
   product-intelligence:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 330
     env:
@@ -27,26 +32,33 @@ jobs:
       PRODUCT_REUSE_STAGE_DB: 'true'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
+      PRODUCT_RANKING_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway
+      PRODUCT_RANK_PRESELECT: '4000'
+      PRODUCT_RANK_AI_MAX: '240'
+      PRODUCT_RANK_SAVE_LIMIT: '200'
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight Product Intelligence gateway
+      - name: Preflight ranking and reference gateways
         id: preflight
         run: |
           python - <<'PY'
-          import json, urllib.request
-          url='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway'
-          with urllib.request.urlopen(url, timeout=30) as r:
-              health=json.loads(r.read().decode())
-          safe={k:health.get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')}
-          print(safe)
-          if not health.get('ok'):
-              raise SystemExit('Product Intelligence gateway unhealthy')
-          import os
+          import json, os, urllib.request
+          urls={
+            'reference':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway',
+            'ranking':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway',
+          }
+          health={}
+          for name,url in urls.items():
+              with urllib.request.urlopen(url, timeout=30) as r:
+                  health[name]=json.loads(r.read().decode())
+              print(name,{k:health[name].get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')})
+              if not health[name].get('ok'):
+                  raise SystemExit(f'{name} gateway unhealthy')
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              f.write(f"deepseek_configured={'true' if health.get('deepseek_configured') else 'false'}\n")
-              f.write(f"deepseek_model={health.get('deepseek_model') or ''}\n")
+              f.write(f"reference_ai={'true' if health['reference'].get('deepseek_configured') else 'false'}\n")
+              f.write(f"ranking_ai={'true' if health['ranking'].get('deepseek_configured') else 'false'}\n")
           PY
 
       - uses: actions/setup-python@v5
@@ -70,25 +82,32 @@ jobs:
               raise SystemExit('Source feed unexpectedly small; refusing incomplete product run')
           PY
 
-      - name: Phase A — runtime-configured commercial scan
+      - name: Phase A — deterministic commercial universe scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Pain-solver diagnostic — Excel priors × real feed candidates
+      - name: Pain-solver diagnostic — optional signal only
         run: python workers/product_intelligence/pain_solver_scan.py
 
-      - name: Phase B — pain-first diversified RAG + Product Research + Skeptic Audit
-        if: steps.preflight.outputs.deepseek_configured == 'true'
+      - name: Reference audit pipeline — non-blocking for ranking
+        if: steps.preflight.outputs.reference_ai == 'true'
+        continue-on-error: true
         run: python workers/product_intelligence/product_intelligence_v2.py "$PRODUCT_SOURCE_FEED"
 
-      - name: AI phase intentionally blocked when DeepSeek is absent
-        if: steps.preflight.outputs.deepseek_configured != 'true'
-        run: echo 'Phase A completed. Phase B skipped because DeepSeek is not configured. No non-AI persistence fallback is allowed.'
+      - name: Final Ranking V3 — AI strategy + independent ranking skeptic
+        if: steps.preflight.outputs.ranking_ai == 'true'
+        run: python workers/product_intelligence/product_ranking_v3.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Upload run profiles only
+      - name: Fail if final ranking AI is unavailable
+        if: steps.preflight.outputs.ranking_ai != 'true'
+        run: |
+          echo 'Final promotion ranking requires the ranking AI gateway. Deterministic Phase A completed but no final AI promotion list was published.'
+          exit 1
+
+      - name: Upload compact decision profiles only
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: product-intelligence-v1-profile
+          name: product-ranking-daily-profile
           retention-days: 30
           path: |
             product-commercial-scan-profile.json
@@ -97,6 +116,7 @@ jobs:
             product-pain-solver-sample.json
             product-feed-safety-profile.json
             product-intelligence-profile.json
+            product-ranking-v3-profile.json
 
       - name: Remove raw feed and local staging from runner
         if: always()
