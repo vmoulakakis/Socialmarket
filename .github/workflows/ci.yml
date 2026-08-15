@@ -28,11 +28,13 @@ jobs:
           workers/demand_intelligence_v3/graph_rag.py
           workers/demand_intelligence_v3/causal_skeptic.py
           workers/demand_intelligence_v3/deep_lab.py
+          workers/demand_intelligence_v3/run_autonomous.py
           workers/market_intelligence/category_pain_intelligence.py
           workers/market_intelligence/authoritative_context_v2.py
           workers/market_intelligence/category_pain_intelligence_v31.py
       - name: Deep Demand V3.1 truth-contract tests
         run: python -m unittest workers/demand_intelligence_v3/test_deep_demand_v31.py
       - run: deno check --node-modules-dir=auto supabase/functions/demand-intelligence-gateway/index.ts
+      - run: deno check --node-modules-dir=auto supabase/functions/demand-model-lab-gateway/index.ts
       - run: deno check --node-modules-dir=auto supabase/functions/evidence-gateway/index.ts
       - run: npm run build
