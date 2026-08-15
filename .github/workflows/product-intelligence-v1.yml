@@ -27,8 +27,8 @@ jobs:
       PRODUCT_SOURCE_FEED: linkwise-products.json
       PRODUCT_MIN_COMMISSION_EUR: '10'
       PRODUCT_MIN_MERCHANT_TRUST: '30'
-      PRODUCT_AI_BATCH: '4'
-      PRODUCT_AI_MAX_CANDIDATES: '48'
+      PRODUCT_AI_BATCH: '1'
+      PRODUCT_AI_MAX_CANDIDATES: '4'
       PRODUCT_AI_OFFERS_PER_PRODUCT: '1'
       PRODUCT_REUSE_STAGE_DB: 'true'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
