@@ -20,7 +20,7 @@ jobs:
       - run: npm install
       - run: npm run test:design-v2
       - run: npm run test:demand-v3
-      - run: python -m py_compile workers/demand_intelligence_v3/fuzzy_fusion.py workers/demand_intelligence_v3/forecast_ensemble.py workers/market_intelligence/category_pain_intelligence.py
+      - run: python -m py_compile workers/demand_intelligence_v3/fuzzy_fusion.py workers/demand_intelligence_v3/forecast_ensemble.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/authoritative_context_v2.py workers/market_intelligence/category_pain_intelligence_v31.py
       - run: deno check --node-modules-dir=auto supabase/functions/demand-intelligence-gateway/index.ts
       - run: deno check --node-modules-dir=auto supabase/functions/evidence-gateway/index.ts
       - run: npm run build
