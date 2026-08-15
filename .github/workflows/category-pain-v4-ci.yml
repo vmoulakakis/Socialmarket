@@ -6,9 +6,10 @@ on:
     paths:
       - 'workers/market_intelligence/category_pain_intelligence_v4.py'
       - 'workers/market_intelligence/category_pain_intelligence_v42.py'
+      - 'workers/market_intelligence/category_pain_intelligence_v43.py'
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
-      - 'workers/market_intelligence/test_*v4.py'
+      - 'workers/market_intelligence/test_*v4*.py'
       - 'supabase/functions/evidence-gateway/**'
       - '.github/workflows/generic-evidence-intelligence.yml'
       - '.github/workflows/category-pain-v4-ci.yml'
@@ -17,6 +18,7 @@ on:
     paths:
       - 'workers/market_intelligence/category_pain_intelligence_v4.py'
       - 'workers/market_intelligence/category_pain_intelligence_v42.py'
+      - 'workers/market_intelligence/category_pain_intelligence_v43.py'
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'supabase/functions/evidence-gateway/**'
@@ -39,10 +41,10 @@ jobs:
       - name: Install evidence dependencies
         run: pip install requests trafilatura
       - name: Compile V4 workers
-        run: python -m py_compile workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
-      - name: Test consumer extraction and market/context invariants
+        run: python -m py_compile workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py workers/market_intelligence/category_pain_intelligence_v43.py
+      - name: Test consumer extraction, market/context and diversified discovery invariants
         working-directory: workers/market_intelligence
-        run: python -m unittest -v test_consumer_evidence_v4.py test_category_pain_v4.py
+        run: python -m unittest -v test_consumer_evidence_v4.py test_category_pain_v4.py test_consumer_discovery_v43.py
       - name: Type-check hardened evidence gateway
         run: deno check --node-modules-dir=auto supabase/functions/evidence-gateway/index.ts
       - name: Guard V4 truth semantics
@@ -52,4 +54,6 @@ jobs:
           grep -R "context_only" workers/market_intelligence/authoritative_context_v3.py
           grep -R "SERP snippets are discovery-only" workers/market_intelligence/category_pain_intelligence_v4.py
           grep -R "not search volume" workers/market_intelligence/category_pain_intelligence_v4.py
-          grep -R "_EXTRACT_LOCK" workers/market_intelligence/category_pain_intelligence_v42.py
+          grep -R "_EXTRACT_LOCK" workers/market_intelligence/category_pain_intelligence_v43.py
+          grep -R "PER_DOMAIN_CAP" workers/market_intelligence/category_pain_intelligence_v43.py
+          grep -R "domain_balanced_exact_phrase_v43" workers/market_intelligence/category_pain_intelligence_v43.py
