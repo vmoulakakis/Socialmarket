@@ -4,6 +4,8 @@ import re
 from collections import Counter
 from urllib.parse import urlparse
 
+from semantic_taxonomy import TAXONOMY, classify_label
+
 
 def _domain(url: str | None) -> str:
     if not url:
@@ -19,37 +21,54 @@ def _clamp(v: float, low: float = 0, high: float = 100) -> float:
 
 
 def _tokens(text: str | None) -> list[str]:
-    # Keep brand-bearing words such as Shop/Store when they are part of a multi-word
-    # merchant identity (e.g. Abito Shop, The Body Shop). Only remove structural/TLD words.
     stop = {"official", "the", "and", "gr", "com", "online", "greece"}
     return [x for x in re.findall(r"[\wΑ-Ωα-ωάέήίόύώϊϋΐΰ]+", (text or "").lower()) if len(x) >= 3 and x not in stop]
 
 
 def _entity_relevant(e: dict, entity_name: str | None, authoritative_url: str | None) -> bool:
-    """Conservative evidence-to-entity binding.
-
-    An exact authoritative domain is always relevant. Multi-token names require all
-    significant tokens in the result. Single-token brands are accepted from social
-    sources when the token is explicitly present; this prevents generic web pages
-    containing an ambiguous word from becoming merchant pain evidence.
-    """
     src_domain = _domain(e.get("source_url"))
     auth_domain = _domain(authoritative_url)
     if auth_domain and src_domain == auth_domain:
         return True
-
     text = " ".join(filter(None, [e.get("title"), e.get("body")])).lower()
     toks = _tokens(entity_name)
     if not toks:
         return False
     if len(toks) >= 2:
         return all(t in text for t in toks)
-
     token = toks[0]
     platform = str(e.get("platform") or "").lower()
     source_kind = str(e.get("source_kind") or "").lower()
     social = platform in {"instagram", "facebook", "tiktok", "youtube", "reddit"} or source_kind.startswith("social")
     return social and token in text
+
+
+def _taxonomy_audit(result: dict) -> tuple[float, list[str], list[str]]:
+    reasons: list[str] = []
+    contradictions: list[str] = []
+    category = str(result.get("category") or "").strip()
+    subcategory = str(result.get("subcategory") or "").strip()
+
+    if category == "Other" or not category:
+        return 25.0, ["taxonomy_unresolved"], []
+    if category not in TAXONOMY:
+        return 5.0, [], [f"noncanonical_category:{category[:100]}"]
+
+    if not subcategory:
+        return 70.0, ["subcategory_not_resolved"], []
+
+    role = classify_label(subcategory)
+    if role.get("role") != "product_taxonomy":
+        contradictions.append(f"invalid_taxonomy_role:{role.get('role')}:{subcategory[:100]}")
+        return 5.0, reasons, contradictions
+    if role.get("category") != category:
+        contradictions.append(f"subcategory_category_mismatch:{subcategory[:80]}->{role.get('category')}!={category}")
+        return 15.0, reasons, contradictions
+    canonical_sub = role.get("subcategory")
+    if canonical_sub not in TAXONOMY.get(category, {}):
+        contradictions.append(f"noncanonical_subcategory:{subcategory[:100]}")
+        return 20.0, reasons, contradictions
+    return 100.0, reasons, contradictions
 
 
 def audit_research(result: dict, evidence: list[dict], authoritative_url: str | None = None) -> dict:
@@ -84,16 +103,9 @@ def audit_research(result: dict, evidence: list[dict], authoritative_url: str | 
     social_score = _clamp(len(platforms) * 18 + sum(1 for e in valid_evidence if str(e.get("source_kind", "")).startswith("social")) * 2)
     relevance_score = _clamp(relevance_ratio * 100)
 
-    category = (result.get("category") or "").strip().lower()
-    subcategory = (result.get("subcategory") or "").strip().lower()
-    bad_nav = {"home", "about", "contact", "help", "blog", "login", "register", "cart", "βοήθεια", "επικοινωνία", "αρχική"}
-    promo_pattern = re.compile(r"(%|κουπ[όο]ν|έκπτωση|εκπτωση|sale|offer|προσφορ|δωρεάν|δωρεαν)", re.I)
-    taxonomy_score = 80.0 if category and category != "other" else 35.0
-    if subcategory and (subcategory in bad_nav or promo_pattern.search(subcategory)):
-        taxonomy_score = 10.0
-        contradictions.append(f"non_taxonomy_label_used_as_subcategory:{subcategory[:80]}")
-    elif subcategory:
-        taxonomy_score = min(100.0, taxonomy_score + 15)
+    taxonomy_score, taxonomy_reasons, taxonomy_contradictions = _taxonomy_audit(result)
+    reasons.extend(taxonomy_reasons)
+    contradictions.extend(taxonomy_contradictions)
 
     demand = float(result.get("demand_score") or 0)
     competition = float(result.get("competition_score") or 0)
@@ -115,18 +127,21 @@ def audit_research(result: dict, evidence: list[dict], authoritative_url: str | 
 
     contradiction_score = _clamp(100 - len(contradictions) * 35)
     overall = _clamp(
-        identity_score * 0.20
-        + relevance_score * 0.15
-        + quality * 0.11
-        + diversity * 0.10
-        + taxonomy_score * 0.11
-        + demand_validation * 0.11
-        + competition_validation * 0.10
+        identity_score * 0.19
+        + relevance_score * 0.14
+        + quality * 0.10
+        + diversity * 0.09
+        + taxonomy_score * 0.17
+        + demand_validation * 0.10
+        + competition_validation * 0.09
         + pain_validation * 0.08
         + social_score * 0.04
     )
 
-    if contradictions or identity_score < 50 or overall < 55:
+    # Semantic taxonomy is a hard trust boundary: navigation/brand/theme/location cannot validate.
+    if taxonomy_score < 65:
+        verdict = "rejected" if taxonomy_score < 20 else "needs_review"
+    elif contradictions or identity_score < 50 or overall < 55:
         verdict = "rejected" if identity_score < 20 or overall < 40 else "needs_review"
     elif overall >= 72 and diversity >= 40 and relevance_score >= 60:
         verdict = "validated"
@@ -159,6 +174,7 @@ def audit_research(result: dict, evidence: list[dict], authoritative_url: str | 
         "contradictions": contradictions,
         "source_domains": sorted(domains),
         "platforms": sorted(platforms),
+        "taxonomy_methodology": "closed_semantic_product_taxonomy_v1",
     }
 
 
@@ -168,12 +184,6 @@ def pain_language(
     authoritative_url: str | None = None,
     limit: int = 30,
 ) -> list[str]:
-    """Extract only entity-bound pain/desire phrases.
-
-    Official-site marketing/policy text is intentionally excluded. Pain candidates
-    must come from complaints, alternatives, reviews or public social observations
-    and pass the conservative entity relevance gate above.
-    """
     allowed = {"complaints", "alternatives", "reviews", "social_comment", "social_public_observation"}
     terms = (
         "πρόβλημα", "παράπονο", "ακριβ", "δεν βρίσκ", "δεν μπορ", "καθυστερ",
