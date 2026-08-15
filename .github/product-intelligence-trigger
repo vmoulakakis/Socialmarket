@@ -1,3 +1,3 @@
-full-resilience-validation: 2026-08-15T14:06:00+03:00
-reason: validate gateway v1.4 structured-output retry, batch quarantine, circuit breaker, validated-only persistence
-run: 1-of-3
+pain-solver-diagnostic: 2026-08-16T02:25:00+03:00
+reason: scan real Linkwise stage candidates using Excel-derived pain-solver priors; keep tracking URLs and product images; read-only diagnostic
+run: top-pain-solvers

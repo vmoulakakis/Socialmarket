@@ -73,6 +73,9 @@ jobs:
       - name: Phase A — runtime-configured commercial scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
+      - name: Pain-solver diagnostic — Excel priors × real feed candidates
+        run: python workers/product_intelligence/pain_solver_scan.py
+
       - name: Phase B — pain-first diversified RAG + Product Research + Skeptic Audit
         if: steps.preflight.outputs.deepseek_configured == 'true'
         run: python workers/product_intelligence/product_intelligence_v2.py "$PRODUCT_SOURCE_FEED"
@@ -90,6 +93,8 @@ jobs:
           path: |
             product-commercial-scan-profile.json
             product-commercial-scan-sample.json
+            product-pain-solver-profile.json
+            product-pain-solver-sample.json
             product-feed-safety-profile.json
             product-intelligence-profile.json
 
