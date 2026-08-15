@@ -30,7 +30,7 @@ jobs:
       MERCHANT_RESEARCH_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-research-gateway
       SEARXNG_BASE_URL: http://127.0.0.1:8080
       MERCHANT_RESEARCH_LIMIT: '350'
-      MERCHANT_RESEARCH_WORKERS: '5'
+      MERCHANT_RESEARCH_WORKERS: '3'
       MERCHANT_COLLECTOR_BUDGET_PER_KIND: '12'
       MERCHANT_SOCIAL_MAX_ITEMS_PER_QUERY: '4'
       MERCHANT_PLAYWRIGHT_MAX_PAGES: '1'
