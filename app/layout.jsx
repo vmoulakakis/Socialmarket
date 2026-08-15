@@ -17,6 +17,7 @@ export default function RootLayout({ children }) {
             <div className="navlinks">
               <Link href="/analytics">Analytics</Link>
               <Link href="/optimization">Optimize</Link>
+              <Link href="/forecast-products">Forecast Products</Link>
               <Link href="/">AI Console</Link>
               <Link href="/market">Market Map</Link>
               <Link href="/niches">Niches</Link>
