@@ -1,0 +1,47 @@
+name: Product JSON Feed Contract Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/product-json-feed-contract-diagnostic.yml'
+      - '.github/product-json-feed-contract-trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install parser/download dependencies
+        run: pip install 'ijson>=3.4,<4' 'gdown>=5.2,<6'
+      - name: Download raw feed read-only
+        run: |
+          gdown "$DRIVE_FILE_ID" -O linkwise-products.json
+          test -s linkwise-products.json
+          python - <<'PY'
+          from pathlib import Path
+          n=Path('linkwise-products.json').stat().st_size
+          print({'bytes':n})
+          if n < 3_000_000_000: raise SystemExit('unexpectedly small source feed')
+          PY
+      - name: Inspect first 1000 complete records only
+        run: python workers/product_intelligence/diagnose_json_feed_contract.py linkwise-products.json product-json-feed-contract.json 1000
+      - name: Upload schema diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-json-feed-contract
+          retention-days: 7
+          path: product-json-feed-contract.json
+      - name: Delete raw source from runner
+        if: always()
+        run: rm -f linkwise-products.json
