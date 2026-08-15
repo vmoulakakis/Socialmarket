@@ -103,5 +103,19 @@ def collect_v4(job):
 base.collect=collect_v4
 base.UA={'User-Agent':'Mozilla/5.0 SocialMarketSemanticPain/4.0'}
 
+
+def main():
+    seeded=base.gateway('seed')
+    print(json.dumps({'seed':seeded},ensure_ascii=False),flush=True)
+    done=0
+    while done<base.LIMIT:
+        jobs=(base.gateway('claim',limit=min(base.BATCH,base.LIMIT-done),worker='github-semantic-category-pain-v4').get('jobs') or [])
+        if not jobs:break
+        for result in base.process_batch(jobs):
+            print(json.dumps(result,ensure_ascii=False),flush=True)
+            done+=1
+    print(json.dumps({'status':'completed','processed':done,'limit':base.LIMIT,'retrieval':'greek_consumer_evidence_v4+direct_authoritative_context_v3'},ensure_ascii=False),flush=True)
+
+
 if __name__=='__main__':
-    base.main()
+    main()
