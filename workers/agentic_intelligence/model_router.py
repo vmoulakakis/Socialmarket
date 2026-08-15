@@ -13,15 +13,17 @@ PREFERRED_PUBLISHERS = ["mistral ai", "microsoft", "meta", "cohere", "ai21 labs"
 
 
 class FreeModelRouter:
-    """Zero-paid-token semantic fallback.
+    """Canonical zero-paid-token semantic route.
 
-    Order is deliberately strict:
-      1. caller's deterministic/local logic
-      2. GitHub Models included quota with GITHUB_TOKEN
-      3. paid providers are NOT called here
+    Order:
+      0. deterministic/vector/RAG logic in the caller
+      1. local open-weight runtime when configured by LocalFirstAgentRuntime
+      2. GitHub Models included quota
+      3. no paid provider is called here
 
-    DeepSeek/OpenAI escalation is handled separately and must first reserve one
-    of the database-enforced 100 shared monthly requests.
+    Paid DeepSeek/OpenAI requests require a DB reservation and an explicit
+    ENABLE_PAID_REMOTE=1. Product Intelligence itself uses its OIDC gateway,
+    which applies the same DB policy server-side.
     """
 
     def __init__(self, max_calls: int | None = None):
@@ -65,8 +67,6 @@ class FreeModelRouter:
             if modalities and "text" not in modalities:
                 continue
             capabilities = {str(x).lower() for x in (m.get("capabilities") or [])}
-            # Tool calling is preferred because the same route can later power
-            # real Agents SDK tool loops, but plain chat models are acceptable.
             tool_rank = 0 if "tool-calling" in capabilities else 1
             try:
                 pub_rank = PREFERRED_PUBLISHERS.index(publisher)
@@ -78,7 +78,7 @@ class FreeModelRouter:
         return self._model
 
     def complete_json(self, system: str, payload: Any, *, temperature: float = 0.0) -> tuple[dict[str, Any] | None, dict[str, Any]]:
-        """One bounded free semantic call. Returns (parsed_json, telemetry)."""
+        """One bounded included-quota semantic call. Returns (parsed_json, telemetry)."""
         with self._lock:
             if not self.available:
                 return None, {"route": "github_models_free", "status": "unavailable_or_cap"}
@@ -132,27 +132,34 @@ class FreeModelRouter:
             }
 
 
-def reserve_paid_escalation(db_call, provider: str, model_name: str, complexity: float, reason: str, task_id: str | None = None):
-    """The only legal doorway to DeepSeek/OpenAI for this engine.
+def reserve_paid_escalation(
+    db_call,
+    provider: str,
+    model_name: str,
+    complexity: float,
+    reason: str,
+    task_id: str | None = None,
+    task_type: str = "merchant_research",
+):
+    """Only legal doorway to a paid remote model for Python workers.
 
-    The database function rejects providers other than DeepSeek/OpenAI,
-    complexity below 0.92, missing reasons, and the 101st shared request in a
-    calendar month. This helper only reserves; callers still need an explicit
-    ENABLE_PAID_REMOTE=1 before making the provider request.
+    The database policy enforces task-specific provider enablement, complexity,
+    monthly shared caps and OpenAI daily caps. A reservation does not itself
+    invoke a model.
     """
     if os.getenv("ENABLE_PAID_REMOTE", "0") != "1":
         raise RuntimeError("paid remote inference disabled")
     if provider not in {"deepseek", "openai"}:
         raise RuntimeError("unsupported paid provider")
-    result = db_call(
+    return db_call(
         "POST",
         "rpc/reserve_remote_model_request",
         data={
             "p_task_id": task_id,
+            "p_task_type": task_type,
             "p_provider": provider,
             "p_model_name": model_name,
             "p_complexity_score": float(complexity),
             "p_escalation_reason": reason,
         },
     )
-    return result
