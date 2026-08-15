@@ -2,7 +2,7 @@ import collections, json, os, sqlite3, sys, time, urllib.parse, urllib.request
 from pathlib import Path
 import ijson
 
-from stream_feed import iter_records, normalize
+from stream_feed import iter_records, normalize, normalize_domain
 from product_agents import (
     canonical_key, compact_product_for_ai, evidence_metrics, final_opportunity_score,
     fold, parse_commission_rule, select_pain_rag, select_theme_rag
@@ -51,23 +51,49 @@ def init_stage(path):
     db.commit();return db
 
 
+def _unique_row(rows):
+    if not rows:return None
+    by_program={str(r.get('merchant_program_id') or r.get('merchant_id')):r for r in rows}
+    return next(iter(by_program.values())) if len(by_program)==1 else None
+
+
 def merchant_maps(context):
-    by_program={}; aliases={}
+    by_program={}; aliases={}; by_domain={}
     for row in context.get('programs',[]):
-        by_program[fold(row.get('program_name'))]=row
-        for a in row.get('aliases') or []:aliases[fold(a)]=row
-    return by_program,aliases
+        pkey=fold(row.get('program_name'))
+        if pkey:by_program[pkey]=row
+        for a in row.get('aliases') or []:
+            akey=fold(a)
+            if akey:aliases[akey]=row
+        dom=normalize_domain(row.get('official_domain'))
+        if dom:by_domain.setdefault(dom,[]).append(row)
+    return by_program,aliases,by_domain
 
 
-def resolve_merchant(program,by_program,aliases):
-    k=fold(program)
-    if not k:return None
-    if k in by_program:return by_program[k]
-    if k in aliases:return aliases[k]
-    # conservative fuzzy fallback: only one near-exact containment candidate
-    hits=[v for n,v in by_program.items() if len(k)>=6 and (k in n or n in k)]
-    ids={h.get('merchant_id') for h in hits}
-    return hits[0] if len(ids)==1 else None
+def resolve_merchant(product,by_program,aliases,by_domain):
+    """Resolve conservatively using authoritative destination domain first.
+
+    The production Linkwise feed does not expose program_name. Its tracking_url
+    carries an encoded destination (lnkurl), which normalize() turns into
+    target_domain. Domain resolution is deterministic; broad fuzzy name matching
+    is intentionally not used.
+    """
+    domain=normalize_domain(product.get('target_domain'))
+    if domain:
+        exact=_unique_row(by_domain.get(domain,[]))
+        if exact:return exact,'target_domain_exact'
+        # Safe subdomain fallback: only if exactly one canonical domain is a suffix.
+        hits=[]
+        for known,rows in by_domain.items():
+            if domain.endswith('.'+known):hits.extend(rows)
+        suffix=_unique_row(hits)
+        if suffix:return suffix,'target_domain_suffix'
+
+    k=fold(product.get('program_name'))
+    if k:
+        if k in by_program:return by_program[k],'program_exact'
+        if k in aliases:return aliases[k],'alias_exact'
+    return None,None
 
 
 def preliminary_score(p,merchant):
@@ -79,9 +105,9 @@ def preliminary_score(p,merchant):
 
 
 def stage_feed(feed,context):
-    by_program,aliases=merchant_maps(context)
+    by_program,aliases,by_domain=merchant_maps(context)
     db=init_stage(STAGE_DB)
-    reasons=collections.Counter(); seen=eligible=0
+    reasons=collections.Counter(); resolution_methods=collections.Counter(); seen=eligible=0
     try:
         iterator=iter_records(feed)
         while True:
@@ -93,9 +119,11 @@ def stage_feed(feed,context):
                 break
             seen+=1
             p=normalize(raw)
-            merchant=resolve_merchant(p.get('program_name'),by_program,aliases)
+            merchant,resolution_method=resolve_merchant(p,by_program,aliases,by_domain)
             if not merchant:
                 reasons['merchant_unresolved']+=1;continue
+            resolution_methods[resolution_method]+=1
+            p['merchant_resolution_method']=resolution_method
             if merchant.get('promotion_mode') in ('demand_beacon_only','blocked') or merchant.get('dominant_market'):
                 reasons['dominant_or_blocked_merchant']+=1;continue
             trust=float(merchant.get('trust_score') or 0)
@@ -118,9 +146,9 @@ def stage_feed(feed,context):
                 reasons['commission_below_10']+=1;continue
             p['expected_commission_eur']=round(p['expected_commission_eur'],4)
             p['potential_commission_eur']=round(p['potential_commission_eur'],4)
-            p['merchant_name']=merchant.get('canonical_name') or p.get('program_name')
+            p['merchant_name']=merchant.get('canonical_name') or p.get('program_name') or p.get('target_domain')
             p['merchant_context']={k:merchant.get(k) for k in (
-                'merchant_id','merchant_program_id','canonical_name','solution_whitespace_score','demand_beacon_score',
+                'merchant_id','merchant_program_id','canonical_name','official_domain','solution_whitespace_score','demand_beacon_score',
                 'demand_score','competition_score','trust_score','confidence','promotion_mode','dominant_market'
             )}
             p['canonical_key']=canonical_key(p)
@@ -130,9 +158,14 @@ def stage_feed(feed,context):
             eligible+=1
             if eligible%5000==0:db.commit()
             if seen%250000==0:
-                print(json.dumps({'phase':'stream','seen':seen,'commission_eligible':eligible,'excluded':reasons.most_common(8)}),flush=True)
+                print(json.dumps({'phase':'stream','seen':seen,'commission_eligible':eligible,'merchant_resolution_methods':resolution_methods.most_common(),'excluded':reasons.most_common(8)}),flush=True)
     finally:db.commit()
-    return db,{'records_seen':seen,'commission_eligible_records':eligible,'excluded_reasons':reasons.most_common()}
+    return db,{
+      'records_seen':seen,
+      'commission_eligible_records':eligible,
+      'merchant_resolution_methods':resolution_methods.most_common(),
+      'excluded_reasons':reasons.most_common()
+    }
 
 
 def iter_best_offers(db,max_offers_per_product=3):
@@ -211,6 +244,7 @@ def process_batch(items,stats):
           'scores':{**components,'final_opportunity_score':final},'validation_status':verdict,
           'audit_summary':audit.get('audit_summary'),'audit':audit,'enrichment':enrich,
           'evidence_count':sum(int(c.get('evidence_count') or 0) for c in selected_pains),
+          'resolution':{'method':p.get('merchant_resolution_method'),'target_domain':p.get('target_domain'),'linkwise_route':p.get('linkwise_route')}
         })
         stats['audited_'+verdict]+=1
     if saves:
@@ -222,7 +256,7 @@ def process_batch(items,stats):
 def main(feed):
     health=gateway('health')
     if not health.get('deepseek_configured'):
-        raise SystemExit('Product Intelligence requires DEEPSEEK_API_KEY in Supabase Edge secrets; refusing non-AI fallback.')
+        raise SystemExit('Product Intelligence requires DeepSeek configuration for Phase B; refusing non-AI persistence fallback.')
     context=gateway('context')
     print(json.dumps({'phase':'context','programs':len(context.get('programs',[])),'pain_clusters':len(context.get('pain_clusters',[])),'themes':len(context.get('themes',[])),'deepseek_model':health.get('deepseek_model')}),flush=True)
     db,stream_stats=stage_feed(feed,context)
@@ -236,6 +270,7 @@ def main(feed):
     unique_products=db.execute('select count(distinct canonical_key) from candidates').fetchone()[0]
     profile={**stream_stats,'unique_commission_eligible_products':unique_products,'ai_offers_submitted':submitted,**stats,'policy':{
       'commission_gate_eur':MIN_COMMISSION,'merchant_trust_gate':MIN_MERCHANT_TRUST,
+      'merchant_resolution':'Linkwise tracking_url destination domain -> authoritative merchant official_domain; exact program/alias only as secondary path',
       'dominant_merchants':'excluded from product promotion; retained in merchant intelligence as demand beacons',
       'ranking':'25 pain + 20 merchant whitespace + 15 Greek demand + 12 commission + 10 inverse competition + 8 seasonal + 5 trust + 3 discount + 2 evidence confidence',
       'raw_feed_imported':False,'ai_fallback_allowed':False
