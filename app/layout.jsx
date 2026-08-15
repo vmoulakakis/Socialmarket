@@ -1,4 +1,5 @@
 import './globals.css';
+import './semantic.css';
 import Link from 'next/link';
 import AuthGate from '@/components/AuthGate';
 
