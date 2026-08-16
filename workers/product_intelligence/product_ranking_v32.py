@@ -1,13 +1,15 @@
-"""Ranking V3.2: preserve V3.1 scoring semantics but compute expensive RAG only after a high-recall cheap shortlist."""
+"""Ranking V3.2: preserve V3.1 semantics while reducing preselection and AI wall-clock latency."""
 import collections
 import heapq
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import product_intelligence_v1 as v1
 import product_ranking_v3 as v3
 
 RAG_PRESELECT=max(v3.PRESELECT,int(os.getenv('PRODUCT_RANK_RAG_PRESELECT','16000')))
+AI_WORKERS=max(1,min(3,int(os.getenv('PRODUCT_RANK_AI_WORKERS','3'))))
 
 
 def _cheap_item(product,decision_index):
@@ -75,6 +77,7 @@ def preselect_v32(products,context,decision_index):
         'rag_evaluated':rag_evaluated,
         'preselected':len(ordered),
         'ai_shortlist':len(selected),
+        'ai_workers':AI_WORKERS,
         'deep_demand_matched_candidates':deep_matched,
         'deep_demand_markets':decision_index['market_count'],
         'deep_demand_model_markets':decision_index['model_count'],
@@ -84,9 +87,35 @@ def preselect_v32(products,context,decision_index):
     }
 
 
+def _run_ai_batch(batch):
+    wire=[v3.wire_item(x) for x in batch]
+    ranked=v3.rank_gateway('rank',items=wire,thinking='auto').get('items',[])
+    by_hash={str(x.get('source_record_hash')):x for x in ranked}
+    audit_wire=[{**x,'ranking':by_hash[str(x['product']['source_record_hash'])]} for x in wire if str(x['product']['source_record_hash']) in by_hash]
+    audited=v3.rank_gateway('rank_audit',items=audit_wire,thinking='auto').get('items',[]) if audit_wire else []
+    audit_by={str(x.get('source_record_hash')):x for x in audited}
+    return {h:{'ranking':result,'audit':audit_by.get(h,{})} for h,result in by_hash.items()}
+
+
+def rank_with_ai_v32(items):
+    batches=[items[i:i+v3.AI_BATCH] for i in range(0,len(items),v3.AI_BATCH)]
+    outputs={};stats=collections.Counter({'ai_rank_batches':len(batches),'ai_workers':AI_WORKERS})
+    with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
+        futures={pool.submit(_run_ai_batch,batch):len(batch) for batch in batches}
+        for future in as_completed(futures):
+            size=futures[future]
+            try:
+                result=future.result();outputs.update(result);stats['ai_ranked']+=len(result)
+            except Exception:
+                # Fail the affected batch into diagnostics; no fabricated AI output.
+                stats['ai_rank_failures']+=size
+    return outputs,dict(stats)
+
+
 def main(feed):
     v3.ENGINE_VERSION='ranking_v3.2'
     v3.preselect=preselect_v32
+    v3.rank_with_ai=rank_with_ai_v32
     return v3.main(feed)
 
 
