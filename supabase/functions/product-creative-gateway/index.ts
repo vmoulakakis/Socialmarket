@@ -133,11 +133,11 @@ async function finalize(b:any){
 }
 
 Deno.serve(async req=>{
-  if(req.method==='GET')return json({ok:true,service:'product-creative-gateway',version:'1.1',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL,contract:{minimum_ranked:100,top_creatives:20,variants_per_product:3,durable_assets_per_product:3,canonical_content:true,scheduler_handoff:'publish.outbox'}})
+  if(req.method==='GET')return json({ok:true,service:'product-creative-gateway',version:'1.2',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL,contract:{minimum_ranked:100,top_creatives:20,variants_per_product:3,durable_assets_per_product:3,canonical_content:true,scheduler_handoff:'publish.outbox'}})
   if(req.method!=='POST')return json({error:'method_not_allowed'},405)
   try{
     await auth(req);const b=await req.json(),action=String(b.action||'')
-    if(action==='health')return json({ok:true,version:'1.1',deepseek_configured:Boolean(DEEPSEEK_KEY),contract:{minimum_ranked:100,top_creatives:20,variants_per_product:3,durable_assets_per_product:3,canonical_content:true,scheduler_handoff:'publish.outbox'}})
+    if(action==='health')return json({ok:true,version:'1.2',deepseek_configured:Boolean(DEEPSEEK_KEY),contract:{minimum_ranked:100,top_creatives:20,variants_per_product:3,durable_assets_per_product:3,canonical_content:true,scheduler_handoff:'publish.outbox'}})
     if(action==='generate'){const items=(Array.isArray(b.items)?b.items:[]).slice(0,5),r=await deepseek(CREATIVE_SYSTEM,{items},'creative');return json({ok:true,items:Array.isArray(r?.items)?r.items:[]})}
     if(action==='audit'){const items=(Array.isArray(b.items)?b.items:[]).slice(0,5),r=await deepseek(AUDIT_SYSTEM,{items},'audit');return json({ok:true,items:Array.isArray(r?.items)?r.items:[]})}
     if(action==='upload_asset')return json({ok:true,...await uploadAsset(b)})
@@ -145,5 +145,9 @@ Deno.serve(async req=>{
     if(action==='persist_content')return json({ok:true,...await persistContent(b)})
     if(action==='finalize')return json({ok:true,...await finalize(b)})
     throw new Error('action_not_allowed')
-  }catch(e){const message=String(e instanceof Error?e.message:e);console.error(e);return json({error:message},message.includes('oidc')?401:500)}
+  }catch(e){
+    const message=String(e instanceof Error?e.message:e);console.error(e)
+    const authFailure=message.includes('oidc')||message.includes('"exp" claim timestamp check failed')||message.includes('JWTExpired')
+    return json({error:message},authFailure?401:500)
+  }
 })
