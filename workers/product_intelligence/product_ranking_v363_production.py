@@ -1,8 +1,8 @@
-"""Production orchestration for Ranking V3.6.3.
+"""Production orchestration for Ranking V3.6.4.
 
-Keeps the proven V3.6.2 ranking/SEO/creative logic while making run-state durable
-before expensive work begins, recording the failure stage, and completing both the
-canonical ranking run and the independent creative/content contract.
+Keeps the proven ranking/SEO/creative logic, makes run-state durable before expensive
+work, and strictly recovers missing partial AI batch results instead of accepting an
+incomplete promotion list.
 """
 import collections
 import json
@@ -18,7 +18,7 @@ import product_ranking_v3 as v3
 import product_ranking_v32 as v32
 from runtime_config import apply_runtime_config, load_runtime_config
 
-ENGINE_VERSION='ranking_v3.6.3'
+ENGINE_VERSION='ranking_v3.6.4'
 RUN_GATEWAY=os.getenv('PRODUCT_RUN_OBSERVABILITY_GATEWAY','https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-run-observability-gateway')
 
 
@@ -66,29 +66,72 @@ def _profile(rows,run_key,stream_stats,shortlist_stats,ai_stats,content_stats,sa
     }
 
 
+def _item_hash(item):
+    return str((item.get('product') or {}).get('source_record_hash') or item.get('source_record_hash') or '')
+
+
+def strict_rank_with_ai(items):
+    """Recover partial DeepSeek batch output without substituting non-AI rankings.
+
+    The gateway can return syntactically valid JSON containing fewer items than were
+    requested. V3.6.3 treated that as success. V3.6.4 retries only missing hashes in
+    progressively smaller batches until the production Top-100 contract is satisfied.
+    """
+    outputs,stats=v32.rank_with_ai_v32(items)
+    stats=dict(stats)
+    minimum=v32.FINAL_MIN_RANKED
+    target=max(minimum,min(v3.SAVE_LIMIT,160))
+    attempted=0;recovered=0;rounds=0
+    missing=[x for x in items if _item_hash(x) not in outputs]
+    while len(outputs)<target and missing and rounds<3:
+        rounds+=1;before=len(outputs);batch_size=2 if rounds<3 else 1
+        for i in range(0,len(missing),batch_size):
+            if len(outputs)>=target:break
+            batch=missing[i:i+batch_size];attempted+=len(batch)
+            result,failed,splits=v32._run_ai_batch_resilient(batch)
+            outputs.update(result)
+            stats['ai_rank_failures']=int(stats.get('ai_rank_failures') or 0)+int(failed or 0)
+            stats['ai_split_retries']=int(stats.get('ai_split_retries') or 0)+int(splits or 0)
+        recovered+=len(outputs)-before
+        missing=[x for x in items if _item_hash(x) not in outputs]
+        if len(outputs)==before:break
+    stats.update({
+        'ai_ranked':len(outputs),
+        'ai_recovery_target':target,
+        'ai_recovery_rounds':rounds,
+        'ai_recovery_attempted':attempted,
+        'ai_recovered_missing':recovered,
+        'ai_missing_after_recovery':len(missing),
+        'ai_completeness_policy':'partial batch output is retried on missing hashes; no deterministic substitute',
+    })
+    if len(outputs)<minimum:
+        raise RuntimeError(f'AI completeness contract requires at least {minimum} fully ranked products; got {len(outputs)} after {rounds} recovery rounds')
+    return outputs,stats
+
+
 def main(feed):
     cfg=load_runtime_config(v1);apply_runtime_config(v1,cfg)
     v3.ENGINE_VERSION=ENGINE_VERSION
     v3.preselect=v32.preselect_v32
-    v3.rank_with_ai=v32.rank_with_ai_v32
+    v3.rank_with_ai=strict_rank_with_ai
     v3.enrich_final_rows=v32.enrich_final_rows_v34
     v3.rank_gateway=production_gateway
 
     health=production_gateway('health')
     if not health.get('deepseek_configured'):
-        raise SystemExit('Ranking V3.6.3 requires AI for the final promotion list; DeepSeek is not configured.')
+        raise SystemExit('Ranking V3.6.4 requires AI for the final promotion list; DeepSeek is not configured.')
     creative_health=v32.creative_gateway('health')
     if not creative_health.get('deepseek_configured'):
-        raise SystemExit('Ranking V3.6.3 requires the creative AI gateway; DeepSeek is not configured.')
+        raise SystemExit('Ranking V3.6.4 requires the creative AI gateway; DeepSeek is not configured.')
 
     run_key=f"{os.getenv('GITHUB_RUN_ID') or datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{os.getenv('GITHUB_RUN_ATTEMPT','1')}"
     run_id=os.getenv('PRODUCT_RANK_RUN_ID','').strip()
     if not run_id:
         run=production_gateway('ranking_start',run_key=run_key,engine_version=ENGINE_VERSION,metadata={
             'runtime_config_version':cfg.get('_version'),
-            'orchestrator':'product_ranking_v363_production',
+            'orchestrator':'product_ranking_v364_production',
             'stage':'starting',
-            'policy':'ranking-first; pain optional; missing competition gives no inverse bonus; canonical run is durable before expensive product work',
+            'policy':'ranking-first; pain optional; partial AI output is retried by missing hash; no deterministic fallback',
         })
         run_id=str(run['run_id'])
     stage='context';db=None
@@ -115,7 +158,7 @@ def main(feed):
         shortlist,shortlist_stats=v32.preselect_v32(v1.iter_best_offers(db,v1.AI_OFFERS_PER_PRODUCT),context,decision_index)
 
         stage='ai_ranking'
-        ai_outputs,ai_stats=v32.rank_with_ai_v32(shortlist)
+        ai_outputs,ai_stats=strict_rank_with_ai(shortlist)
         rows=[v3.final_row(item,ai_outputs[str(item['product']['source_record_hash'])]) for item in shortlist if str(item['product']['source_record_hash']) in ai_outputs]
         rows.sort(key=lambda x:(x['rank_score'],x['ai_confidence'],v3.num(x['expected_commission_eur'])),reverse=True)
         rows=rows[:v3.SAVE_LIMIT]
@@ -136,12 +179,12 @@ def main(feed):
             eligible_candidates=int(stream_stats.get('commission_eligible_records') or 0),
             ai_ranked=int(ai_stats.get('ai_ranked') or 0),
             saved_count=saved,
-            metadata={'shortlist':shortlist_stats,'ai':ai_stats,'content':content_stats,'orchestrator':'product_ranking_v363_production'},
+            metadata={'shortlist':shortlist_stats,'ai':ai_stats,'content':content_stats,'orchestrator':'product_ranking_v364_production'},
         )
 
         profile=_profile(rows,run_key,stream_stats,shortlist_stats,ai_stats,content_stats,saved)
         v3.PROFILE.write_text(json.dumps(profile,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
-        print(json.dumps({'product_ranking_v363':profile},ensure_ascii=False,default=str),flush=True)
+        print(json.dumps({'product_ranking_v364':profile},ensure_ascii=False,default=str),flush=True)
         return profile
     except BaseException as exc:
         if isinstance(exc,KeyboardInterrupt):raise
