@@ -18,12 +18,13 @@ CLIENT='CD104'
 CATEGORY_IDS='3,67,25,27,29,33,63,147,87,89,99,103,109,117,119'
 BASE='https://affiliate.linkwi.se/feeds/1.2/{client}/programs-joined/columns-{columns}/catinc-{categories}/catex-0/proginc-0/progex-0/feed.json'
 
-# Verified production fields from live Linkwise probe. Optional brand/model aliases
-# are probed separately and added only if the network actually emits them.
+# Verified against the live joined-program feed on 2026-08-16. Unsupported tags
+# are deliberately omitted rather than synthesized from product text.
 CORE_FIELDS=(
     'product_id','product_name','description','category','image_url','in_stock','availability',
     'valid_from','valid_to','price','full_price','discount','times_bought','size','colour','sku'
 )
+VERIFIED_OPTIONAL_FIELDS=('thumb_url',)
 OPTIONAL_FIELD_CANDIDATES=('brand','brand_name','manufacturer','maker','model','model_name','mpn','ean','gtin','currency','thumb_url')
 DEEPLINK_CANDIDATES=('deep_link','deeplink','aw_deep_link','tracking_url')
 MINIMUM_CONTRACT={'product_id','product_name','category','price','tracking_url'}
@@ -41,8 +42,7 @@ def _sample(url,limit=524288,session=None):
     s=session or _session()
     with s.get(url,stream=True,timeout=(15,45),allow_redirects=True) as r:
         result={'status':r.status_code,'content_type':r.headers.get('content-type'),'content_length':r.headers.get('content-length')}
-        if r.status_code>=400:
-            result['error']=r.text[:240];return result
+        if r.status_code>=400:result['error']=r.text[:240];return result
         buf=b''
         for chunk in r.iter_content(32768):
             if chunk:
@@ -64,8 +64,7 @@ def resolve_deeplink_field():
     s=_session();results=[]
     for field in DEEPLINK_CANDIDATES:
         result=probe_field(field,s);results.append(result);print(json.dumps({'probe':result},ensure_ascii=False),flush=True)
-        if result.get('status')==200 and result.get('field_present') and result.get('linkwise_tracking_shape'):
-            return field,results
+        if result.get('status')==200 and result.get('field_present') and result.get('linkwise_tracking_shape'):return field,results
     present=[x for x in results if x.get('status')==200 and x.get('field_present')]
     if len(present)==1:return str(present[0]['field']),results
     raise RuntimeError('Could not resolve one unambiguous Linkwise deeplink field: '+json.dumps(results,ensure_ascii=False))
@@ -73,16 +72,16 @@ def resolve_deeplink_field():
 
 def probe_optional_fields():
     result=_sample(feed_url(('product_id','price',*OPTIONAL_FIELD_CANDIDATES)),524288)
-    keys=set(result.get('keys') or []);supported=tuple(x for x in OPTIONAL_FIELD_CANDIDATES if x in keys)
-    result['supported_optional_fields']=supported
-    print(json.dumps({'optional_field_probe':result},ensure_ascii=False),flush=True)
-    return supported,result
+    keys=set(result.get('keys') or []);supported=tuple(x for x in OPTIONAL_FIELD_CANDIDATES if x in keys);result['supported_optional_fields']=supported
+    print(json.dumps({'optional_field_probe':result},ensure_ascii=False),flush=True);return supported,result
 
 
 def direct_columns():
-    explicit=os.getenv('LINKWISE_DEEPLINK_FIELD','').strip();field=explicit or resolve_deeplink_field()[0]
+    explicit=os.getenv('LINKWISE_DEEPLINK_FIELD','').strip();field=explicit or 'tracking_url'
     optional_env=os.getenv('LINKWISE_OPTIONAL_FIELDS','').strip()
-    optional=tuple(x for x in optional_env.split(',') if x) if optional_env else ('brand','model','currency')
+    optional=tuple(x.strip() for x in optional_env.split(',') if x.strip()) if optional_env else VERIFIED_OPTIONAL_FIELDS
+    invalid=[x for x in optional if x not in VERIFIED_OPTIONAL_FIELDS]
+    if invalid:raise RuntimeError(f'unverified Linkwise optional fields requested: {invalid}')
     return (*CORE_FIELDS,*optional,field),field
 
 
