@@ -2,8 +2,6 @@ name: Product Intelligence + Promotion Ranking
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '20 6 * * *'
   workflow_run:
     workflows: ['Deep Demand Intelligence V3.1']
     types: [completed]
@@ -133,7 +131,7 @@ jobs:
               raise SystemExit(f'Commercial universe unexpectedly thin: products={eligible}, offers={offers}')
           PY
 
-      - name: Final Ranking V3.6.3 — durable Top 100+ + complete SEO + 20 READY creative packs + 60 durable assets
+      - name: Final Ranking V3.6.4 — durable Top 100+ + complete SEO + 20 READY creative packs + 60 durable assets
         id: final_rank
         if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v363_production.py "$PRODUCT_SOURCE_FEED"
