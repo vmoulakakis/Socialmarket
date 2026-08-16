@@ -38,3 +38,22 @@ jobs:
       - run: deno check --node-modules-dir=auto supabase/functions/admin-intelligence-gateway/index.ts
       - run: deno check --node-modules-dir=auto supabase/functions/evidence-gateway/index.ts
       - run: npm run build
+      - name: Package controlled Vercel deploy source
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: socialmarket-vercel-source
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: true
+          path: |
+            app/**
+            components/**
+            config/**
+            lib/**
+            public/**
+            package.json
+            package-lock.json
+            jsconfig.json
+            next.config.mjs
+            vercel.json
