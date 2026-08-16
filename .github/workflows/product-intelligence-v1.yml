@@ -15,7 +15,7 @@ on:
 
 concurrency:
   group: socialmarket-product-ranking-daily
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -38,6 +38,7 @@ jobs:
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
       PRODUCT_RANKING_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway
       PRODUCT_CREATIVE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-creative-gateway
+      PRODUCT_RUN_OBSERVABILITY_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-run-observability-gateway
       PRODUCT_RANK_RAG_PRESELECT: '20000'
       PRODUCT_RANK_PRESELECT: '5000'
       PRODUCT_RANK_AI_MAX: '320'
@@ -64,13 +65,14 @@ jobs:
           urls={
             'ranking':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway',
             'creative':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-creative-gateway',
+            'observability':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-run-observability-gateway',
           }
           health={}
           for name,url in urls.items():
               with urllib.request.urlopen(url, timeout=30) as r: health[name]=json.loads(r.read().decode())
               print(name,{k:health[name].get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model','contract')})
               if not health[name].get('ok'): raise SystemExit(f'{name} gateway unhealthy')
-          ai_ok=all(x.get('deepseek_configured') for x in health.values())
+          ai_ok=all(health[x].get('deepseek_configured') for x in ('ranking','creative'))
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
               f.write(f"ranking_ai={'true' if ai_ok else 'false'}\n")
           PY
@@ -127,9 +129,9 @@ jobs:
               raise SystemExit(f'Commercial universe unexpectedly thin: products={eligible}, offers={offers}')
           PY
 
-      - name: Final Ranking V3.6.2 — Top 100+ + complete SEO + 20 READY creative packs + 60 durable assets
+      - name: Final Ranking V3.6.3 — durable Top 100+ + complete SEO + 20 READY creative packs + 60 durable assets
         if: steps.preflight.outputs.ranking_ai == 'true'
-        run: python workers/product_intelligence/product_ranking_v32.py "$PRODUCT_SOURCE_FEED"
+        run: python workers/product_intelligence/product_ranking_v363_production.py "$PRODUCT_SOURCE_FEED"
 
       - name: Fail if final AI services are unavailable
         if: steps.preflight.outputs.ranking_ai != 'true'
