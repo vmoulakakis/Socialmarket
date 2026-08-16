@@ -1,9 +1,38 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {supabase} from '@/lib/supabase';
+
+const score=v=>v==null?'—':Number(v).toFixed(1);
+const confidence=v=>v==null?'—':`${Math.round(Number(v)<=1?Number(v)*100:Number(v))}%`;
+
 export default function Merchants(){
- const [rows,setRows]=useState([]),[loading,setLoading]=useState(true);
- useEffect(()=>{(async()=>{const {data}=await supabase.from('merchant_profiles').select('merchant_name,internal_trust_score,trust_score,trust_confidence,external_reputation_score,external_reputation_confidence,external_risk_flag,external_risk_reason,complaint_risk_score,review_footprint_score,business_identity_score,official_domain,domain_age_years,evidence_count,active_offer_count,duplicate_win_rate,last_researched_at').order('trust_score',{ascending:false}).limit(300);setRows(data||[]);setLoading(false)})()},[]);
- const pct=v=>v==null?'—':`${Math.round(Number(v)*100)}%`;
- return <main><div className="hero"><div><div className="eyebrow">Evidence-first merchant selection</div><h1>Merchant Trust</h1><p className="sub">Internal feed reliability + external web reputation + complaint-risk corroboration. Ο φθηνότερος merchant δεν κερδίζει αυτόματα· externally risky merchant δεν μπορεί να γίνει preferred offer.</p></div></div><div className="card">{loading?<p className="muted">Loading merchant evidence…</p>:rows.length===0?<p className="muted">Δεν υπάρχουν ακόμη merchant profiles. Θα δημιουργηθούν μετά το πραγματικό feed import.</p>:<table className="table"><thead><tr><th>Merchant</th><th>Final Trust</th><th>Internal</th><th>External</th><th>Ext. confidence</th><th>Complaint risk</th><th>Identity</th><th>Domain age</th><th>Evidence</th><th>Risk</th></tr></thead><tbody>{rows.map(m=><tr key={m.merchant_name}><td><strong>{m.merchant_name}</strong><div className="muted">{m.official_domain||'domain pending'}</div></td><td className={Number(m.trust_score)>=80?'score good':Number(m.trust_score)>=65?'score warn':'score bad'}>{Number(m.trust_score||0).toFixed(1)}</td><td>{m.internal_trust_score==null?'—':Number(m.internal_trust_score).toFixed(0)}</td><td>{m.external_reputation_score==null?'—':Number(m.external_reputation_score).toFixed(0)}</td><td>{pct(m.external_reputation_confidence)}</td><td className={Number(m.complaint_risk_score||0)>=80?'bad':''}>{Number(m.complaint_risk_score||0).toFixed(0)}</td><td>{Number(m.business_identity_score||0).toFixed(0)}</td><td>{m.domain_age_years==null?'—':`${Number(m.domain_age_years).toFixed(1)}y`}</td><td>{m.evidence_count||0}</td><td>{m.external_risk_flag?<span className="pill bad">BLOCK</span>:<span className="pill">OK</span>}</td></tr>)}</tbody></table>}<p className="muted" style={{marginTop:14}}>External reputation είναι confidence-weighted. Με λίγα ή αδύναμα sources συρρικνώνεται προς neutral αντί να υπερεκτιμάται.</p></div></main>
+ const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ useEffect(()=>{(async()=>{
+   const {data,error}=await supabase.from('merchant_dashboard')
+     .select('merchant_id,canonical_name,official_domain,primary_category,peer_group,trust_score,overall_opportunity_score,competition_intensity_score,greek_market_fit_score,deep_research_score,research_confidence,risk_flag,risk_reason,evidence_count,researched_at,global_rank,score_stage')
+     .order('global_rank',{ascending:true,nullsFirst:false}).limit(309);
+   setRows(data||[]);setError(error?.message||'');setLoading(false);
+ })()},[]);
+ return <main>
+   <div className="hero"><div><div className="eyebrow">Evidence-first merchant selection</div><h1>Merchant Intelligence</h1><p className="sub">Canonical merchant research, trust, Greek-market fit, competition and opportunity. Missing metrics stay unknown instead of becoming fake zeros.</p></div></div>
+   <div className="card">
+     {loading?<p className="muted">Loading merchant intelligence…</p>:error?<p className="bad">Merchant data error: {error}</p>:rows.length===0?<p className="muted">Δεν υπάρχουν ακόμη canonical merchant rankings.</p>:
+     <table className="table"><thead><tr><th>Rank</th><th>Merchant</th><th>Category</th><th>Trust</th><th>Opportunity</th><th>Greek fit</th><th>Competition</th><th>Deep research</th><th>Confidence</th><th>Evidence</th><th>Risk</th></tr></thead><tbody>
+       {rows.map(m=><tr key={m.merchant_id}>
+         <td>{m.global_rank??'—'}</td>
+         <td><strong>{m.canonical_name}</strong><div className="muted">{m.official_domain||'domain unknown'}</div></td>
+         <td>{m.primary_category||'—'}<div className="muted">{m.peer_group||''}</div></td>
+         <td>{score(m.trust_score)}</td>
+         <td className={Number(m.overall_opportunity_score)>=70?'score good':m.overall_opportunity_score==null?'':'score warn'}>{score(m.overall_opportunity_score)}</td>
+         <td>{score(m.greek_market_fit_score)}</td>
+         <td>{score(m.competition_intensity_score)}</td>
+         <td>{score(m.deep_research_score)}</td>
+         <td>{confidence(m.research_confidence)}</td>
+         <td>{m.evidence_count??'—'}</td>
+         <td>{m.risk_flag?<span className="pill bad" title={m.risk_reason||''}>RISK</span>:<span className="pill">OK</span>}</td>
+       </tr>)}
+     </tbody></table>}
+     <p className="muted" style={{marginTop:14}}>Scores are evidence-backed intelligence fields. Unknown values remain “—”; they are not interpreted as zero.</p>
+   </div>
+ </main>
 }
