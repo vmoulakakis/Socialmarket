@@ -7,10 +7,6 @@ on:
         description: Maximum taxonomy nodes to analyze
         required: false
         default: '120'
-  push:
-    branches: [main]
-    paths:
-      - '.github/deep-demand-trigger'
   workflow_run:
     workflows: ['Semantic Category Pain Intelligence']
     types: [completed]
@@ -26,7 +22,7 @@ concurrency:
 
 jobs:
   model-lab:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'push') }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
     env:
