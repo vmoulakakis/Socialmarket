@@ -14,18 +14,17 @@ No likes, views, follower counts or engagement metrics are collected or used.
 No login, anti-bot bypass, CAPTCHA bypass or restricted API is used.
 """
 
-import hashlib
-import re
+import concurrent.futures
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
 import consumer_evidence_v4 as consumer
 
-UA={
-    'User-Agent':'Mozilla/5.0 (compatible; SocialMarketGreekPain/4.6; public research discovery)'
-}
+UA={'User-Agent':'Mozilla/5.0 (compatible; SocialMarketGreekPain/4.6; public research discovery)'}
 DDG='https://html.duckduckgo.com/html/'
+DISCOVERY_WORKERS=6
+FETCH_WORKERS=6
 
 # Domain selection is intentionally small and category-aware. This makes the
 # collector useful for cross-source validation instead of spraying the web.
@@ -72,8 +71,7 @@ def _unwrap(href:str)->str|None:
     href=str(href or '').strip()
     if not href:return None
     if href.startswith('//'):href='https:'+href
-    if href.startswith('/'):
-        href='https://duckduckgo.com'+href
+    if href.startswith('/'):href='https://duckduckgo.com'+href
     try:
         u=urlparse(href)
         if 'duckduckgo.com' in (u.hostname or ''):
@@ -88,7 +86,7 @@ def _unwrap(href:str)->str|None:
 
 def _ddg(query:str,limit:int=8):
     try:
-        r=requests.get(DDG,params={'q':query,'kl':'gr-el'},headers=UA,timeout=25)
+        r=requests.get(DDG,params={'q':query,'kl':'gr-el'},headers=UA,timeout=15)
         if not r.ok:return [],f'http_{r.status_code}'
         p=_Results();p.feed(r.text[:1_500_000])
         out=[];seen=set()
@@ -98,67 +96,79 @@ def _ddg(query:str,limit:int=8):
             seen.add(url);out.append(url)
             if len(out)>=limit:break
         return out,None
-    except Exception as exc:
-        return [],type(exc).__name__
+    except Exception as exc:return [],type(exc).__name__
 
 
 def _queries(category:str,aliases:list[str]):
     domains=CATEGORY_DOMAINS.get(str(category or ''),DEFAULT_DOMAINS)
-    # Two concrete niche terms are enough to keep direct discovery bounded.
     terms=[x for x in aliases[:2] if str(x or '').strip()]
-    out=[]
-    for term in terms:
-        for d in domains[:4]:
-            out.append((str(term),d,f'site:{d} "{term}"'))
-    return out
+    return [(str(term),d,f'site:{d} "{term}"') for term in terms for d in domains[:4]]
+
+
+def _discover_one(spec):
+    term,domain,query=spec
+    urls,error=_ddg(query,6)
+    diagnostic={
+        'source_kind':'consumer_discovery','source_url':f'https://html.duckduckgo.com/html/?q={query}',
+        'title':f'Direct Greek forum discovery: {domain} / {term}','body':'',
+        'collector':'duckduckgo_greek_forum_discovery_v46','confidence':.40 if error else .58,
+        'metadata':{
+            'query':query,'query_term':term,'geography':'GR','source_family':'discovery_engine',
+            'evidence_mode':'discovery_only','eligible_for_pain_audit':False,
+            'fetch_error':error,'result_count':len(urls),'retrieval_version':'greece_direct_forum_v4.6',
+            'metric_semantics':'URL discovery diagnostic only; search snippets/engagement are never pain or demand evidence'
+        }
+    }
+    return spec,urls,diagnostic
 
 
 def _discover(category:str,aliases:list[str],max_urls:int=24):
-    found=[];seen=set();diagnostics=[]
-    for term,domain,query in _queries(category,aliases):
-        urls,error=_ddg(query,6)
-        diagnostics.append({
-            'source_kind':'consumer_discovery','source_url':f'https://html.duckduckgo.com/html/?q={query}',
-            'title':f'Direct Greek forum discovery: {domain} / {term}','body':'',
-            'collector':'duckduckgo_greek_forum_discovery_v46','confidence':.40 if error else .58,
-            'metadata':{
-                'query':query,'query_term':term,'geography':'GR','source_family':'discovery_engine',
-                'evidence_mode':'discovery_only','eligible_for_pain_audit':False,
-                'fetch_error':error,'result_count':len(urls),'retrieval_version':'greece_direct_forum_v4.6',
-                'metric_semantics':'URL discovery diagnostic only; search snippets/engagement are never pain or demand evidence'
-            }
-        })
-        for url in urls:
-            if url in seen:continue
-            seen.add(url);found.append({'url':url,'title':'','snippet':'','query':query,'query_term':term})
-            if len(found)>=max_urls:return found,diagnostics
-    return found,diagnostics
+    specs=_queries(category,aliases);found=[];seen=set();diagnostics=[]
+    if not specs:return found,diagnostics
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(DISCOVERY_WORKERS,len(specs))) as pool:
+        futures=[pool.submit(_discover_one,s) for s in specs]
+        for future in concurrent.futures.as_completed(futures):
+            spec,urls,diagnostic=future.result();term,_domain_name,query=spec
+            diagnostics.append(diagnostic)
+            for url in urls:
+                if url in seen:continue
+                seen.add(url);found.append({'url':url,'title':'','snippet':'','query':query,'query_term':term})
+                if len(found)>=max_urls:break
+    return found[:max_urls],diagnostics
 
 
-def _extract(found:list[dict],keywords:list[str]):
-    out=[];diagnostics=[]
-    for row in found:
-        fetched,text,error=consumer._fetch_text(row)
-        diagnostics.append({
-            'source_kind':'consumer_discovery','source_url':row['url'],'title':'','body':'',
-            'collector':'direct_greek_forum_fetch_v46','confidence':.44 if error else .64,
-            'metadata':{
-                'query':row.get('query'),'query_term':row.get('query_term'),'geography':'GR',
-                'source_family':consumer.source_family(row['url'])[0],
-                'evidence_mode':'discovery_only','eligible_for_pain_audit':False,
-                'fetch_error':error,'retrieval_version':'greece_direct_forum_v4.6'
-            }
-        })
-        if not text:continue
-        for evidence in consumer._evidence_from_page(fetched,text,keywords):
-            meta=dict(evidence.get('metadata') or {})
+def _fetch_one(row,keywords):
+    fetched,text,error=consumer._fetch_text(row)
+    diagnostic={
+        'source_kind':'consumer_discovery','source_url':row['url'],'title':'','body':'',
+        'collector':'direct_greek_forum_fetch_v46','confidence':.44 if error else .64,
+        'metadata':{
+            'query':row.get('query'),'query_term':row.get('query_term'),'geography':'GR',
+            'source_family':consumer.source_family(row['url'])[0],
+            'evidence_mode':'discovery_only','eligible_for_pain_audit':False,
+            'fetch_error':error,'retrieval_version':'greece_direct_forum_v4.6'
+        }
+    }
+    evidence=[]
+    if text:
+        for item in consumer._evidence_from_page(fetched,text,keywords):
+            meta=dict(item.get('metadata') or {})
             meta.update({
                 'retrieval_version':'greece_direct_forum_v4.6','source_role':'pain_only',
                 'social_metrics_eligible_for_demand':False,
                 'metric_semantics':'actual fetched public consumer/forum text; no likes/views/search snippets used'
             })
-            evidence={**evidence,'collector':'direct_greek_forum_extract_v46','metadata':meta}
-            out.append(evidence)
+            evidence.append({**item,'collector':'direct_greek_forum_extract_v46','metadata':meta})
+    return evidence,diagnostic
+
+
+def _extract(found:list[dict],keywords:list[str]):
+    out=[];diagnostics=[]
+    if not found:return out,diagnostics
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(FETCH_WORKERS,len(found))) as pool:
+        futures=[pool.submit(_fetch_one,row,keywords) for row in found]
+        for future in concurrent.futures.as_completed(futures):
+            evidence,diagnostic=future.result();out.extend(evidence);diagnostics.append(diagnostic)
     return out,diagnostics
 
 
