@@ -1,4 +1,7 @@
+import io
+import urllib.error
 import unittest
+from unittest.mock import patch
 
 from product_ranking_v3 import deterministic_metrics, kpi_snapshot, product_attributes
 import product_ranking_v32 as v32
@@ -117,6 +120,25 @@ class RankingV3Tests(unittest.TestCase):
             output, failed, splits = v32._run_creative_batch_resilient(batch)
             self.assertEqual(len(output), 5);self.assertEqual(failed, 0);self.assertGreaterEqual(splits, 4)
         finally:v32._run_creative_batch_once = original
+
+    def test_creative_gateway_refreshes_expired_oidc_token(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self): return b'{"ok":true}'
+        calls=[]
+        def fake_urlopen(req, timeout=0):
+            calls.append(req)
+            if len(calls)==1:
+                raise urllib.error.HTTPError(req.full_url, 401, 'expired', {}, io.BytesIO(b'{"error":"oidc_not_allowed"}'))
+            return Response()
+        old=v32._CREATIVE_TOKEN
+        try:
+            v32._CREATIVE_TOKEN='stale-token'
+            with patch.object(v32.v1, 'oidc_token', return_value='fresh-token') as token_mock, patch.object(v32.urllib.request, 'urlopen', side_effect=fake_urlopen):
+                result=v32.creative_gateway('health')
+            self.assertTrue(result['ok']);self.assertEqual(len(calls),2);token_mock.assert_called_once()
+        finally:v32._CREATIVE_TOKEN=old
 
 
 if __name__ == '__main__':
