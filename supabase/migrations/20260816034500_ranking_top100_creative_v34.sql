@@ -21,6 +21,12 @@ do $$ begin
     );
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  alter table intel.product_rankings
+    add constraint product_rankings_creative_requires_audit_check
+    check (creative_pack='{}'::jsonb or creative_audit<>'{}'::jsonb);
+exception when duplicate_object then null; end $$;
+
 create index if not exists product_rankings_creative_status_idx
   on intel.product_rankings(run_id, creative_status, rank_score desc);
 
