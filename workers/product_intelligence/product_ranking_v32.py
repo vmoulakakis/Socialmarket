@@ -1,8 +1,10 @@
-"""Ranking V3.3: fast two-stage preselection, resilient AI ranking and final SEO enrichment."""
+"""Ranking V3.4: fast deterministic preselection, resilient AI ranking, SEO and audited Top-20 creative packs."""
 import collections
 import heapq
+import json
 import os
 import sys
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
@@ -14,6 +16,32 @@ AI_WORKERS=max(1,min(3,int(os.getenv('PRODUCT_RANK_AI_WORKERS','3'))))
 SEO_WORKERS=max(1,min(3,int(os.getenv('PRODUCT_RANK_SEO_WORKERS','3'))))
 SEO_BATCH=max(1,min(10,int(os.getenv('PRODUCT_RANK_SEO_BATCH','10'))))
 SEO_LIMIT=max(1,min(v3.SAVE_LIMIT,int(os.getenv('PRODUCT_RANK_SEO_LIMIT',str(v3.SAVE_LIMIT)))))
+FINAL_MIN_RANKED=max(100,int(os.getenv('PRODUCT_RANK_MIN_FINAL','100')))
+CREATIVE_LIMIT=max(20,min(v3.SAVE_LIMIT,int(os.getenv('PRODUCT_RANK_CREATIVE_LIMIT','20'))))
+CREATIVE_BATCH=max(1,min(5,int(os.getenv('PRODUCT_RANK_CREATIVE_BATCH','5'))))
+CREATIVE_WORKERS=max(1,min(3,int(os.getenv('PRODUCT_RANK_CREATIVE_WORKERS','3'))))
+CREATIVE_GATEWAY=os.getenv('PRODUCT_CREATIVE_GATEWAY','https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-creative-gateway')
+BASE_RANK_GATEWAY=v3.rank_gateway
+_CREATIVE_TOKEN=None
+
+
+def creative_gateway(action,**payload):
+    global _CREATIVE_TOKEN
+    if _CREATIVE_TOKEN is None:_CREATIVE_TOKEN=v1.oidc_token()
+    body=json.dumps({'action':action,**payload},ensure_ascii=False).encode()
+    req=urllib.request.Request(CREATIVE_GATEWAY,data=body,headers={'authorization':'Bearer '+_CREATIVE_TOKEN,'content-type':'application/json'},method='POST')
+    try:
+        with urllib.request.urlopen(req,timeout=210) as r:return json.loads(r.read().decode())
+    except urllib.error.HTTPError as exc:
+        msg=exc.read().decode(errors='replace');raise RuntimeError(f'creative gateway {action} failed: {exc.code} {msg[:1000]}')
+
+
+def assert_final_contract(rows,creative_count=None):
+    if len(rows)<FINAL_MIN_RANKED:
+        raise RuntimeError(f'final ranking contract requires at least {FINAL_MIN_RANKED} products; got {len(rows)}')
+    if creative_count is not None and creative_count<CREATIVE_LIMIT:
+        raise RuntimeError(f'creative contract requires {CREATIVE_LIMIT} Top-ranked creative packs; got {creative_count}')
+    return True
 
 
 def _cheap_item(product,decision_index):
@@ -118,7 +146,7 @@ def _run_seo_batch_resilient(batch):
         return outputs,failed,splits
 
 
-def enrich_final_rows_v33(rows):
+def enrich_seo(rows):
     target=rows[:SEO_LIMIT];batches=[target[i:i+SEO_BATCH] for i in range(0,len(target),SEO_BATCH)];outputs={};stats=collections.Counter({'seo_batches':len(batches),'seo_workers':SEO_WORKERS,'seo_target':len(target)})
     with ThreadPoolExecutor(max_workers=SEO_WORKERS) as pool:
         futures={pool.submit(_run_seo_batch_resilient,batch):len(batch) for batch in batches}
@@ -133,13 +161,84 @@ def enrich_final_rows_v33(rows):
         if seo:
             row['seo_content']={k:seo.get(k) for k in ('title','meta_description','short_description','description','keywords','search_intent','slug','feature_bullets')}
             row['seo_generated_at']=generated_at
-    stats['seo_generation']='deepseek evidence-constrained rewrite; product facts only; no invented specifications'
+    stats['seo_generation']='DeepSeek evidence-constrained rewrite; product facts only; no invented specifications'
     return rows,dict(stats)
 
 
+def _creative_wire(row):
+    attrs=row.get('product_attributes') or {};seo=row.get('seo_content') or {}
+    return {
+        'source_record_hash':row.get('source_record_hash'),'rank_score':row.get('rank_score'),'rank_band':row.get('rank_band'),
+        'product':{'name':row.get('product_name'),'brand':row.get('brand_name'),'model':row.get('model_name'),'category':row.get('category'),'subcategory':row.get('subcategory'),'price':row.get('effective_price'),'full_price':row.get('full_price'),'discount_pct':row.get('discount_pct'),'image_url':row.get('image_url'),'tracking_url':row.get('tracking_url')},
+        'verified_attributes':{k:attrs.get(k) for k in ('original_description','availability','colour','size','gtin','mpn')},
+        'promotion':{'angle':row.get('promotion_angle'),'reason':row.get('promotion_reason'),'audience':row.get('audience'),'channels':row.get('recommended_channels') or []},
+        'seo':{k:seo.get(k) for k in ('title','short_description','keywords','search_intent','feature_bullets')},
+        'rules':{'use_real_product_image':True,'tracking_url_immutable':True,'no_internal_kpis_in_consumer_copy':True,'no_invented_features':True}
+    }
+
+
+def _run_creative_batch_once(batch):
+    wires=[_creative_wire(x) for x in batch]
+    generated=creative_gateway('generate',items=wires).get('items',[]);packs={str(x.get('source_record_hash')):x for x in generated if x.get('source_record_hash')}
+    audit_input=[{**w,'creative_pack':packs[str(w['source_record_hash'])]} for w in wires if str(w['source_record_hash']) in packs]
+    audited=creative_gateway('audit',items=audit_input).get('items',[]) if audit_input else [];audits={str(x.get('source_record_hash')):x for x in audited if x.get('source_record_hash')}
+    return {h:{'creative_pack':pack,'creative_audit':audits.get(h,{})} for h,pack in packs.items()}
+
+
+def _run_creative_batch_resilient(batch):
+    try:return _run_creative_batch_once(batch),0,0
+    except Exception:
+        if len(batch)<=1:return {},len(batch),1
+        mid=max(1,len(batch)//2);outputs={};failed=0;splits=1
+        for part in (batch[:mid],batch[mid:]):
+            result,part_failed,part_splits=_run_creative_batch_resilient(part);outputs.update(result);failed+=part_failed;splits+=part_splits
+        return outputs,failed,splits
+
+
+def enrich_creatives(rows):
+    target=rows[:CREATIVE_LIMIT];batches=[target[i:i+CREATIVE_BATCH] for i in range(0,len(target),CREATIVE_BATCH)];outputs={};stats=collections.Counter({'creative_target':len(target),'creative_batches':len(batches),'creative_workers':CREATIVE_WORKERS,'variants_per_product':3})
+    with ThreadPoolExecutor(max_workers=CREATIVE_WORKERS) as pool:
+        futures={pool.submit(_run_creative_batch_resilient,batch):len(batch) for batch in batches}
+        for future in as_completed(futures):
+            size=futures[future]
+            try:
+                result,failed,splits=future.result();outputs.update(result);stats['creative_generated']+=len(result);stats['creative_failures']+=failed;stats['creative_split_retries']+=splits
+            except Exception:stats['creative_failures']+=size
+    assert_final_contract(rows,len(outputs))
+    generated_at=datetime.now(timezone.utc).isoformat()
+    for row in target:
+        result=outputs[str(row.get('source_record_hash'))];audit=result.get('creative_audit') or {};verdict=str(audit.get('verdict') or '').upper()
+        row['creative_pack']=result.get('creative_pack') or {};row['creative_audit']=audit;row['creative_status']='ready' if verdict=='READY' else 'needs_review';row['creative_generated_at']=generated_at
+        stats['creative_ready' if verdict=='READY' else 'creative_needs_review']+=1
+    stats['creative_policy']='Top 20 only; 3 variants each; real product image + exact tracking URL; independent Creative Skeptic audit'
+    return rows,dict(stats)
+
+
+def enrich_final_rows_v34(rows):
+    assert_final_contract(rows)
+    rows,seo_stats=enrich_seo(rows)
+    rows,creative_stats=enrich_creatives(rows)
+    return rows,{**seo_stats,**creative_stats,'final_min_ranked':FINAL_MIN_RANKED,'final_creative_products':CREATIVE_LIMIT}
+
+
+def rank_gateway_final(action,**payload):
+    if action=='save_rankings':
+        result=BASE_RANK_GATEWAY(action,**payload)
+        creative_items=[x for x in (payload.get('items') or []) if x.get('creative_pack')]
+        if creative_items:
+            saved=int(creative_gateway('save_creatives',run_id=payload.get('run_id'),items=creative_items).get('saved') or 0)
+            if saved<len(creative_items):raise RuntimeError(f'creative persistence incomplete: {saved}/{len(creative_items)}')
+        return result
+    if action=='ranking_complete':
+        return creative_gateway('finalize',minimum_ranked=FINAL_MIN_RANKED,minimum_creatives=CREATIVE_LIMIT,**payload)
+    return BASE_RANK_GATEWAY(action,**payload)
+
+
 def main(feed):
-    v3.ENGINE_VERSION='ranking_v3.3'
-    v3.preselect=preselect_v32;v3.rank_with_ai=rank_with_ai_v32;v3.enrich_final_rows=enrich_final_rows_v33
+    health=creative_gateway('health')
+    if not health.get('deepseek_configured'):raise SystemExit('Ranking V3.4 requires the creative AI gateway; DeepSeek is not configured.')
+    v3.ENGINE_VERSION='ranking_v3.4'
+    v3.preselect=preselect_v32;v3.rank_with_ai=rank_with_ai_v32;v3.enrich_final_rows=enrich_final_rows_v34;v3.rank_gateway=rank_gateway_final
     return v3.main(feed)
 
 
