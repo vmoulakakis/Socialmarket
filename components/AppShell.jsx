@@ -14,7 +14,7 @@ const groups=[
  {label:'Affiliate',items:[
   {href:'/merchants',label:'Merchants',code:'ME'},
   {href:'/products',label:'Products',code:'PR'},
-  {href:'/forecast-products',label:'Forecast',code:'FC'},
+  {href:'/forecast-products',label:'Top Products',code:'TP'},
   {href:'/optimization',label:'Optimization',code:'OP'},
  ]},
  {label:'Execution',items:[
