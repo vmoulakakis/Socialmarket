@@ -94,6 +94,29 @@ class RankingV3Tests(unittest.TestCase):
             self.assertEqual(len(output), 8);self.assertEqual(failed, 0);self.assertGreaterEqual(splits, 3)
         finally:v32._run_seo_batch_once = original
 
+    def test_final_contract_rejects_less_than_100_ranked_products(self):
+        with self.assertRaises(RuntimeError):
+            v32.assert_final_contract([{}] * 99)
+
+    def test_final_contract_requires_top20_creative_packs(self):
+        rows = [{}] * max(100, v32.FINAL_MIN_RANKED)
+        with self.assertRaises(RuntimeError):
+            v32.assert_final_contract(rows, 19)
+        self.assertTrue(v32.assert_final_contract(rows, v32.CREATIVE_LIMIT))
+
+    def test_failed_creative_batch_is_recovered_by_split_retry(self):
+        original = v32._run_creative_batch_once
+        try:
+            def fake_once(batch):
+                if len(batch) > 1: raise RuntimeError('simulated creative JSON failure')
+                h = str(batch[0]['source_record_hash'])
+                return {h: {'creative_pack': {'variants': [1, 2, 3]}, 'creative_audit': {'verdict': 'READY'}}}
+            v32._run_creative_batch_once = fake_once
+            batch = [{'source_record_hash': f'c{i}'} for i in range(5)]
+            output, failed, splits = v32._run_creative_batch_resilient(batch)
+            self.assertEqual(len(output), 5);self.assertEqual(failed, 0);self.assertGreaterEqual(splits, 4)
+        finally:v32._run_creative_batch_once = original
+
 
 if __name__ == '__main__':
     unittest.main()
