@@ -37,6 +37,7 @@ jobs:
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
       PRODUCT_RANKING_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway
+      PRODUCT_RANK_RAG_PRESELECT: '16000'
       PRODUCT_RANK_PRESELECT: '4000'
       PRODUCT_RANK_AI_MAX: '240'
       PRODUCT_RANK_SAVE_LIMIT: '200'
@@ -83,9 +84,9 @@ jobs:
       - name: Phase A — deterministic commercial universe scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Final Ranking V3 — AI strategy + independent ranking skeptic
+      - name: Final Ranking V3.2 — two-stage shortlist + AI strategy + independent skeptic
         if: steps.preflight.outputs.ranking_ai == 'true'
-        run: python workers/product_intelligence/product_ranking_v3.py "$PRODUCT_SOURCE_FEED"
+        run: python workers/product_intelligence/product_ranking_v32.py "$PRODUCT_SOURCE_FEED"
 
       - name: Fail if final ranking AI is unavailable
         if: steps.preflight.outputs.ranking_ai != 'true'
