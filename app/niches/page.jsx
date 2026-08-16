@@ -1,8 +1,36 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {supabase} from '@/lib/supabase';
+
+const score=v=>v==null?'—':Number(v).toFixed(1);
+const confidence=v=>v==null?'—':`${Math.round(Number(v)<=1?Number(v)*100:Number(v))}%`;
+
 export default function Niches(){
- const [rows,setRows]=useState([]),[loading,setLoading]=useState(true);
- useEffect(()=>{(async()=>{const {data}=await supabase.from('niche_candidates').select('id,label,category_raw,product_count,merchant_count,brand_count,median_price,total_times_bought,cluster_cohesion,demand_proxy,seller_saturation_proxy,discovery_score,trend_demand,forecast_growth,seller_competition,ad_pressure_proxy,market_score,market_confidence,competition_kill,kill_reason,status').order('created_at',{ascending:false}).limit(500);const latest=data||[];setRows(latest.sort((a,b)=>Number(b.market_score??b.discovery_score??0)-Number(a.market_score??a.discovery_score??0)));setLoading(false)})()},[]);
- return <main><div className="hero"><div><div className="eyebrow">Semantic Discovery</div><h1>Micro‑Niche Intelligence</h1><p className="sub">AI semantic clustering πάνω μόνο στα preferred merchant offers. Demand, forecast και competition αξιολογούνται στο niche — όχι μόνο στη γενική κατηγορία.</p></div></div><div className="card">{loading?<p className="muted">Loading niches…</p>:rows.length===0?<p className="muted">Δεν υπάρχουν ακόμη niches. Θα δημιουργηθούν μετά το πρώτο Merchant Resolution run.</p>:<table className="table"><thead><tr><th>Niche</th><th>Products</th><th>Merchants</th><th>Demand</th><th>Forecast</th><th>Seller comp.</th><th>Ad proxy</th><th>Market</th><th>Status</th></tr></thead><tbody>{rows.map(n=><tr key={n.id}><td><strong>{n.label}</strong><div className="muted">{n.category_raw}</div></td><td>{n.product_count}</td><td>{n.merchant_count}</td><td>{Number(n.trend_demand??n.demand_proxy??0).toFixed(0)}</td><td className={Number(n.forecast_growth)>=0?'good':'bad'}>{n.forecast_growth!=null?`${Number(n.forecast_growth)>=0?'+':''}${Number(n.forecast_growth).toFixed(1)}%`:'—'}</td><td>{Number(n.seller_competition??n.seller_saturation_proxy??0).toFixed(0)}</td><td>{Number(n.ad_pressure_proxy??0).toFixed(0)}</td><td className={n.competition_kill?'score bad':Number(n.market_score??n.discovery_score)>=80?'score good':'score warn'}>{n.competition_kill?'DROP':Number(n.market_score??n.discovery_score??0).toFixed(1)}</td><td><span className="pill">{n.competition_kill?n.kill_reason:(n.status||'discovered')}</span></td></tr>)}</tbody></table>}</div></main>
+ const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ useEffect(()=>{(async()=>{
+   const {data,error}=await supabase.from('category_market_dashboard')
+     .select('id,taxonomy_id,category_name,subcategory_name,taxonomy_name,node_type,observed_at,demand_score,competition_score,pain_gap_score,satisfaction_score,opportunity_score,confidence,validated_pain_clusters,methodology_version')
+     .order('opportunity_score',{ascending:false,nullsFirst:false}).limit(500);
+   setRows(data||[]);setError(error?.message||'');setLoading(false);
+ })()},[]);
+ return <main>
+   <div className="hero"><div><div className="eyebrow">Semantic Category Market</div><h1>Market & Pain Intelligence</h1><p className="sub">Greek taxonomy-level demand, competition, pain-gap and opportunity signals. Forecasts are not shown as facts when the temporal model is withheld.</p></div></div>
+   <div className="card">
+     {loading?<p className="muted">Loading category market intelligence…</p>:error?<p className="bad">Category market error: {error}</p>:rows.length===0?<p className="muted">Δεν υπάρχουν ακόμη category-market observations.</p>:
+     <table className="table"><thead><tr><th>Category / Market</th><th>Demand</th><th>Competition</th><th>Pain gap</th><th>Satisfaction</th><th>Opportunity</th><th>Confidence</th><th>Validated pains</th><th>Observed</th></tr></thead><tbody>
+       {rows.map(n=><tr key={n.id}>
+         <td><strong>{n.subcategory_name||n.taxonomy_name||n.category_name}</strong><div className="muted">{n.category_name}{n.node_type?` · ${n.node_type}`:''}</div></td>
+         <td>{score(n.demand_score)}</td>
+         <td>{score(n.competition_score)}</td>
+         <td>{score(n.pain_gap_score)}</td>
+         <td>{score(n.satisfaction_score)}</td>
+         <td className={Number(n.opportunity_score)>=70?'score good':n.opportunity_score==null?'':'score warn'}>{score(n.opportunity_score)}</td>
+         <td>{confidence(n.confidence)}</td>
+         <td>{n.validated_pain_clusters??0}</td>
+         <td>{n.observed_at?new Date(n.observed_at).toLocaleDateString('el-GR'):'—'}</td>
+       </tr>)}
+     </tbody></table>}
+     <p className="muted" style={{marginTop:14}}>Competition and other missing metrics remain “—”. Zero is displayed only when zero is actually stored.</p>
+   </div>
+ </main>
 }
