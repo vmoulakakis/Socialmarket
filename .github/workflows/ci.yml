@@ -33,5 +33,6 @@ jobs:
       - run: deno check --node-modules-dir=auto supabase/functions/demand-intelligence-gateway/index.ts
       - run: deno check --node-modules-dir=auto supabase/functions/demand-model-lab-gateway/index.ts
       - run: deno check --node-modules-dir=auto supabase/functions/product-ranking-gateway/index.ts
+      - run: deno check --node-modules-dir=auto supabase/functions/product-creative-gateway/index.ts
       - run: deno check --node-modules-dir=auto supabase/functions/evidence-gateway/index.ts
       - run: npm run build
