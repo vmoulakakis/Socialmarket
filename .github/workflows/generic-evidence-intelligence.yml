@@ -17,6 +17,7 @@ on:
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/consumer_source_expansion_v43.py'
       - 'workers/market_intelligence/consumer_direct_social_v44.py'
+      - 'workers/market_intelligence/consumer_direct_greek_v46.py'
       - 'workers/market_intelligence/niche_product_prior_v45.py'
       - 'workers/market_intelligence/niche_keyword_binding_v45.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
@@ -60,7 +61,7 @@ jobs:
           import json,sys
           h=json.loads(sys.argv[1])
           assert h.get('ok') is True
-          assert str(h.get('version')) == '4.0', f"Category Pain V4.5 requires compatible evidence-gateway 4.0; got {h.get('version')}"
+          assert str(h.get('version')) == '4.0', f"Category Pain V4.6 requires compatible evidence-gateway 4.0; got {h.get('version')}"
           assert h.get('collection_type') == 'semantic_category_pain_v4', f"Wrong collection type: {h.get('collection_type')}"
           assert h.get('retrieval') == 'greek_consumer_evidence_v4+direct_authoritative_context_v3', f"Wrong retrieval contract: {h.get('retrieval')}"
           assert h.get('deepseek_configured') is True, 'DeepSeek audit must be configured; fail closed instead of silently accepting un-audited pains'
@@ -74,9 +75,9 @@ jobs:
           done
           docker logs socialmarket-searxng || true
           exit 1
-      - name: Compile Category Pain V4.5 workers
-        run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/niche_product_prior_v45.py workers/market_intelligence/niche_keyword_binding_v45.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
-      - name: Run Greece-first Niche Category Pain V4.5
+      - name: Compile Category Pain V4.6 workers
+        run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/consumer_direct_greek_v46.py workers/market_intelligence/niche_product_prior_v45.py workers/market_intelligence/niche_keyword_binding_v45.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
+      - name: Run Greece-first Niche Category Pain V4.6
         working-directory: workers/market_intelligence
         shell: bash
         run: |
@@ -94,15 +95,15 @@ jobs:
               try: parsed.append(json.loads(line))
               except Exception: pass
           summaries=[x for x in parsed if x.get('status') in ('completed','completed_with_failures') and 'processed' in x]
-          assert summaries, 'Missing structured Category Pain V4.5 completion summary'
+          assert summaries, 'Missing structured Category Pain V4.6 completion summary'
           summary=summaries[-1]
-          assert summary.get('failed') == 0, f"Category Pain V4.5 reported failures: {summary}"
+          assert summary.get('failed') == 0, f"Category Pain V4.6 reported failures: {summary}"
           assert summary.get('status') == 'completed', f"Research did not complete cleanly: {summary}"
           print(summary)
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: semantic-category-pain-v45-output
+          name: semantic-category-pain-v46-output
           retention-days: 30
           path: workers/market_intelligence/semantic-category-pain-output.json
