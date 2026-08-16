@@ -1,6 +1,7 @@
 import unittest
 
 from product_ranking_v3 import deterministic_metrics
+import product_ranking_v32 as v32
 
 
 class RankingV3Tests(unittest.TestCase):
@@ -41,6 +42,25 @@ class RankingV3Tests(unittest.TestCase):
         self.assertEqual(without_lab['deep_demand_score'], 0)
         self.assertGreater(without_lab['deterministic_rank_score'], 0)
         self.assertGreater(with_lab['deterministic_rank_score'], without_lab['deterministic_rank_score'])
+
+    def test_failed_large_ai_batch_is_recovered_by_split_retry(self):
+        original = v32._run_ai_batch_once
+        try:
+            def fake_once(batch):
+                if len(batch) > 2:
+                    raise RuntimeError('simulated structured-output failure')
+                return {
+                    str(x['product']['source_record_hash']): {'ranking': {'ok': True}, 'audit': {}}
+                    for x in batch
+                }
+            v32._run_ai_batch_once = fake_once
+            batch = [{'product': {'source_record_hash': f'p{i}'}} for i in range(8)]
+            output, failed, splits = v32._run_ai_batch_resilient(batch)
+            self.assertEqual(len(output), 8)
+            self.assertEqual(failed, 0)
+            self.assertGreaterEqual(splits, 3)
+        finally:
+            v32._run_ai_batch_once = original
 
 
 if __name__ == '__main__':
