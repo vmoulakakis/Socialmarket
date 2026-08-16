@@ -35,7 +35,7 @@ def feed_url(columns,client=CLIENT,categories=CATEGORY_IDS):
 
 
 def _session():
-    s=requests.Session();s.headers.update({'User-Agent':'SocialMarketAI/3.6 direct-feed','Accept-Encoding':'gzip, deflate'});return s
+    s=requests.Session();s.headers.update({'User-Agent':'SocialMarketAI/3.6.2 direct-feed','Accept-Encoding':'gzip, deflate'});return s
 
 
 def _sample(url,limit=524288,session=None):
@@ -180,7 +180,7 @@ def download(output,minimum_bytes=10_000_000,max_attempts=3):
             for future in concurrent.futures.as_completed(futures):shards.append(future.result())
         total_shard_bytes,nonempty=_merge_shards(shards,path);merged_bytes=path.stat().st_size
         if merged_bytes<minimum_bytes:raise RuntimeError(f'direct Linkwise merged response unexpectedly small: {merged_bytes}')
-        print(json.dumps({'direct_linkwise_feed':{'merged_bytes':merged_bytes,'total_shard_bytes':total_shard_bytes,'shards':len(shards),'nonempty_shards':nonempty,'workers':workers,'deeplink_field':deeplink_field,'columns':list(columns),'source':'affiliate.linkwi.se_parallel_categories'}},flush=True))
+        print(json.dumps({'direct_linkwise_feed':{'merged_bytes':merged_bytes,'total_shard_bytes':total_shard_bytes,'shards':len(shards),'nonempty_shards':nonempty,'workers':workers,'deeplink_field':deeplink_field,'columns':list(columns),'source':'affiliate.linkwi.se_parallel_categories'}}),flush=True)
         return {'path':str(path),'bytes':merged_bytes,'deeplink_field':deeplink_field,'columns':list(columns),'shards':len(shards)}
     finally:
         shutil.rmtree(shard_dir,ignore_errors=True)
