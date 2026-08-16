@@ -1,4 +1,4 @@
-"""Ranking V3.5: deterministic shortlist, resilient AI ranking, SEO, durable Top-20 creatives and canonical content handoff."""
+"""Ranking V3.6.2: adaptive deterministic shortlist, resilient AI ranking, strict SEO, audited durable Top-20 creatives and canonical content handoff."""
 import base64
 import collections
 import heapq
@@ -31,14 +31,27 @@ _CREATIVE_TOKEN=None
 
 
 def creative_gateway(action,**payload):
+    """Call the creative gateway and refresh the short-lived GitHub OIDC token on 401.
+
+    Ranking/SEO can run for well over an hour. A token captured by the initial creative
+    health check is therefore not safe to reuse blindly for Top-20 generation/assets.
+    """
     global _CREATIVE_TOKEN
-    if _CREATIVE_TOKEN is None:_CREATIVE_TOKEN=v1.oidc_token()
     body=json.dumps({'action':action,**payload},ensure_ascii=False).encode()
-    req=urllib.request.Request(CREATIVE_GATEWAY,data=body,headers={'authorization':'Bearer '+_CREATIVE_TOKEN,'content-type':'application/json'},method='POST')
-    try:
-        with urllib.request.urlopen(req,timeout=210) as r:return json.loads(r.read().decode())
-    except urllib.error.HTTPError as exc:
-        msg=exc.read().decode(errors='replace');raise RuntimeError(f'creative gateway {action} failed: {exc.code} {msg[:1000]}')
+    last_error=None
+    for attempt in (1,2):
+        if _CREATIVE_TOKEN is None:_CREATIVE_TOKEN=v1.oidc_token()
+        req=urllib.request.Request(CREATIVE_GATEWAY,data=body,headers={'authorization':'Bearer '+_CREATIVE_TOKEN,'content-type':'application/json'},method='POST')
+        try:
+            with urllib.request.urlopen(req,timeout=210) as r:return json.loads(r.read().decode())
+        except urllib.error.HTTPError as exc:
+            msg=exc.read().decode(errors='replace');last_error=f'creative gateway {action} failed: {exc.code} {msg[:1200]}'
+            if exc.code==401 and attempt==1:
+                print(json.dumps({'warning':'creative_oidc_expired_refreshing','action':action,'status':401}),flush=True)
+                _CREATIVE_TOKEN=None
+                continue
+            raise RuntimeError(last_error)
+    raise RuntimeError(last_error or f'creative gateway {action} failed')
 
 
 def assert_final_contract(rows,creative_count=None,asset_pack_count=None):
@@ -49,6 +62,10 @@ def assert_final_contract(rows,creative_count=None,asset_pack_count=None):
     if asset_pack_count is not None and asset_pack_count<CREATIVE_LIMIT:
         raise RuntimeError(f'durable creative contract requires {CREATIVE_LIMIT} complete 3-asset packs; got {asset_pack_count}')
     return True
+
+
+def _item_hash(item):
+    return str((item.get('product') or {}).get('source_record_hash') or item.get('source_record_hash') or '')
 
 
 def _cheap_item(product,decision_index):
@@ -93,7 +110,7 @@ def preselect_v32(products,context,decision_index):
         'deep_demand_matched_candidates':deep_matched,'deep_demand_markets':decision_index['market_count'],'deep_demand_model_markets':decision_index['model_count'],
         'program_kpis_available':decision_index['program_kpi_count'],'first_party_programs_30d':decision_index['first_party_program_count'],
         'unique_merchants':len({str((x.get('merchant') or {}).get('merchant_id')) for x in selected}),'unique_categories':len({str((x.get('_raw') or {}).get('category_raw')) for x in selected}),
-        'preselection_policy':'all eligible -> O(1) deterministic conversion-aware heap -> high-recall RAG pool -> full deterministic score -> diversified AI shortlist'
+        'preselection_policy':'all eligible -> deterministic conversion-aware heap -> high-recall RAG -> diversified AI shortlist; missing pain gives no bonus but is not a rejection'
     }
 
 
@@ -107,8 +124,10 @@ def _run_ai_batch_once(batch):
 
 def _run_ai_batch_resilient(batch):
     try:return _run_ai_batch_once(batch),0,0
-    except Exception:
-        if len(batch)<=1:return {},len(batch),1
+    except Exception as exc:
+        if len(batch)<=1:
+            print(json.dumps({'warning':'ranking_ai_item_failed','source_record_hash':_item_hash(batch[0]) if batch else None,'error':str(exc)[:1200]}),flush=True)
+            return {},len(batch),1
         mid=max(1,len(batch)//2);outputs={};failed=0;splits=1
         for part in (batch[:mid],batch[mid:]):
             result,part_failed,part_splits=_run_ai_batch_resilient(part);outputs.update(result);failed+=part_failed;splits+=part_splits
@@ -123,7 +142,8 @@ def rank_with_ai_v32(items):
             size=futures[future]
             try:
                 result,failed,splits=future.result();outputs.update(result);stats['ai_ranked']+=len(result);stats['ai_rank_failures']+=failed;stats['ai_split_retries']+=splits
-            except Exception:stats['ai_rank_failures']+=size
+            except Exception as exc:
+                stats['ai_rank_failures']+=size;print(json.dumps({'warning':'ranking_ai_worker_failed','items':size,'error':str(exc)[:1200]}),flush=True)
     return outputs,dict(stats)
 
 
@@ -138,8 +158,10 @@ def _run_seo_batch_once(batch):
 
 def _run_seo_batch_resilient(batch):
     try:return _run_seo_batch_once(batch),0,0
-    except Exception:
-        if len(batch)<=1:return {},len(batch),1
+    except Exception as exc:
+        if len(batch)<=1:
+            print(json.dumps({'warning':'seo_ai_item_failed','source_record_hash':str(batch[0].get('source_record_hash') or '') if batch else None,'error':str(exc)[:1200]}),flush=True)
+            return {},len(batch),1
         mid=max(1,len(batch)//2);outputs={};failed=0;splits=1
         for part in (batch[:mid],batch[mid:]):
             result,part_failed,part_splits=_run_seo_batch_resilient(part);outputs.update(result);failed+=part_failed;splits+=part_splits
@@ -154,7 +176,10 @@ def enrich_seo(rows):
             size=futures[future]
             try:
                 result,failed,splits=future.result();outputs.update(result);stats['seo_enriched']+=len(result);stats['seo_failures']+=failed;stats['seo_split_retries']+=splits
-            except Exception:stats['seo_failures']+=size
+            except Exception as exc:
+                stats['seo_failures']+=size;print(json.dumps({'warning':'seo_ai_worker_failed','items':size,'error':str(exc)[:1200]}),flush=True)
+    if len(outputs)<len(target):
+        raise RuntimeError(f'SEO contract requires {len(target)} enriched ranked products; got {len(outputs)}; stats={dict(stats)}')
     generated_at=datetime.now(timezone.utc).isoformat()
     for row in rows:
         seo=outputs.get(str(row.get('source_record_hash')))
@@ -173,8 +198,10 @@ def _run_creative_batch_once(batch):
 
 def _run_creative_batch_resilient(batch):
     try:return _run_creative_batch_once(batch),0,0
-    except Exception:
-        if len(batch)<=1:return {},len(batch),1
+    except Exception as exc:
+        if len(batch)<=1:
+            print(json.dumps({'warning':'creative_ai_item_failed','source_record_hash':str(batch[0].get('source_record_hash') or '') if batch else None,'error':str(exc)[:1200]}),flush=True)
+            return {},len(batch),1
         mid=max(1,len(batch)//2);outputs={};failed=0;splits=1
         for part in (batch[:mid],batch[mid:]):
             result,part_failed,part_splits=_run_creative_batch_resilient(part);outputs.update(result);failed+=part_failed;splits+=part_splits
@@ -200,7 +227,7 @@ def attach_durable_assets(rows):
         for future in as_completed(futures):
             row=futures[future]
             try:future.result();complete+=1
-            except Exception as exc:failures.append({'source_record_hash':row.get('source_record_hash'),'error':str(exc)[:500]})
+            except Exception as exc:failures.append({'source_record_hash':row.get('source_record_hash'),'error':str(exc)[:800]})
     if failures:raise RuntimeError('creative asset rendering/upload failures: '+json.dumps(failures[:5],ensure_ascii=False))
     assert_final_contract(rows,CREATIVE_LIMIT,complete);return rows,{'creative_asset_packs':complete,'creative_assets':complete*3,'creative_asset_workers':ASSET_WORKERS,'creative_asset_namespace':ASSET_NAMESPACE}
 
@@ -213,11 +240,16 @@ def enrich_creatives(rows):
             size=futures[future]
             try:
                 result,failed,splits=future.result();outputs.update(result);stats['creative_generated']+=len(result);stats['creative_failures']+=failed;stats['creative_split_retries']+=splits
-            except Exception:stats['creative_failures']+=size
-    assert_final_contract(rows,len(outputs));generated_at=datetime.now(timezone.utc).isoformat()
+            except Exception as exc:
+                stats['creative_failures']+=size;print(json.dumps({'warning':'creative_ai_worker_failed','items':size,'error':str(exc)[:1200]}),flush=True)
+    if len(outputs)<CREATIVE_LIMIT:
+        raise RuntimeError(f'creative generation contract requires {CREATIVE_LIMIT} packs; got {len(outputs)}; stats={dict(stats)}')
+    assert_final_contract(rows,len(outputs));generated_at=datetime.now(timezone.utc).isoformat();ready=0
     for idx,row in enumerate(target,1):
-        result=outputs[str(row.get('source_record_hash'))];audit=result.get('creative_audit') or {};verdict=str(audit.get('verdict') or '').upper();row['creative_pack']=result.get('creative_pack') or {};row['creative_audit']=audit;row['creative_status']='ready' if verdict=='READY' else 'needs_review';row['creative_generated_at']=generated_at;row['creative_global_rank']=idx;stats['creative_ready' if verdict=='READY' else 'creative_needs_review']+=1
-    rows,asset_stats=attach_durable_assets(rows);stats['creative_policy']='Top 20; 3 durable PNG variants each; real product image + exact tracking URL + QR; independent Creative Skeptic; canonical content persistence';return rows,{**dict(stats),**asset_stats}
+        result=outputs[str(row.get('source_record_hash'))];audit=result.get('creative_audit') or {};verdict=str(audit.get('verdict') or '').upper();row['creative_pack']=result.get('creative_pack') or {};row['creative_audit']=audit;row['creative_status']='ready' if verdict=='READY' else 'needs_review';row['creative_generated_at']=generated_at;row['creative_global_rank']=idx;stats['creative_ready' if verdict=='READY' else 'creative_needs_review']+=1;ready+=int(verdict=='READY')
+    if ready<CREATIVE_LIMIT:
+        raise RuntimeError(f'creative skeptic contract requires all Top {CREATIVE_LIMIT} packs READY; got {ready}; needs_review={CREATIVE_LIMIT-ready}')
+    rows,asset_stats=attach_durable_assets(rows);stats['creative_policy']='Top 20; all must pass independent Creative Skeptic; 3 durable PNG variants each; real product image + exact tracking URL + QR; canonical content persistence';return rows,{**dict(stats),**asset_stats}
 
 
 def enrich_final_rows_v34(rows):
@@ -227,6 +259,7 @@ def enrich_final_rows_v34(rows):
 def _persist_creative_content(run_id,item):
     result=creative_gateway('persist_content',run_id=run_id,source_record_hash=item.get('source_record_hash'),brand_slug=CREATIVE_BRAND_SLUG,merchant_id=item.get('merchant_id'),merchant_name=item.get('merchant_name'),product_name=item.get('product_name'),tracking_url=item.get('tracking_url'),image_url=item.get('image_url'),global_rank=item.get('creative_global_rank'),creative_pack=item.get('creative_pack') or {},creative_audit=item.get('creative_audit') or {},priority=max(50,101-int(item.get('creative_global_rank') or 50)))
     if len(result.get('content_items') or [])!=3:raise RuntimeError(f'canonical creative content persistence incomplete for {item.get("source_record_hash")}')
+    if not result.get('approved'):raise RuntimeError(f'creative content not approved by skeptic for {item.get("source_record_hash")}')
     return result
 
 
@@ -246,8 +279,8 @@ def rank_gateway_final(action,**payload):
 
 def main(feed):
     health=creative_gateway('health')
-    if not health.get('deepseek_configured'):raise SystemExit('Ranking V3.5 requires the creative AI gateway; DeepSeek is not configured.')
-    v3.ENGINE_VERSION='ranking_v3.5';v3.preselect=preselect_v32;v3.rank_with_ai=rank_with_ai_v32;v3.enrich_final_rows=enrich_final_rows_v34;v3.rank_gateway=rank_gateway_final;return v3.main(feed)
+    if not health.get('deepseek_configured'):raise SystemExit('Ranking V3.6.2 requires the creative AI gateway; DeepSeek is not configured.')
+    v3.ENGINE_VERSION='ranking_v3.6.2';v3.preselect=preselect_v32;v3.rank_with_ai=rank_with_ai_v32;v3.enrich_final_rows=enrich_final_rows_v34;v3.rank_gateway=rank_gateway_final;return v3.main(feed)
 
 
 if __name__=='__main__':main(sys.argv[1] if len(sys.argv)>1 else v1.SOURCE_FEED)
