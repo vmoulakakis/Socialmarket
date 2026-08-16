@@ -1,14 +1,17 @@
 """Direct Linkwise dynamic-feed transport.
 
-The Google Drive 3.84 GB JSON is a cache/snapshot. Production prefers the live
-Linkwise joined-program feed and retains Drive only as an emergency fallback.
+Production prefers the live Linkwise joined-program feed. The category universe is
+fetched as deterministic parallel shards, then concatenated as one JSON array.
+Google Drive remains emergency fallback at workflow level only.
 """
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
+import shutil
 import time
 from pathlib import Path
 
@@ -17,9 +20,6 @@ import requests
 CLIENT='CD104'
 CATEGORY_IDS='3,67,25,27,29,33,63,147,87,89,99,103,109,117,119'
 BASE='https://affiliate.linkwi.se/feeds/1.2/{client}/programs-joined/columns-{columns}/catinc-{categories}/catex-0/proginc-0/progex-0/feed.json'
-
-# Verified against the live joined-program feed on 2026-08-16. Unsupported tags
-# are deliberately omitted rather than synthesized from product text.
 CORE_FIELDS=(
     'product_id','product_name','description','category','image_url','in_stock','availability',
     'valid_from','valid_to','price','full_price','discount','times_bought','size','colour','sku'
@@ -51,6 +51,7 @@ def _sample(url,limit=524288,session=None):
         text=buf.decode('utf-8','replace')
         result['keys']=sorted(set(re.findall(r'"([A-Za-z0-9_]+)"\s*:',text)))[:120]
         result['bytes_sampled']=len(buf)
+        result['root_char']=next((chr(b) for b in buf if chr(b).strip()),'')
         result['linkwise_tracking_shape']=bool(re.search(r'https?[^"\\]*(?:go|affiliate)\.linkwi\.se',text,re.I))
         result['image_shape']=bool(re.search(r'https?[^"\\]+\.(?:jpg|jpeg|png|webp)(?:[?"\\]|$)',text,re.I))
         return result
@@ -90,32 +91,99 @@ def probe_contract(deeplink_field='tracking_url'):
     keys=set(result.get('keys') or []);result['requested_columns']=list(columns);result['present_columns']=sorted(keys)
     missing=sorted(MINIMUM_CONTRACT-keys);has_image='image_url' in keys and bool(result.get('image_shape'))
     result['missing_required']=missing;result['has_usable_image_field']=has_image;result['supported_optional_fields']=supported_optional
-    result['contract_ok']=result.get('status')==200 and not missing and has_image and bool(result.get('linkwise_tracking_shape'))
+    result['contract_ok']=result.get('status')==200 and not missing and has_image and bool(result.get('linkwise_tracking_shape')) and result.get('root_char')=='['
     print(json.dumps({'production_contract_probe':result},ensure_ascii=False),flush=True)
     if not result['contract_ok']:raise RuntimeError('Direct Linkwise production field contract failed: '+json.dumps(result,ensure_ascii=False))
     return result
 
 
-def download(output,minimum_bytes=10_000_000,max_attempts=3):
-    columns,deeplink_field=direct_columns();url=feed_url(columns);path=Path(output);tmp=path.with_suffix(path.suffix+'.part');last=None
+def _download_shard(category,columns,directory,max_attempts=3):
+    path=directory/f'cat-{category}.json';last=None
     for attempt in range(1,max_attempts+1):
         try:
-            if tmp.exists():tmp.unlink()
-            with _session().get(url,stream=True,timeout=(30,900),allow_redirects=True) as r:
+            path.unlink(missing_ok=True)
+            with _session().get(feed_url(columns,categories=category),stream=True,timeout=(30,900),allow_redirects=True) as r:
                 r.raise_for_status();written=0
-                with tmp.open('wb') as f:
+                with path.open('wb') as f:
                     for chunk in r.iter_content(1024*1024):
-                        if not chunk:continue
-                        f.write(chunk);written+=len(chunk)
-                        if written and written%(250*1024*1024)<1024*1024:print(json.dumps({'direct_linkwise_download_bytes':written,'attempt':attempt}),flush=True)
-            if written<minimum_bytes:raise RuntimeError(f'direct Linkwise response unexpectedly small: {written}')
-            tmp.replace(path)
-            print(json.dumps({'direct_linkwise_feed':{'bytes':written,'deeplink_field':deeplink_field,'columns':list(columns),'source':'affiliate.linkwi.se'}}),flush=True)
-            return {'path':str(path),'bytes':written,'deeplink_field':deeplink_field,'columns':list(columns)}
+                        if chunk:f.write(chunk);written+=len(chunk)
+            if written<2:raise RuntimeError(f'empty shard for category {category}')
+            with path.open('rb') as f:
+                while True:
+                    b=f.read(1)
+                    if not b:raise RuntimeError(f'empty shard for category {category}')
+                    if not b.isspace():break
+            if b!=b'[':raise RuntimeError(f'non-array shard root for category {category}: {b!r}')
+            print(json.dumps({'linkwise_shard_complete':category,'bytes':written,'attempt':attempt}),flush=True)
+            return category,path,written
         except Exception as exc:
-            last=exc;print(json.dumps({'warning':'direct_linkwise_download_attempt_failed','attempt':attempt,'error':str(exc)[:600]}),flush=True)
-            if attempt<max_attempts:time.sleep(min(20,attempt*5))
-    raise RuntimeError(f'direct Linkwise feed download failed after {max_attempts} attempts: {last}')
+            last=exc;print(json.dumps({'warning':'linkwise_shard_attempt_failed','category':category,'attempt':attempt,'error':str(exc)[:500]}),flush=True)
+            if attempt<max_attempts:time.sleep(min(15,attempt*4))
+    raise RuntimeError(f'category {category} failed after {max_attempts} attempts: {last}')
+
+
+def _array_body_bounds(path):
+    with path.open('rb') as f:
+        pos=0
+        while True:
+            b=f.read(1)
+            if not b:raise RuntimeError(f'empty JSON shard: {path}')
+            if not b.isspace():break
+            pos+=1
+        if b!=b'[':raise RuntimeError(f'JSON shard root is not array: {path}')
+        start=f.tell()
+        f.seek(0,2);end=f.tell();p=end-1
+        while p>=start:
+            f.seek(p);b=f.read(1)
+            if not b.isspace():break
+            p-=1
+        if b!=b']':raise RuntimeError(f'JSON shard is incomplete: {path}')
+        body_end=p
+        p=start
+        first_non_ws=None
+        while p<body_end:
+            f.seek(p);b=f.read(1)
+            if not b.isspace():first_non_ws=p;break
+            p+=1
+        return start,body_end,first_non_ws is not None
+
+
+def _copy_range(src,dst,start,end,chunk_size=4*1024*1024):
+    with src.open('rb') as f:
+        f.seek(start);remaining=end-start
+        while remaining>0:
+            data=f.read(min(chunk_size,remaining))
+            if not data:raise RuntimeError(f'unexpected EOF while merging {src}')
+            dst.write(data);remaining-=len(data)
+
+
+def _merge_shards(shards,output):
+    tmp=Path(str(output)+'.part');tmp.unlink(missing_ok=True);total=0;nonempty=0
+    with tmp.open('wb') as out:
+        out.write(b'[')
+        for category,path,written in sorted(shards,key=lambda x:int(x[0])):
+            start,end,has_body=_array_body_bounds(path);total+=written
+            if not has_body:continue
+            if nonempty:out.write(b',')
+            _copy_range(path,out,start,end);nonempty+=1
+        out.write(b']')
+    tmp.replace(output)
+    return total,nonempty
+
+
+def download(output,minimum_bytes=10_000_000,max_attempts=3):
+    columns,deeplink_field=direct_columns();path=Path(output);shard_dir=Path(str(path)+'.shards');shutil.rmtree(shard_dir,ignore_errors=True);shard_dir.mkdir(parents=True,exist_ok=True)
+    categories=[x.strip() for x in CATEGORY_IDS.split(',') if x.strip()];workers=max(1,min(8,int(os.getenv('LINKWISE_SHARD_WORKERS','6'))));shards=[]
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futures={pool.submit(_download_shard,c,columns,shard_dir,max_attempts):c for c in categories}
+            for future in concurrent.futures.as_completed(futures):shards.append(future.result())
+        total_shard_bytes,nonempty=_merge_shards(shards,path);merged_bytes=path.stat().st_size
+        if merged_bytes<minimum_bytes:raise RuntimeError(f'direct Linkwise merged response unexpectedly small: {merged_bytes}')
+        print(json.dumps({'direct_linkwise_feed':{'merged_bytes':merged_bytes,'total_shard_bytes':total_shard_bytes,'shards':len(shards),'nonempty_shards':nonempty,'workers':workers,'deeplink_field':deeplink_field,'columns':list(columns),'source':'affiliate.linkwi.se_parallel_categories'}},flush=True))
+        return {'path':str(path),'bytes':merged_bytes,'deeplink_field':deeplink_field,'columns':list(columns),'shards':len(shards)}
+    finally:
+        shutil.rmtree(shard_dir,ignore_errors=True)
 
 
 def main():
