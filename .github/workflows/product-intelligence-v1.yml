@@ -31,6 +31,9 @@ jobs:
       DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
       PRODUCT_SOURCE_FEED: linkwise-products.json
       PRODUCT_REUSE_STAGE_DB: 'true'
+      # Ranking is not validation: unknown/low trust is a ranking signal, not a pre-AI admission gate.
+      # Explicit blocked/demand-beacon-only/dominant merchant policies remain hard exclusions.
+      PRODUCT_MIN_MERCHANT_TRUST: '0'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
       PRODUCT_RANKING_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway
