@@ -31,7 +31,7 @@ jobs:
       DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
       PRODUCT_SOURCE_FEED: linkwise-products.json
       PRODUCT_REUSE_STAGE_DB: 'true'
-      # Ranking is not validation: unknown/low trust is a ranking signal, not a pre-AI admission gate.
+      # Ranking is not validation: missing trust/pain is not an admission failure.
       # Explicit blocked/demand-beacon-only/dominant merchant policies remain hard exclusions.
       PRODUCT_MIN_MERCHANT_TRUST: '0'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
@@ -42,6 +42,9 @@ jobs:
       PRODUCT_RANK_AI_MAX: '240'
       PRODUCT_RANK_AI_WORKERS: '3'
       PRODUCT_RANK_SAVE_LIMIT: '200'
+      PRODUCT_RANK_SEO_LIMIT: '200'
+      PRODUCT_RANK_SEO_BATCH: '10'
+      PRODUCT_RANK_SEO_WORKERS: '3'
 
     steps:
       - uses: actions/checkout@v4
@@ -85,7 +88,7 @@ jobs:
       - name: Phase A — deterministic commercial universe scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Final Ranking V3.2 — two-stage shortlist + AI strategy + independent skeptic
+      - name: Final Ranking V3.3 — conversion-aware shortlist + AI strategist + skeptic + SEO
         if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v32.py "$PRODUCT_SOURCE_FEED"
 
