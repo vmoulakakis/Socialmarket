@@ -39,8 +39,6 @@ def run_observability(action,**payload):
 
 def production_gateway(action,**payload):
     if action=='ranking_complete':
-        # Canonical Product Ranking completion must never be replaced by the
-        # independent creative finalizer. Both contracts have to succeed.
         base=v32.BASE_RANK_GATEWAY('ranking_complete',**payload)
         creative=v32.creative_gateway(
             'finalize',
@@ -56,11 +54,9 @@ def production_gateway(action,**payload):
 def _profile(rows,run_key,stream_stats,shortlist_stats,ai_stats,content_stats,saved):
     bands=collections.Counter(x['rank_band'] for x in rows)
     return {
-        'engine_version':ENGINE_VERSION,
-        'run_key':run_key,
+        'engine_version':ENGINE_VERSION,'run_key':run_key,
         **stream_stats,**shortlist_stats,**ai_stats,**content_stats,
-        'saved_rankings':saved,
-        'bands':dict(bands),
+        'saved_rankings':saved,'bands':dict(bands),
         'top_20':[
             {k:x.get(k) for k in ('product_name','merchant_name','rank_score','rank_band','expected_commission_eur','network_performance_score','promotion_angle','recommended_channels')}
             | {'kpis':x.get('kpi_snapshot'),'seo_title':(x.get('seo_content') or {}).get('title')}
@@ -78,8 +74,6 @@ def main(feed):
     v3.enrich_final_rows=v32.enrich_final_rows_v34
     v3.rank_gateway=production_gateway
 
-    # Health is checked before creating a production run so an unavailable
-    # gateway does not create misleading run noise.
     health=production_gateway('health')
     if not health.get('deepseek_configured'):
         raise SystemExit('Ranking V3.6.3 requires AI for the final promotion list; DeepSeek is not configured.')
@@ -88,13 +82,16 @@ def main(feed):
         raise SystemExit('Ranking V3.6.3 requires the creative AI gateway; DeepSeek is not configured.')
 
     run_key=f"{os.getenv('GITHUB_RUN_ID') or datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{os.getenv('GITHUB_RUN_ATTEMPT','1')}"
-    run=production_gateway('ranking_start',run_key=run_key,engine_version=ENGINE_VERSION,metadata={
-        'runtime_config_version':cfg.get('_version'),
-        'orchestrator':'product_ranking_v363_production',
-        'stage':'starting',
-        'policy':'ranking-first; pain optional; missing competition gives no inverse bonus; canonical run is durable before expensive product work',
-    })
-    run_id=run['run_id'];stage='context';db=None
+    run_id=os.getenv('PRODUCT_RANK_RUN_ID','').strip()
+    if not run_id:
+        run=production_gateway('ranking_start',run_key=run_key,engine_version=ENGINE_VERSION,metadata={
+            'runtime_config_version':cfg.get('_version'),
+            'orchestrator':'product_ranking_v363_production',
+            'stage':'starting',
+            'policy':'ranking-first; pain optional; missing competition gives no inverse bonus; canonical run is durable before expensive product work',
+        })
+        run_id=str(run['run_id'])
+    stage='context';db=None
 
     try:
         context=v1.gateway('context')
