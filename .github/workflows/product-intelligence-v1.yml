@@ -15,8 +15,11 @@ on:
       - '.github/product-intelligence-trigger'
 
 concurrency:
+  # Product ranking is a daily decision product: a newer completed-demand/data trigger
+  # supersedes an older still-running ranking. This prevents stale sequential jobs from
+  # blocking fresh market evidence or a newly deployed ranking engine.
   group: socialmarket-product-ranking-daily
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
