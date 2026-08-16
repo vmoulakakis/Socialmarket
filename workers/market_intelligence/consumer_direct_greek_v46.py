@@ -2,19 +2,18 @@ from __future__ import annotations
 
 """Direct Greece-first forum discovery for Category Pain V4.6.
 
-SearXNG remains the general market discovery layer, but niche consumer pain must
-not disappear when a metasearch engine under-returns site-scoped forum results.
-This module uses DuckDuckGo's public HTML search only to discover URLs on a
-small allowlist of Greek consumer communities. Search snippets are NEVER pain
-proof: every URL must be fetched publicly and its actual page text must pass the
-existing V4 consumer scorer and the downstream DeepSeek skeptic/cross-source
-validation gates.
+Search engines are used ONLY to discover public Greek forum/review URLs. Search
+snippets are never persisted as pain proof. Every candidate URL must be fetched
+publicly and its actual page text must pass the existing V4 consumer scorer and
+the downstream DeepSeek skeptic/cross-source validation gates.
 
 No likes, views, follower counts or engagement metrics are collected or used.
 No login, anti-bot bypass, CAPTCHA bypass or restricted API is used.
 """
 
 import concurrent.futures
+import re
+import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -23,11 +22,10 @@ import consumer_evidence_v4 as consumer
 
 UA={'User-Agent':'Mozilla/5.0 (compatible; SocialMarketGreekPain/4.6; public research discovery)'}
 DDG='https://html.duckduckgo.com/html/'
+BING='https://www.bing.com/search'
 DISCOVERY_WORKERS=6
 FETCH_WORKERS=6
 
-# Domain selection is intentionally small and category-aware. This makes the
-# collector useful for cross-source validation instead of spraying the web.
 DEFAULT_DOMAINS=('insomnia.gr','myphone.gr','thelab.gr','reviewit.gr')
 CATEGORY_DOMAINS={
     'Electronics & Technology':('insomnia.gr','adslgr.com','thelab.gr','myphone.gr'),
@@ -43,6 +41,10 @@ CATEGORY_DOMAINS={
 ALLOWED=set(DEFAULT_DOMAINS)
 for values in CATEGORY_DOMAINS.values():ALLOWED.update(values)
 
+STOPWORDS={
+    'για','που','δεν','και','την','τον','στο','στη','στην','απο','χωρις','με','σε','του','της','ένα','ενα',
+    'for','the','and','with','without','that','this','home','school','σπιτι','σχολειο','ταξιδι',
+}
 _ORIGINAL_COLLECT=None
 _APPLIED=False
 
@@ -52,9 +54,9 @@ class _Results(HTMLParser):
         super().__init__();self.urls=[]
     def handle_starttag(self,tag,attrs):
         if tag!='a':return
-        a=dict(attrs);cls=str(a.get('class') or '')
-        href=str(a.get('href') or '')
-        if href and ('result__a' in cls or 'result-link' in cls):self.urls.append(href)
+        href=str(dict(attrs).get('href') or '')
+        # Collect all anchors; _unwrap/_allowed performs the strict domain filter.
+        if href:self.urls.append(href)
 
 
 def _host(url:str)->str:
@@ -84,38 +86,81 @@ def _unwrap(href:str)->str|None:
     except Exception:return None
 
 
+def _unique(urls,limit):
+    out=[];seen=set()
+    for url in urls:
+        if not url or url in seen or not _allowed(url):continue
+        seen.add(url);out.append(url)
+        if len(out)>=limit:break
+    return out
+
+
 def _ddg(query:str,limit:int=8):
     try:
-        r=requests.get(DDG,params={'q':query,'kl':'gr-el'},headers=UA,timeout=15)
+        r=requests.get(DDG,params={'q':query,'kl':'gr-el'},headers=UA,timeout=12)
         if not r.ok:return [],f'http_{r.status_code}'
         p=_Results();p.feed(r.text[:1_500_000])
-        out=[];seen=set()
-        for href in p.urls:
-            url=_unwrap(href)
-            if not url or url in seen:continue
-            seen.add(url);out.append(url)
-            if len(out)>=limit:break
-        return out,None
+        return _unique([_unwrap(h) for h in p.urls],limit),None
     except Exception as exc:return [],type(exc).__name__
+
+
+def _bing(query:str,limit:int=8):
+    """Bing RSS is a discovery-only, no-key fallback when DDG under-returns."""
+    try:
+        r=requests.get(BING,params={'q':query,'format':'rss','setlang':'el'},headers=UA,timeout=12)
+        if not r.ok:return [],f'http_{r.status_code}'
+        root=ET.fromstring(r.content[:2_000_000])
+        urls=[]
+        for item in root.findall('.//item'):
+            link=(item.findtext('link') or '').strip()
+            if link:urls.append(link)
+        return _unique(urls,limit),None
+    except Exception as exc:return [],type(exc).__name__
+
+
+def _search_anchor(term:str)->str:
+    # Long exact pain phrases destroy search recall. Keep concrete product tokens
+    # and let actual fetched page text + skeptic gates decide whether pain exists.
+    tokens=re.findall(r"[A-Za-z0-9Α-Ωα-ωΆΈΉΊΌΎΏάέήίόύώϊϋΐΰ-]+",str(term or ''))
+    kept=[]
+    for token in tokens:
+        f=consumer.fold(token)
+        if len(f)<3 or f in STOPWORDS:continue
+        kept.append(token)
+    return ' '.join(kept[:5]) or str(term or '').strip()
 
 
 def _queries(category:str,aliases:list[str]):
     domains=CATEGORY_DOMAINS.get(str(category or ''),DEFAULT_DOMAINS)
     terms=[x for x in aliases[:2] if str(x or '').strip()]
-    return [(str(term),d,f'site:{d} "{term}"') for term in terms for d in domains[:4]]
+    out=[]
+    for term in terms:
+        anchor=_search_anchor(str(term))
+        for d in domains[:4]:
+            # No exact full-phrase quotes: product anchor maximizes recall; pain is
+            # validated only after fetching the actual public page.
+            out.append((str(term),anchor,d,f'site:{d} {anchor}'))
+    return out
 
 
 def _discover_one(spec):
-    term,domain,query=spec
-    urls,error=_ddg(query,6)
+    term,anchor,domain,query=spec
+    ddg_urls,ddg_error=_ddg(query,6)
+    bing_urls=[];bing_error=None
+    if len(ddg_urls)<2:
+        bing_urls,bing_error=_bing(query,6)
+    urls=_unique([*ddg_urls,*bing_urls],6)
+    errors=[x for x in (ddg_error,bing_error) if x]
     diagnostic={
         'source_kind':'consumer_discovery','source_url':f'https://html.duckduckgo.com/html/?q={query}',
-        'title':f'Direct Greek forum discovery: {domain} / {term}','body':'',
-        'collector':'duckduckgo_greek_forum_discovery_v46','confidence':.40 if error else .58,
+        'title':f'Direct Greek forum discovery: {domain} / {anchor}','body':'',
+        'collector':'greek_forum_search_discovery_v46','confidence':.40 if errors and not urls else .60,
         'metadata':{
-            'query':query,'query_term':term,'geography':'GR','source_family':'discovery_engine',
+            'query':query,'query_term':term,'search_anchor':anchor,'geography':'GR','source_family':'discovery_engine',
             'evidence_mode':'discovery_only','eligible_for_pain_audit':False,
-            'fetch_error':error,'result_count':len(urls),'retrieval_version':'greece_direct_forum_v4.6',
+            'fetch_error':';'.join(errors) if errors else None,'result_count':len(urls),
+            'ddg_results':len(ddg_urls),'bing_results':len(bing_urls),
+            'retrieval_version':'greece_direct_forum_v4.6',
             'metric_semantics':'URL discovery diagnostic only; search snippets/engagement are never pain or demand evidence'
         }
     }
@@ -128,7 +173,7 @@ def _discover(category:str,aliases:list[str],max_urls:int=24):
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(DISCOVERY_WORKERS,len(specs))) as pool:
         futures=[pool.submit(_discover_one,s) for s in specs]
         for future in concurrent.futures.as_completed(futures):
-            spec,urls,diagnostic=future.result();term,_domain_name,query=spec
+            spec,urls,diagnostic=future.result();term,_anchor,_domain_name,query=spec
             diagnostics.append(diagnostic)
             for url in urls:
                 if url in seen:continue
