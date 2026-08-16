@@ -32,7 +32,8 @@ jobs:
       LINKWISE_DEEPLINK_FIELD: tracking_url
       LINKWISE_OPTIONAL_FIELDS: thumb_url
       PRODUCT_REUSE_STAGE_DB: 'true'
-      PRODUCT_MIN_MERCHANT_TRUST: '0'
+      PRODUCT_MIN_COMMISSION_EUR: '10'
+      PRODUCT_MIN_MERCHANT_TRUST: '50'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
       PRODUCT_RANKING_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway
@@ -120,15 +121,13 @@ jobs:
           eligible=int(p.get('unique_commission_eligible_products') or 0)
           offers=int(p.get('commission_eligible_offers') or 0)
           print({'source':os.getenv('PRODUCT_SOURCE'),'records_seen':seen,'unique_commission_eligible_products':eligible,'commission_eligible_offers':offers})
-          # Data-integrity gates derived conservatively from repeated full-universe scans;
-          # these are completeness checks, not ranking/eligibility threshold relaxations.
           if seen < 2_000_000:
               raise SystemExit(f'Product universe incomplete: only {seen} complete records')
           if eligible < 10_000 or offers < 10_000:
               raise SystemExit(f'Commercial universe unexpectedly thin: products={eligible}, offers={offers}')
           PY
 
-      - name: Final Ranking V3.6 — Top 100+ + SEO + 60 durable Top-20 creative assets
+      - name: Final Ranking V3.6.2 — Top 100+ + complete SEO + 20 READY creative packs + 60 durable assets
         if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v32.py "$PRODUCT_SOURCE_FEED"
 
