@@ -6,13 +6,9 @@ on:
     workflows: ['Deep Demand Intelligence V3.1']
     types: [completed]
     branches: [main]
-  push:
-    branches: [main]
-    paths:
-      - '.github/product-intelligence-trigger'
 
 concurrency:
-  group: socialmarket-product-ranking-daily
+  group: socialmarket-product-ranking-weekly
   cancel-in-progress: false
 
 permissions:
@@ -21,7 +17,7 @@ permissions:
 
 jobs:
   product-intelligence:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'push') }}
     runs-on: ubuntu-latest
     timeout-minutes: 330
     env:
@@ -150,7 +146,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: product-ranking-daily-profile
+          name: product-ranking-weekly-profile
           retention-days: 30
           path: |
             product-commercial-scan-profile.json
