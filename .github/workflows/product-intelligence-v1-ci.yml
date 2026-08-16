@@ -35,13 +35,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install minimal parser dependency
+      - name: Install Product Intelligence dependencies
         run: pip install -r workers/product_intelligence/requirements.txt
       - name: Compile Product Intelligence workers
         run: python -m py_compile workers/product_intelligence/*.py
-      - name: Run deterministic policy, shortlist and missing-data tests
+      - name: Run deterministic policy, shortlist, feed transport and missing-data tests
         working-directory: workers/product_intelligence
-        run: python -m unittest -v test_product_intelligence.py test_candidate_shortlist.py test_product_concentration.py test_missing_semantics.py
+        run: python -m unittest -v test_product_intelligence.py test_candidate_shortlist.py test_product_concentration.py test_missing_semantics.py test_linkwise_direct_feed.py
       - name: Guard against legacy minimum-price policy
         run: |
           if grep -R "MIN_PRICE\|price_not_over_50\|price > 50\|price >= 50" workers/product_intelligence; then
