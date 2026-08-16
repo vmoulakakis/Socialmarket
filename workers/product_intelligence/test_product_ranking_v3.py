@@ -33,9 +33,7 @@ class RankingV3Tests(unittest.TestCase):
 
     def test_supported_pain_is_bonus_not_gate(self):
         no_pain = deterministic_metrics(self.item(pains=[]))['deterministic_rank_score']
-        with_pain = deterministic_metrics(self.item(pains=[{
-            'retrieval_score': 90, 'pain_severity': 85, 'demand_score': 80, 'commercial_intent': 90
-        }]))['deterministic_rank_score']
+        with_pain = deterministic_metrics(self.item(pains=[{'retrieval_score': 90, 'pain_severity': 85, 'demand_score': 80, 'commercial_intent': 90}]))['deterministic_rank_score']
         self.assertGreater(with_pain, no_pain)
 
     def test_deep_demand_is_additive_context_not_a_gate(self):
@@ -95,14 +93,17 @@ class RankingV3Tests(unittest.TestCase):
         finally:v32._run_seo_batch_once = original
 
     def test_final_contract_rejects_less_than_100_ranked_products(self):
-        with self.assertRaises(RuntimeError):
-            v32.assert_final_contract([{}] * 99)
+        with self.assertRaises(RuntimeError):v32.assert_final_contract([{}] * 99)
 
     def test_final_contract_requires_top20_creative_packs(self):
         rows = [{}] * max(100, v32.FINAL_MIN_RANKED)
-        with self.assertRaises(RuntimeError):
-            v32.assert_final_contract(rows, 19)
+        with self.assertRaises(RuntimeError):v32.assert_final_contract(rows, 19)
         self.assertTrue(v32.assert_final_contract(rows, v32.CREATIVE_LIMIT))
+
+    def test_final_contract_requires_20_complete_durable_asset_packs(self):
+        rows = [{}] * max(100, v32.FINAL_MIN_RANKED)
+        with self.assertRaises(RuntimeError):v32.assert_final_contract(rows, v32.CREATIVE_LIMIT, 19)
+        self.assertTrue(v32.assert_final_contract(rows, v32.CREATIVE_LIMIT, v32.CREATIVE_LIMIT))
 
     def test_failed_creative_batch_is_recovered_by_split_retry(self):
         original = v32._run_creative_batch_once
