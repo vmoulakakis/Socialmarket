@@ -1,3 +1,3 @@
-ranking-v3.6-final
-reason: live Linkwise direct feed + fail-closed >=2M universe + >=100 ranked products + Top20 audited creatives + 60 stored PNG assets + canonical content handoff to SocialScheduler
-run: products-to-promote-v36-final
+ranking-v3.6.1-final
+reason: parallel live Linkwise category shards + fail-closed >=2M universe + >=100 ranked products + Top20 audited creatives + 60 stored PNG assets + canonical content handoff to SocialScheduler
+run: products-to-promote-v361-final
