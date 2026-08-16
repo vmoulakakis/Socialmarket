@@ -3,7 +3,7 @@ name: Merchant Intelligence V4.3 Semantic
 on:
   workflow_dispatch:
   schedule:
-    - cron: '45 0 * * *'
+    - cron: '45 0 * * 1'
   push:
     branches: [main]
     paths:
