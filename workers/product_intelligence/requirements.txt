@@ -1,2 +1,4 @@
 ijson>=3.4,<4
 gdown>=5.2,<6
+Pillow>=11,<13
+qrcode[pil]>=8,<9
