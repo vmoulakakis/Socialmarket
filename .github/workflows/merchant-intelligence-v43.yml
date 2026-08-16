@@ -4,13 +4,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '45 0 * * 1'
-  push:
-    branches: [main]
-    paths:
-      - 'workers/market_intelligence/merchant_intelligence_v43.py'
-      - 'workers/market_intelligence/semantic_taxonomy.py'
-      - '.github/workflows/merchant-intelligence-v43.yml'
-      - 'supabase/functions/merchant-research-gateway/**'
 
 permissions:
   contents: read
