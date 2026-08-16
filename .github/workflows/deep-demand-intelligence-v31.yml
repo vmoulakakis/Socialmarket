@@ -15,8 +15,6 @@ on:
     workflows: ['Semantic Category Pain Intelligence']
     types: [completed]
     branches: [main]
-  schedule:
-    - cron: '30 3 * * *'
 
 permissions:
   contents: read
