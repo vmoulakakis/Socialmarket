@@ -3,7 +3,6 @@ name: Product Intelligence + Promotion Ranking
 on:
   workflow_dispatch:
   schedule:
-    # Fallback cron. Normal path is workflow_run after Deep Demand completes.
     - cron: '20 6 * * *'
   workflow_run:
     workflows: ['Deep Demand Intelligence V3.1']
@@ -15,7 +14,6 @@ on:
       - '.github/product-intelligence-trigger'
 
 concurrency:
-  # Latest market evidence wins. A newer trigger cancels an obsolete ranking run.
   group: socialmarket-product-ranking-daily
   cancel-in-progress: true
 
@@ -49,6 +47,8 @@ jobs:
       PRODUCT_RANK_CREATIVE_LIMIT: '20'
       PRODUCT_RANK_CREATIVE_BATCH: '5'
       PRODUCT_RANK_CREATIVE_WORKERS: '3'
+      PRODUCT_CREATIVE_ASSET_WORKERS: '4'
+      PRODUCT_CREATIVE_BRAND_SLUG: lyseis-pou-axizoun
 
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +78,7 @@ jobs:
           cache: pip
           cache-dependency-path: workers/product_intelligence/requirements.txt
 
-      - name: Install streaming dependencies
+      - name: Install product intelligence dependencies
         run: pip install -r workers/product_intelligence/requirements.txt
 
       - name: Download source feed read-only from Drive
@@ -96,7 +96,7 @@ jobs:
       - name: Phase A — deterministic commercial universe scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Final Ranking V3.4 — Top 100+ + SEO + audited Top-20 creative packs
+      - name: Final Ranking V3.5 — Top 100+ + SEO + 60 durable Top-20 creative assets
         if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v32.py "$PRODUCT_SOURCE_FEED"
 
