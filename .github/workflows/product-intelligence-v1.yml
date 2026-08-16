@@ -15,9 +15,7 @@ on:
       - '.github/product-intelligence-trigger'
 
 concurrency:
-  # Product ranking is a daily decision product: a newer completed-demand/data trigger
-  # supersedes an older still-running ranking. This prevents stale sequential jobs from
-  # blocking fresh market evidence or a newly deployed ranking engine.
+  # Latest market evidence wins. A newer trigger cancels an obsolete ranking run.
   group: socialmarket-product-ranking-daily
   cancel-in-progress: true
 
@@ -34,37 +32,44 @@ jobs:
       DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
       PRODUCT_SOURCE_FEED: linkwise-products.json
       PRODUCT_REUSE_STAGE_DB: 'true'
-      # Ranking is not validation: missing trust/pain is not an admission failure.
-      # Explicit blocked/demand-beacon-only/dominant merchant policies remain hard exclusions.
       PRODUCT_MIN_MERCHANT_TRUST: '0'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
       PRODUCT_RANKING_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway
-      PRODUCT_RANK_RAG_PRESELECT: '16000'
-      PRODUCT_RANK_PRESELECT: '4000'
-      PRODUCT_RANK_AI_MAX: '240'
+      PRODUCT_CREATIVE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-creative-gateway
+      PRODUCT_RANK_RAG_PRESELECT: '20000'
+      PRODUCT_RANK_PRESELECT: '5000'
+      PRODUCT_RANK_AI_MAX: '320'
       PRODUCT_RANK_AI_WORKERS: '3'
       PRODUCT_RANK_SAVE_LIMIT: '200'
+      PRODUCT_RANK_MIN_FINAL: '100'
       PRODUCT_RANK_SEO_LIMIT: '200'
       PRODUCT_RANK_SEO_BATCH: '10'
       PRODUCT_RANK_SEO_WORKERS: '3'
+      PRODUCT_RANK_CREATIVE_LIMIT: '20'
+      PRODUCT_RANK_CREATIVE_BATCH: '5'
+      PRODUCT_RANK_CREATIVE_WORKERS: '3'
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight ranking gateway
+      - name: Preflight ranking + creative gateways
         id: preflight
         run: |
           python - <<'PY'
           import json, os, urllib.request
-          url='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway'
-          with urllib.request.urlopen(url, timeout=30) as r:
-              health=json.loads(r.read().decode())
-          print({k:health.get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model')})
-          if not health.get('ok'):
-              raise SystemExit('ranking gateway unhealthy')
+          urls={
+            'ranking':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway',
+            'creative':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-creative-gateway',
+          }
+          health={}
+          for name,url in urls.items():
+              with urllib.request.urlopen(url, timeout=30) as r: health[name]=json.loads(r.read().decode())
+              print(name,{k:health[name].get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model','contract')})
+              if not health[name].get('ok'): raise SystemExit(f'{name} gateway unhealthy')
+          ai_ok=all(x.get('deepseek_configured') for x in health.values())
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              f.write(f"ranking_ai={'true' if health.get('deepseek_configured') else 'false'}\n")
+              f.write(f"ranking_ai={'true' if ai_ok else 'false'}\n")
           PY
 
       - uses: actions/setup-python@v5
@@ -91,14 +96,14 @@ jobs:
       - name: Phase A — deterministic commercial universe scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Final Ranking V3.3 — conversion-aware shortlist + AI strategist + skeptic + SEO
+      - name: Final Ranking V3.4 — Top 100+ + SEO + audited Top-20 creative packs
         if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v32.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Fail if final ranking AI is unavailable
+      - name: Fail if final AI services are unavailable
         if: steps.preflight.outputs.ranking_ai != 'true'
         run: |
-          echo 'Final promotion ranking requires the ranking AI gateway. Deterministic Phase A completed but no final AI promotion list was published.'
+          echo 'Final ranking requires both ranking and creative AI gateways. No partial production list will be published.'
           exit 1
 
       - name: Upload compact decision profiles only

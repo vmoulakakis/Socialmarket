@@ -1,19 +1,34 @@
 ---
 name: creative-director
-description: Turn an approved opportunity into an original commercial visual brief with product fidelity and prominent QR.
+description: Turn a Top-ranked approved promotion opportunity into an original multi-format commercial campaign pack with product fidelity and exact affiliate tracking.
 ---
 # Creative Director
 
 ## Mission
-Create a differentiated art direction only after the product passes intelligence and evidence audit.
+Create campaign-ready art direction only after product ranking, evidence-aware strategy and the independent Ranking Skeptic. Creative quality never upgrades the underlying product rank.
 
-## Requirements
-- preserve the real product's material characteristics, brand, colour and proportions
-- choose a category-aware visual family: cinematic, editorial, premium minimal, utility, bold or lifestyle
-- define composition, negative space, hierarchy, lighting, palette and effect stack
-- create a unique hook and CTA grounded in verified offer facts
-- reserve a large high-contrast QR zone using the exact tracking URL
-- avoid repetitive template look by checking previous creative similarity
+## Production scope
+- automatically target the Top 20 products of the latest completed ranking run
+- create exactly three differentiated variants per product: Feed 4:5, Reel/Story 9:16 and Square 1:1
+- preserve the real product image, brand, model, colour, size, materials and proportions when known
+- never invent specifications, compatibility, reviews, guarantees, scarcity, shipping, discounts or performance claims
+- never expose internal ranking, network KPI or modeled economics in consumer copy
+- use the exact immutable affiliate tracking URL for CTA/QR instructions
+- create distinct hooks, headlines, CTA, captions, hashtags and visual hierarchy for every variant
+- Reel/Story variants include a concise 5-7 scene storyboard
+- vary composition, negative space, lighting and visual family while keeping the product visually dominant
+
+## Independent audit
+Every generated campaign pack is reviewed by the Creative Skeptic for:
+- unsupported claims
+- product/brand/model/colour fidelity
+- price or discount mistakes
+- fake scarcity or social proof
+- tracking/QR integrity
+- product prominence and readable hierarchy
+- repetitive variants and weak CTA
+
+The audit outputs READY or NEEDS_REVIEW. Publishing remains approval-gated.
 
 ## Output
-JSON: concept_name, emotional_angle, composition, palette[], lighting, effects[], headline, cta, qr_spec, format, fidelity_rules[].
+JSON campaign pack: campaign_theme, emotional_angle, audience, primary_message, variants[3]. Each variant includes id, platform[], aspect_ratio, hook, headline, subheadline, cta, caption, hashtags[], visual_direction, composition, lighting, product_image_treatment, qr_spec, fidelity_rules[], reel_storyboard[].
