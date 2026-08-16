@@ -77,6 +77,10 @@ jobs:
               f.write(f"ranking_ai={'true' if ai_ok else 'false'}\n")
           PY
 
+      - name: Start durable Product Ranking run
+        id: durable_run
+        run: python workers/product_intelligence/product_run_lifecycle.py start
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -130,6 +134,7 @@ jobs:
           PY
 
       - name: Final Ranking V3.6.3 — durable Top 100+ + complete SEO + 20 READY creative packs + 60 durable assets
+        id: final_rank
         if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v363_production.py "$PRODUCT_SOURCE_FEED"
 
@@ -138,6 +143,10 @@ jobs:
         run: |
           echo 'Final ranking requires both ranking and creative AI gateways. No partial production list will be published.'
           exit 1
+
+      - name: Mark pre-final Product workflow failure
+        if: failure() && steps.durable_run.outcome == 'success' && steps.final_rank.outcome != 'failure'
+        run: python workers/product_intelligence/product_run_lifecycle.py fail workflow_pre_final
 
       - name: Upload compact decision profiles only
         uses: actions/upload-artifact@v4
