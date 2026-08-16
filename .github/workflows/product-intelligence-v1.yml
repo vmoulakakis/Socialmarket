@@ -29,6 +29,8 @@ jobs:
     env:
       DRIVE_FILE_ID: 1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT
       PRODUCT_SOURCE_FEED: linkwise-products.json
+      LINKWISE_DEEPLINK_FIELD: tracking_url
+      LINKWISE_OPTIONAL_FIELDS: thumb_url
       PRODUCT_REUSE_STAGE_DB: 'true'
       PRODUCT_MIN_MERCHANT_TRUST: '0'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
@@ -81,22 +83,52 @@ jobs:
       - name: Install product intelligence dependencies
         run: pip install -r workers/product_intelligence/requirements.txt
 
-      - name: Download source feed read-only from Drive
+      - name: Validate live Linkwise feed contract
+        run: python workers/product_intelligence/linkwise_direct_feed.py --probe
+
+      - name: Download live Linkwise feed with Drive snapshot fallback
         run: |
-          gdown "$DRIVE_FILE_ID" -O "$PRODUCT_SOURCE_FEED"
+          set -o pipefail
+          if python workers/product_intelligence/linkwise_direct_feed.py --output "$PRODUCT_SOURCE_FEED"; then
+            echo 'PRODUCT_SOURCE=direct_linkwise' >> "$GITHUB_ENV"
+          else
+            echo 'Direct Linkwise transport failed; attempting read-only Drive snapshot fallback.'
+            rm -f "$PRODUCT_SOURCE_FEED" "$PRODUCT_SOURCE_FEED.part"
+            gdown "$DRIVE_FILE_ID" -O "$PRODUCT_SOURCE_FEED"
+            echo 'PRODUCT_SOURCE=drive_snapshot_fallback' >> "$GITHUB_ENV"
+          fi
           test -s "$PRODUCT_SOURCE_FEED"
           python - <<'PY'
           from pathlib import Path
           p=Path('linkwise-products.json')
-          print({'feed_bytes':p.stat().st_size})
-          if p.stat().st_size < 3_000_000_000:
-              raise SystemExit('Source feed unexpectedly small; refusing incomplete product run')
+          size=p.stat().st_size
+          print({'feed_bytes':size})
+          if size < 10_000_000:
+              raise SystemExit('Product source unexpectedly small; refusing incomplete run')
           PY
 
       - name: Phase A — deterministic commercial universe scan
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Final Ranking V3.5 — Top 100+ + SEO + 60 durable Top-20 creative assets
+      - name: Enforce source-universe completeness
+        run: |
+          python - <<'PY'
+          import json, os
+          with open('product-commercial-scan-profile.json',encoding='utf-8') as f:
+              p=json.load(f)
+          seen=int(p.get('records_seen') or 0)
+          eligible=int(p.get('unique_commission_eligible_products') or 0)
+          offers=int(p.get('commission_eligible_offers') or 0)
+          print({'source':os.getenv('PRODUCT_SOURCE'),'records_seen':seen,'unique_commission_eligible_products':eligible,'commission_eligible_offers':offers})
+          # Data-integrity gates derived conservatively from repeated full-universe scans;
+          # these are completeness checks, not ranking/eligibility threshold relaxations.
+          if seen < 2_000_000:
+              raise SystemExit(f'Product universe incomplete: only {seen} complete records')
+          if eligible < 10_000 or offers < 10_000:
+              raise SystemExit(f'Commercial universe unexpectedly thin: products={eligible}, offers={offers}')
+          PY
+
+      - name: Final Ranking V3.6 — Top 100+ + SEO + 60 durable Top-20 creative assets
         if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v32.py "$PRODUCT_SOURCE_FEED"
 
@@ -120,4 +152,4 @@ jobs:
 
       - name: Remove raw feed and local staging from runner
         if: always()
-        run: rm -f "$PRODUCT_SOURCE_FEED" product-stage.sqlite3 product-stage.sqlite3-wal product-stage.sqlite3-shm
+        run: rm -f "$PRODUCT_SOURCE_FEED" "$PRODUCT_SOURCE_FEED.part" product-stage.sqlite3 product-stage.sqlite3-wal product-stage.sqlite3-shm
