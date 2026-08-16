@@ -11,22 +11,6 @@ on:
     workflows: ['Merchant Intelligence V4.3 Semantic']
     types: [completed]
     branches: [main]
-  push:
-    branches: [main]
-    paths:
-      - 'workers/market_intelligence/category_pain_intelligence_v4.py'
-      - 'workers/market_intelligence/category_pain_intelligence_v42.py'
-      - 'workers/market_intelligence/consumer_evidence_v4.py'
-      - 'workers/market_intelligence/consumer_source_expansion_v43.py'
-      - 'workers/market_intelligence/consumer_direct_social_v44.py'
-      - 'workers/market_intelligence/consumer_direct_greek_v46.py'
-      - 'workers/market_intelligence/niche_product_prior_v45.py'
-      - 'workers/market_intelligence/niche_keyword_binding_v45.py'
-      - 'workers/market_intelligence/authoritative_context_v3.py'
-      - 'workers/market_intelligence/market_query_aliases.py'
-      - 'workers/market_intelligence/semantic_taxonomy.py'
-      - '.github/workflows/generic-evidence-intelligence.yml'
-      - 'supabase/functions/evidence-gateway/**'
 
 permissions:
   contents: read
@@ -34,17 +18,17 @@ permissions:
 
 concurrency:
   group: semantic-category-pain-intelligence
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   collect-audit:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'push') }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
       EVIDENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/evidence-gateway
       SEARXNG_BASE_URL: http://127.0.0.1:8080
-      CATEGORY_PAIN_LIMIT: ${{ github.event_name == 'push' && '20' || inputs.limit || '80' }}
+      CATEGORY_PAIN_LIMIT: ${{ inputs.limit || '80' }}
       CATEGORY_PAIN_WORKERS: '3'
       CATEGORY_PAIN_AI_BATCH: '1'
       CATEGORY_CONSUMER_FETCH_WORKERS: '6'
