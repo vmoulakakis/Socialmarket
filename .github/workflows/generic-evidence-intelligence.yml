@@ -7,8 +7,10 @@ on:
         description: 'Canonical taxonomy nodes to research (1-100)'
         required: false
         default: '20'
-  schedule:
-    - cron: '15 2 * * *'
+  workflow_run:
+    workflows: ['Merchant Intelligence V4.3 Semantic']
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -32,10 +34,11 @@ permissions:
 
 concurrency:
   group: semantic-category-pain-intelligence
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   collect-audit:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
@@ -43,9 +46,6 @@ jobs:
       SEARXNG_BASE_URL: http://127.0.0.1:8080
       CATEGORY_PAIN_LIMIT: ${{ github.event_name == 'push' && '20' || inputs.limit || '80' }}
       CATEGORY_PAIN_WORKERS: '3'
-      # One taxonomy target per DeepSeek audit request prevents large multi-category
-      # consumer-evidence payloads from exceeding provider context/request limits.
-      # Validation thresholds and evidence-diversity gates remain unchanged.
       CATEGORY_PAIN_AI_BATCH: '1'
       CATEGORY_CONSUMER_FETCH_WORKERS: '6'
       CATEGORY_CONSUMER_MAX_URLS: '72'
