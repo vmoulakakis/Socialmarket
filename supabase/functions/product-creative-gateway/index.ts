@@ -94,7 +94,7 @@ async function persistContent(b:any){
   for(const variant of variants){
     const variantId=String(variant.id||''),sourceKey=`ranked:${runId}:${hash}:${variantId}`,caption=String(variant.caption||''),assetUrl=String(variant.asset_url||'')
     if(!variantId||!caption)throw new Error(`creative_variant_incomplete:${variantId}`)
-    const metadata={origin:'ranked_product_creative',creative_run_id:runId,source_record_hash:hash,global_rank:b.global_rank??null,variant_id:variantId,aspect_ratio:variant.aspect_ratio??null,platforms:platforms(variant.platform),creative_audit:audit,product_image_url:b.image_url??null,product_name:productName,merchant_name:b.merchant_name??null,affiliate_disclosure:true}
+    const metadata={origin:'ranked_product_creative',creative_run_id:runId,source_record_hash:hash,global_rank:b.global_rank??null,variant_id:variantId,aspect_ratio:variant.aspect_ratio??null,platforms:platforms(variant.platform),hashtags:Array.isArray(variant.hashtags)?variant.hashtags.slice(0,10):[],creative_audit:audit,product_image_url:b.image_url??null,product_name:productName,merchant_name:b.merchant_name??null,affiliate_disclosure:true}
     const rows=await sql`insert into content.items(source_key,brand_site_id,merchant_id,title,angle,core_copy,cta,tracking_url,media_url,status,approved_at,metadata,updated_at)
       values(${sourceKey},${brand[0].id}::uuid,${merchantId}::uuid,${`${productName} — ${variantId}`},${String(pack.campaign_theme||pack.emotional_angle||'')},${caption},${String(variant.cta||'')},${trackingUrl},${assetUrl},${approved?'approved':'draft'},${approved?new Date().toISOString():null}::timestamptz,${sql.json(metadata)},now())
       on conflict(source_key) do update set title=excluded.title,angle=excluded.angle,core_copy=excluded.core_copy,cta=excluded.cta,tracking_url=excluded.tracking_url,media_url=excluded.media_url,metadata=excluded.metadata,status=case when content.items.status in('queued','completed') then content.items.status else excluded.status end,approved_at=case when content.items.status in('queued','completed') then content.items.approved_at else excluded.approved_at end,updated_at=now() returning id,status`
@@ -133,11 +133,11 @@ async function finalize(b:any){
 }
 
 Deno.serve(async req=>{
-  if(req.method==='GET')return json({ok:true,service:'product-creative-gateway',version:'1.2',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL,contract:{minimum_ranked:100,top_creatives:20,variants_per_product:3,durable_assets_per_product:3,canonical_content:true,scheduler_handoff:'publish.outbox'}})
+  if(req.method==='GET')return json({ok:true,service:'product-creative-gateway',version:'1.3',deepseek_configured:Boolean(DEEPSEEK_KEY),deepseek_model:DEEPSEEK_MODEL,contract:{minimum_ranked:100,top_creatives:20,variants_per_product:3,durable_assets_per_product:3,canonical_content:true,scheduler_handoff:'content.items_to_rolling_outbox'}})
   if(req.method!=='POST')return json({error:'method_not_allowed'},405)
   try{
     await auth(req);const b=await req.json(),action=String(b.action||'')
-    if(action==='health')return json({ok:true,version:'1.2',deepseek_configured:Boolean(DEEPSEEK_KEY),contract:{minimum_ranked:100,top_creatives:20,variants_per_product:3,durable_assets_per_product:3,canonical_content:true,scheduler_handoff:'publish.outbox'}})
+    if(action==='health')return json({ok:true,version:'1.3',deepseek_configured:Boolean(DEEPSEEK_KEY),contract:{minimum_ranked:100,top_creatives:20,variants_per_product:3,durable_assets_per_product:3,canonical_content:true,scheduler_handoff:'content.items_to_rolling_outbox'}})
     if(action==='generate'){const items=(Array.isArray(b.items)?b.items:[]).slice(0,5),r=await deepseek(CREATIVE_SYSTEM,{items},'creative');return json({ok:true,items:Array.isArray(r?.items)?r.items:[]})}
     if(action==='audit'){const items=(Array.isArray(b.items)?b.items:[]).slice(0,5),r=await deepseek(AUDIT_SYSTEM,{items},'audit');return json({ok:true,items:Array.isArray(r?.items)?r.items:[]})}
     if(action==='upload_asset')return json({ok:true,...await uploadAsset(b)})
