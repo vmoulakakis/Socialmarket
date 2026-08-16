@@ -18,12 +18,13 @@ CLIENT='CD104'
 CATEGORY_IDS='3,67,25,27,29,33,63,147,87,89,99,103,109,117,119'
 BASE='https://affiliate.linkwi.se/feeds/1.2/{client}/programs-joined/columns-{columns}/catinc-{categories}/catex-0/proginc-0/progex-0/feed.json'
 
+# Verified production fields from live Linkwise probe. Optional brand/model aliases
+# are probed separately and added only if the network actually emits them.
 CORE_FIELDS=(
-    'product_id','model_name','product_name','description','category','brand_name',
-    'thumb_url','image_url','in_stock','availability','valid_from','valid_to',
-    'currency','price','full_price','discount','times_bought','size','colour',
-    'ean','gtin','mpn','sku'
+    'product_id','product_name','description','category','image_url','in_stock','availability',
+    'valid_from','valid_to','price','full_price','discount','times_bought','size','colour','sku'
 )
+OPTIONAL_FIELD_CANDIDATES=('brand','brand_name','manufacturer','maker','model','model_name','mpn','ean','gtin','currency','thumb_url')
 DEEPLINK_CANDIDATES=('deep_link','deeplink','aw_deep_link','tracking_url')
 MINIMUM_CONTRACT={'product_id','product_name','category','price','tracking_url'}
 
@@ -70,16 +71,26 @@ def resolve_deeplink_field():
     raise RuntimeError('Could not resolve one unambiguous Linkwise deeplink field: '+json.dumps(results,ensure_ascii=False))
 
 
+def probe_optional_fields():
+    result=_sample(feed_url(('product_id','price',*OPTIONAL_FIELD_CANDIDATES)),524288)
+    keys=set(result.get('keys') or []);supported=tuple(x for x in OPTIONAL_FIELD_CANDIDATES if x in keys)
+    result['supported_optional_fields']=supported
+    print(json.dumps({'optional_field_probe':result},ensure_ascii=False),flush=True)
+    return supported,result
+
+
 def direct_columns():
-    explicit=os.getenv('LINKWISE_DEEPLINK_FIELD','').strip();field=explicit or resolve_deeplink_field()[0];return (*CORE_FIELDS,field),field
+    explicit=os.getenv('LINKWISE_DEEPLINK_FIELD','').strip();field=explicit or resolve_deeplink_field()[0]
+    optional_env=os.getenv('LINKWISE_OPTIONAL_FIELDS','').strip()
+    optional=tuple(x for x in optional_env.split(',') if x) if optional_env else ('brand','model','currency')
+    return (*CORE_FIELDS,*optional,field),field
 
 
 def probe_contract(deeplink_field='tracking_url'):
-    columns=(*CORE_FIELDS,deeplink_field);result=_sample(feed_url(columns),786432)
+    supported_optional,_=probe_optional_fields();columns=(*CORE_FIELDS,*supported_optional,deeplink_field);result=_sample(feed_url(columns),786432)
     keys=set(result.get('keys') or []);result['requested_columns']=list(columns);result['present_columns']=sorted(keys)
-    missing=sorted(MINIMUM_CONTRACT-keys)
-    has_image=bool({'image_url','thumb_url'}&keys) and bool(result.get('image_shape'))
-    result['missing_required']=missing;result['has_usable_image_field']=has_image
+    missing=sorted(MINIMUM_CONTRACT-keys);has_image='image_url' in keys and bool(result.get('image_shape'))
+    result['missing_required']=missing;result['has_usable_image_field']=has_image;result['supported_optional_fields']=supported_optional
     result['contract_ok']=result.get('status')==200 and not missing and has_image and bool(result.get('linkwise_tracking_shape'))
     print(json.dumps({'production_contract_probe':result},ensure_ascii=False),flush=True)
     if not result['contract_ok']:raise RuntimeError('Direct Linkwise production field contract failed: '+json.dumps(result,ensure_ascii=False))
@@ -111,7 +122,7 @@ def download(output,minimum_bytes=10_000_000,max_attempts=3):
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--probe',action='store_true');ap.add_argument('--output',default=os.getenv('PRODUCT_SOURCE_FEED','linkwise-products.json'));args=ap.parse_args()
     if args.probe:
-        field,results=resolve_deeplink_field();contract=probe_contract(field);print(json.dumps({'ok':True,'resolved_deeplink_field':field,'contract_ok':contract['contract_ok'],'field_results':results},ensure_ascii=False));return 0
+        field,results=resolve_deeplink_field();contract=probe_contract(field);print(json.dumps({'ok':True,'resolved_deeplink_field':field,'contract_ok':contract['contract_ok'],'supported_optional_fields':contract['supported_optional_fields'],'field_results':results},ensure_ascii=False));return 0
     download(args.output);return 0
 
 
