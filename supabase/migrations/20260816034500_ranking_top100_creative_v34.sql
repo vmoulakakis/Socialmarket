@@ -10,6 +10,17 @@ do $$ begin
     check (creative_status in ('not_targeted','ready','needs_review','failed'));
 exception when duplicate_object then null; end $$;
 
+do $$ begin
+  alter table intel.product_rankings
+    add constraint product_rankings_creative_pack_three_variants_check
+    check (
+      creative_pack='{}'::jsonb or (
+        jsonb_typeof(creative_pack->'variants')='array'
+        and jsonb_array_length(creative_pack->'variants')=3
+      )
+    );
+exception when duplicate_object then null; end $$;
+
 create index if not exists product_rankings_creative_status_idx
   on intel.product_rankings(run_id, creative_status, rank_score desc);
 
