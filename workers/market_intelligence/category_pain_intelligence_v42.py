@@ -9,15 +9,18 @@ import consumer_direct_social_v44 as direct_social
 from niche_product_prior_v45 import apply as apply_niche_product_prior
 from niche_keyword_binding_v45 import apply as apply_niche_keyword_binding
 from consumer_direct_greek_v46 import apply as apply_direct_greek
+from consumer_searx_forum_v47 import apply as apply_searx_forum
 
-# V4.6 source policy:
+# V4.7 source policy:
 # 1) crawlable Greek consumer communities,
 # 2) direct YouTube public-comment acquisition for product-bound pain,
 # 3) no Reddit JSON collection in this commercial pipeline,
 # 4) concrete niche-product search intents,
 # 5) exact product token/bigram taxonomy binding,
-# 6) direct Greek forum discovery independent of SearX site-query coverage,
-# 7) social/forum evidence is PAIN ONLY: no views/likes/followers as demand proof.
+# 6) legacy DDG/Bing direct-Greek discovery retained for diagnostic parity,
+# 7) domain-bound SearXNG forum discovery added as the high-recall production path,
+# 8) search snippets remain discovery-only; actual fetched public text is mandatory,
+# 9) social/forum evidence is PAIN ONLY: no views/likes/followers as demand proof.
 # Quality thresholds and cross-source skeptic gates remain unchanged.
 apply_source_expansion()
 direct_social.apply()
@@ -25,6 +28,7 @@ direct_social._reddit=lambda aliases,keywords,limit=24: []
 apply_niche_product_prior()
 apply_niche_keyword_binding()
 apply_direct_greek()
+apply_searx_forum()
 
 # libxml/lxml-backed extraction can abort the interpreter when several
 # Trafilatura parses run concurrently in the same GitHub runner process. Keep
@@ -43,9 +47,8 @@ consumer.trafilatura.extract=_serial_extract
 import category_pain_intelligence_v4 as v4  # noqa: E402
 
 
-# Compatibility seam for the Autopilot AI Task Router. Production remains on
-# the existing gateway unless CATEGORY_PAIN_AI_ROUTE=local_router is explicitly
-# enabled by the workflow after benchmark qualification.
+# Compatibility seam for the Autopilot AI Task Router. Production defaults to
+# local_router on the canonical workflow after benchmark qualification.
 if os.getenv('CATEGORY_PAIN_AI_ROUTE','legacy_gateway').strip().lower() == 'local_router':
     from category_pain_local_audit import audit_items  # noqa: E402
 
