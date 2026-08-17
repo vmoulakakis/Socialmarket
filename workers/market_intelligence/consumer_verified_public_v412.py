@@ -36,25 +36,25 @@ VERIFIED_PUBLIC_SEEDS = {
     ),
     ('Sports & Outdoors', 'Camping & Hiking'): (
         {
-            'url': 'https://www.skroutz.gr/s/4876341/Panda-Aytofouskoto-Mono-Ypostroma-Camping-186x53cm-Pachous-2-5cm-Mple-15350.html',
-            'title': 'Panda Αυτοφούσκωτο Υπόστρωμα Camping - επαληθευμένες αξιολογήσεις',
-            'source_family': 'marketplace_review',
-            'binding_terms': ('στρώμα camping', 'αυτοφούσκωτο', 'χάνει αέρα', 'ξεφουσκώνει', 'βαλβίδα'),
-            'confidence': .90,
+            'url': 'https://www.e-camping.gr/forum?catid=46&id=124&start=70&view=topic',
+            'title': 'E-Camping - Στρώματα: Ένα θέμα που καίει',
+            'source_family': 'community_forum',
+            'binding_terms': ('στρώμα', 'στρώματα', 'φουσκωτό', 'χάνει αέρα', 'ξεφουσκώνει', 'φούσκωμα'),
+            'confidence': .86,
         },
         {
-            'url': 'https://www.skroutz.gr/s/11605111/Outwell-Sleepin-Aytofouskoto-Diplo-Ypostroma-Camping-Pachous-7-5cm-Gri-290319.html',
-            'title': 'Outwell Sleepin Αυτοφούσκωτο Camping - επαληθευμένες αξιολογήσεις',
-            'source_family': 'marketplace_review',
-            'binding_terms': ('στρώμα camping', 'αυτοφούσκωτο', 'χάνει αέρα', 'βαλβίδα', 'τρύπησε'),
-            'confidence': .90,
+            'url': 'https://www.insomnia.gr/forums/topic/775912-%CE%B1%CE%B3%CE%BF%CF%81%CE%AC-%CF%86%CE%BF%CF%85%CF%83%CE%BA%CF%89%CF%84%CE%BF%CF%8D-%CF%83%CF%84%CF%81%CF%8E%CE%BC%CE%B1%CF%84%CE%BF%CF%82-%CE%B5%CE%B4%CE%AC%CF%86%CE%BF%CF%85%CF%82/',
+            'title': 'Insomnia - Αγορά φουσκωτού στρώματος εδάφους',
+            'source_family': 'community_forum',
+            'binding_terms': ('στρώμα', 'φουσκωτό', 'ξεφουσκώνει', 'κάθε νύχτα', 'φούσκωμα'),
+            'confidence': .82,
         },
         {
-            'url': 'https://www.skroutz.gr/s/54658602/Outwell-Sleepin-Aytofouskoto-Diplo-Ypostroma-Camping-Pachous-10cm-Mayro-400074.html',
-            'title': 'Outwell Sleepin 10cm Camping - αξιολογήσεις βαλβίδας και απώλειας αέρα',
-            'source_family': 'marketplace_review',
-            'binding_terms': ('στρώμα camping', 'χάνει αέρα', 'βαλβίδα', 'ραφές', 'τρύπες'),
-            'confidence': .90,
+            'url': 'https://advride.gr/threads/%CE%9A%CF%81%CE%B5%CE%B2%CE%AC%CF%84%CE%B9-%CE%BA%CE%B1%CF%84%CE%B1%CF%83%CE%BA%CE%AE%CE%BD%CF%89%CF%83%CE%B7%CF%82.775/page-2',
+            'title': 'ADVride - Κρεβάτι κατασκήνωσης και φουσκωτά στρώματα',
+            'source_family': 'community_forum',
+            'binding_terms': ('στρώμα', 'φουσκωτά στρώματα', 'φουσκώνεις', 'ξεφουσκώνεις', 'κάθε μέρα', 'κατασκήνωση'),
+            'confidence': .82,
         },
     ),
 }
@@ -121,7 +121,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
                 'source_url': url,
                 'title': title[:500],
                 'body': segment[:1600],
-                'collector': 'verified_public_extract_v414',
+                'collector': 'verified_public_extract_v415',
                 'confidence': round(min(.95, base_conf + min(.05, score * .001)), 3),
                 'content_hash': digest,
                 'metadata': {
@@ -139,7 +139,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
                     'first_person_signal': first,
                     'consumer_language_score': score,
                     'ugc_surface': consumer._ugc_surface(url, family, segment),
-                    'retrieval_version': 'verified_public_v4.14',
+                    'retrieval_version': 'verified_public_v4.15',
                     'source_role': 'pain_only',
                     'social_metrics_eligible_for_demand': False,
                     'metric_semantics': 'actual freshly fetched public consumer text; seed/search metadata excluded from proof',
@@ -151,7 +151,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
         'source_url': url,
         'title': row['title'],
         'body': '',
-        'collector': 'verified_public_seed_v414',
+        'collector': 'verified_public_seed_v415',
         'confidence': .45 if error else .70,
         'metadata': {
             'geography': 'GR',
@@ -163,7 +163,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
             'segments_examined': segment_count,
             'pain_candidates_emitted': len(evidence),
             'reject_reasons': dict(reasons),
-            'retrieval_version': 'verified_public_v4.14',
+            'retrieval_version': 'verified_public_v4.15',
             'metric_semantics': 'verified public URL seed only; actual fetched text must independently pass the consumer scorer',
         },
     }
@@ -211,7 +211,7 @@ def apply():
     if _APPLIED:
         return
     # Lexical recall extensions only; numeric scorer/audit thresholds remain unchanged.
-    extra_pain_stems = ('βουλ', 'χανει αερ', 'ξεφουσκ', 'τρυπ')
+    extra_pain_stems = ('βουλ', 'χανει αερ', 'ξεφουσκ', 'τρυπ', 'μπελ')
     for stem in extra_pain_stems:
         if stem not in consumer.PAIN_STEMS:
             consumer.PAIN_STEMS = (*consumer.PAIN_STEMS, stem)
