@@ -66,4 +66,5 @@ jobs:
           grep -R "_EXTRACT_LOCK" workers/market_intelligence/category_pain_intelligence_v42.py
           grep -R "observed public user statement; not a population estimate" workers/market_intelligence/consumer_direct_social_v44.py
           grep -R "search snippets are discovery diagnostics only" workers/market_intelligence/consumer_searx_forum_v47.py
-          grep -R "same-domain links" workers/market_intelligence/consumer_forum_seed_crawl_v48.py
+          grep -R "Search snippets or seed metadata never become pain evidence" workers/market_intelligence/consumer_forum_seed_crawl_v48.py
+          grep -R "actual page text must pass the same" workers/market_intelligence/consumer_forum_seed_crawl_v48.py
