@@ -19,9 +19,23 @@ class TaskExecutor(Protocol):
 
 
 class TaskCache(Protocol):
-    def get(self, key: str) -> Mapping[str, Any] | None: ...
+    """Immutable task cache keyed by the task's input+contract hashes."""
 
-    def set(self, key: str, value: Mapping[str, Any]) -> None: ...
+    def get(self, task: AITask) -> Mapping[str, Any] | None: ...
+
+    def set(
+        self,
+        task: AITask,
+        value: Mapping[str, Any],
+        *,
+        attempt: AITaskAttempt | None = None,
+    ) -> None: ...
+
+
+class TaskResultSink(Protocol):
+    """Durable observability hook invoked for every final router outcome."""
+
+    def record(self, result: AITaskResult) -> None: ...
 
 
 class InMemoryTaskCache:
@@ -30,11 +44,18 @@ class InMemoryTaskCache:
     def __init__(self) -> None:
         self._items: dict[str, Mapping[str, Any]] = {}
 
-    def get(self, key: str) -> Mapping[str, Any] | None:
-        return self._items.get(key)
+    def get(self, task: AITask) -> Mapping[str, Any] | None:
+        return self._items.get(task.cache_key)
 
-    def set(self, key: str, value: Mapping[str, Any]) -> None:
-        self._items[key] = dict(value)
+    def set(
+        self,
+        task: AITask,
+        value: Mapping[str, Any],
+        *,
+        attempt: AITaskAttempt | None = None,
+    ) -> None:
+        del attempt
+        self._items[task.cache_key] = dict(value)
 
 
 @dataclass
@@ -71,10 +92,12 @@ class AITaskRouter:
         *,
         deterministic_handlers: Mapping[str, DeterministicHandler] | None = None,
         cache: TaskCache | None = None,
+        result_sink: TaskResultSink | None = None,
     ) -> None:
         self.executors = tuple(sorted(executors, key=lambda x: (x.tier, x.name)))
         self.deterministic_handlers = dict(deterministic_handlers or {})
         self.cache = cache
+        self.result_sink = result_sink
 
     @staticmethod
     def _valid(task: AITask, data: Mapping[str, Any] | None) -> tuple[bool, str | None]:
@@ -123,6 +146,17 @@ class AITaskRouter:
             metadata=safe_meta,
         )
 
+    def _finish(self, result: AITaskResult) -> AITaskResult:
+        if self.result_sink is not None:
+            try:
+                self.result_sink.record(result)
+            except Exception:
+                # Observability must never mutate the semantic decision or make a
+                # valid task result look successful/failed for the wrong reason.
+                # Production sinks must separately alert on persistence failure.
+                pass
+        return result
+
     def execute(self, task: AITask) -> AITaskResult:
         attempts: list[AITaskAttempt] = []
 
@@ -133,27 +167,28 @@ class AITaskRouter:
             try:
                 data = handler(task)
                 valid, reason = self._valid(task, data)
-                attempts.append(
-                    self._attempt(
-                        task,
-                        executor="deterministic",
-                        tier=0,
-                        status="ok" if valid else "not_applicable",
-                        started=started,
-                        data=data if valid else None,
-                        error=None if valid else reason,
-                    )
+                attempt = self._attempt(
+                    task,
+                    executor="deterministic",
+                    tier=0,
+                    status="ok" if valid else "not_applicable",
+                    started=started,
+                    data=data if valid else None,
+                    error=None if valid else reason,
                 )
+                attempts.append(attempt)
                 if valid:
                     if task.cacheable and self.cache is not None:
-                        self.cache.set(task.cache_key, data)
-                    return AITaskResult(
-                        status="ok",
-                        data=data,
-                        task_type=task.task_type,
-                        input_hash=task.input_hash,
-                        contract_hash=task.contract_hash,
-                        attempts=tuple(attempts),
+                        self.cache.set(task, data, attempt=attempt)
+                    return self._finish(
+                        AITaskResult(
+                            status="ok",
+                            data=data,
+                            task_type=task.task_type,
+                            input_hash=task.input_hash,
+                            contract_hash=task.contract_hash,
+                            attempts=tuple(attempts),
+                        )
                     )
             except Exception as exc:
                 attempts.append(
@@ -169,17 +204,31 @@ class AITaskRouter:
 
         # Immutable-result cache is checked before any generative inference.
         if task.cacheable and self.cache is not None:
-            cached = self.cache.get(task.cache_key)
+            cached = self.cache.get(task)
             valid, _ = self._valid(task, cached)
             if valid:
-                return AITaskResult(
-                    status="ok",
-                    data=cached,
+                cache_attempt = AITaskAttempt(
                     task_type=task.task_type,
+                    executor="immutable_cache",
+                    tier=0,
+                    status="cache_hit",
                     input_hash=task.input_hash,
                     contract_hash=task.contract_hash,
-                    attempts=tuple(attempts),
-                    from_cache=True,
+                    latency_ms=0,
+                    route="cache",
+                    output_hash=sha256_json(cached),
+                )
+                attempts.append(cache_attempt)
+                return self._finish(
+                    AITaskResult(
+                        status="ok",
+                        data=cached,
+                        task_type=task.task_type,
+                        input_hash=task.input_hash,
+                        contract_hash=task.contract_hash,
+                        attempts=tuple(attempts),
+                        from_cache=True,
+                    )
                 )
 
         for executor in self.executors:
@@ -195,29 +244,30 @@ class AITaskRouter:
             try:
                 data, telemetry = executor.run(task)
                 valid, reason = self._valid(task, data)
-                attempts.append(
-                    self._attempt(
-                        task,
-                        executor=executor.name,
-                        tier=executor.tier,
-                        status="ok" if valid else "invalid",
-                        started=started,
-                        telemetry=telemetry,
-                        data=data if valid else None,
-                        error=None if valid else reason,
-                    )
+                attempt = self._attempt(
+                    task,
+                    executor=executor.name,
+                    tier=executor.tier,
+                    status="ok" if valid else "invalid",
+                    started=started,
+                    telemetry=telemetry,
+                    data=data if valid else None,
+                    error=None if valid else reason,
                 )
+                attempts.append(attempt)
                 if not valid:
                     continue
                 if task.cacheable and self.cache is not None:
-                    self.cache.set(task.cache_key, data)
-                return AITaskResult(
-                    status="ok",
-                    data=data,
-                    task_type=task.task_type,
-                    input_hash=task.input_hash,
-                    contract_hash=task.contract_hash,
-                    attempts=tuple(attempts),
+                    self.cache.set(task, data, attempt=attempt)
+                return self._finish(
+                    AITaskResult(
+                        status="ok",
+                        data=data,
+                        task_type=task.task_type,
+                        input_hash=task.input_hash,
+                        contract_hash=task.contract_hash,
+                        attempts=tuple(attempts),
+                    )
                 )
             except Exception as exc:
                 attempts.append(
@@ -231,12 +281,14 @@ class AITaskRouter:
                     )
                 )
 
-        return AITaskResult(
-            status="safe_hold",
-            data=None,
-            task_type=task.task_type,
-            input_hash=task.input_hash,
-            contract_hash=task.contract_hash,
-            attempts=tuple(attempts),
-            reason="no_validated_execution_route_produced_a_valid_result",
+        return self._finish(
+            AITaskResult(
+                status="safe_hold",
+                data=None,
+                task_type=task.task_type,
+                input_hash=task.input_hash,
+                contract_hash=task.contract_hash,
+                attempts=tuple(attempts),
+                reason="no_validated_execution_route_produced_a_valid_result",
+            )
         )
