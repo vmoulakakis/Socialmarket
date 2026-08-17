@@ -75,9 +75,13 @@ jobs:
           grep -R "metadata never become pain evidence" workers/market_intelligence/consumer_forum_seed_crawl_v48.py
           grep -R "actual text must pass the same" workers/market_intelligence/consumer_forum_seed_crawl_v48.py
           grep -R "seed/search metadata excluded from proof" workers/market_intelligence/consumer_verified_public_v412.py
-          grep -R "source_diverse_compact_v3" workers/market_intelligence/category_pain_local_audit.py
-          grep -R "category-pain-local-v4-structured" workers/market_intelligence/category_pain_local_audit.py
+          grep -R "verified_public_v4.18" workers/market_intelligence/consumer_verified_public_v412.py
+          grep -R "source_diverse_compact_v4" workers/market_intelligence/category_pain_local_audit.py
+          grep -R "category-pain-local-v5-compact-decision" workers/market_intelligence/category_pain_local_audit.py
           grep -R "RESPONSE_SCHEMA" workers/market_intelligence/category_pain_local_audit.py
+          grep -R "required_keys=(\"clusters\",)" workers/market_intelligence/category_pain_local_audit.py
+          grep -R "max_output_tokens=240" workers/market_intelligence/category_pain_local_audit.py
           grep -R "deterministic-preflight" workers/market_intelligence/category_pain_local_audit.py
           grep -R "_hard_topology_ready" workers/market_intelligence/category_pain_local_audit.py
+          grep -R "_adapt_result" workers/market_intelligence/category_pain_local_audit.py
           grep -R "CATEGORY_PAIN_AUDIT_MAX_EVIDENCE" workers/market_intelligence/category_pain_local_audit.py
