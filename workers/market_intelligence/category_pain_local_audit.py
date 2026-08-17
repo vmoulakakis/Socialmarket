@@ -16,8 +16,8 @@ from task_contract import AITask  # noqa: E402
 
 INSTRUCTIONS = """You are SocialMarket Greek Consumer Pain Skeptic.
 Use ONLY the supplied real extracted consumer-text rows for the exact category/subcategory. Identify product problems, unmet needs, alternative requests or purchase frictions. Reject navigation, SEO/product copy, generic articles, unrelated merchant complaints, keyword coincidences and pure praise. Never invent demand, prevalence, prices, features or popularity.
-A validated cluster needs at least 3 supplied rows supporting the SAME commercially meaningful need, with independent support: at least 2 domains AND either 2 source families or 3 domains. Otherwise use needs_review/rejected or return no cluster.
-Return strict JSON keys clusters, audit_summary, rejected_patterns. Each cluster requires canonical_text, cluster_type (pain|unmet_need|alternative_request|complaint), evidence_indices, pain_severity 0-100, commercial_intent 0-100, audit_score 0-100, confidence 0-1, rationale, verdict (validated|needs_review|rejected)."""
+A candidate cluster needs at least 3 supplied rows supporting the SAME commercially meaningful need. Validated also requires independent support: at least 2 domains AND either 2 source families or 3 domains. NEVER output a cluster with fewer than 3 evidence_indices; omit it instead. If nothing qualifies, return clusters: [].
+Return strict JSON only, no markdown, with keys clusters, audit_summary, rejected_patterns. Return at most 2 clusters. Each cluster requires canonical_text, cluster_type (pain|unmet_need|alternative_request|complaint), evidence_indices, pain_severity 0-100, commercial_intent 0-100, audit_score 0-100, confidence 0-1, rationale, verdict (validated|needs_review|rejected). Keep canonical_text <=180 characters, rationale <=160 characters, audit_summary <=220 characters, and rejected_patterns to at most 4 strings <=80 characters each."""
 
 
 def _host(url: str | None) -> str:
@@ -149,7 +149,7 @@ def build_task(item: Mapping[str, Any]) -> AITask:
             "evidence": evidence,
         },
         required_keys=("clusters", "audit_summary", "rejected_patterns"),
-        prompt_version="category-pain-local-v2-compact",
+        prompt_version="category-pain-local-v3-concise",
         max_tier=2,
         cacheable=True,
         material_change_capable=True,
@@ -157,7 +157,7 @@ def build_task(item: Mapping[str, Any]) -> AITask:
             "evidence_count": len(evidence),
             "source_domains": len({str(x.get("source_domain") or "") for x in evidence if x.get("source_domain")}),
             "geography": "GR",
-            "evidence_pack": "source_diverse_compact_v1",
+            "evidence_pack": "source_diverse_compact_v2",
         },
     )
 
@@ -166,8 +166,12 @@ def _validate_nested(data: Mapping[str, Any], evidence_count: int) -> tuple[bool
     clusters = data.get("clusters")
     if not isinstance(clusters, list):
         return False, "clusters_not_array"
+    if len(clusters) > 2:
+        return False, "too_many_clusters"
     if not isinstance(data.get("rejected_patterns"), list):
         return False, "rejected_patterns_not_array"
+    if len(data.get("rejected_patterns") or []) > 4:
+        return False, "too_many_rejected_patterns"
     if not isinstance(data.get("audit_summary"), str):
         return False, "audit_summary_not_string"
 
@@ -196,6 +200,8 @@ def _validate_nested(data: Mapping[str, Any], evidence_count: int) -> tuple[bool
         indices = cluster.get("evidence_indices")
         if not isinstance(indices, list):
             return False, "evidence_indices_not_array"
+        if len(indices) < 3:
+            return False, "cluster_insufficient_evidence_indices"
         for idx in indices:
             if not isinstance(idx, int) or isinstance(idx, bool) or idx < 0 or idx >= evidence_count:
                 return False, "evidence_index_out_of_range"
@@ -208,6 +214,12 @@ def _validate_nested(data: Mapping[str, Any], evidence_count: int) -> tuple[bool
             return False, "cluster_score_not_numeric"
         if not (0 <= severity <= 100 and 0 <= intent <= 100 and 0 <= audit <= 100 and 0 <= confidence <= 1):
             return False, "cluster_score_out_of_range"
+        if len(str(cluster.get("canonical_text") or "")) > 220:
+            return False, "cluster_text_too_long"
+        if len(str(cluster.get("rationale") or "")) > 220:
+            return False, "cluster_rationale_too_long"
+    if len(str(data.get("audit_summary") or "")) > 320:
+        return False, "audit_summary_too_long"
     return True, None
 
 
