@@ -9,9 +9,8 @@ pain scorer. It never bypasses login, robots, 403/CAPTCHA or anti-bot controls.
 """
 
 import concurrent.futures
-import re
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import consumer_evidence_v4 as consumer
 import consumer_searx_forum_v47 as v47
@@ -37,8 +36,8 @@ SEEDS = {
     ),
 }
 
-TOPIC_MARKERS = (
-    'view=topic', 'viewtopic.php', 'showthread.php', '/topic/', '/forums/topic/', '/forum/', 't=', 'id=',
+TOPIC_PATH_MARKERS = (
+    'viewtopic.php', 'showthread.php', '/topic/', '/forums/topic/',
 )
 DISCUSSION_TERMS = (
     'προβλημα','πρόβλημα','εμπειρ','αγορα','αγορά','χρησ','δοκιμ','δεν','σπα','χαλα','δυσκολ',
@@ -78,6 +77,23 @@ def _same_domain(url: str, seed: str) -> bool:
     return bool(a and b and (a == b or a.endswith('.' + b) or b.endswith('.' + a)))
 
 
+def _topic_url(url: str) -> bool:
+    """Classify real topic URLs without substring collisions such as catid=id.
+
+    Forum URL contracts differ, so use exact query semantics where available
+    and well-known topic path forms otherwise. Generic `id=` / `t=` substring
+    matching is intentionally forbidden because category/index URLs can contain
+    those character sequences (for example `catid=`).
+    """
+    parsed = urlparse(str(url or ''))
+    path = parsed.path.lower()
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    view = str((query.get('view') or [''])[0]).lower()
+    if view == 'topic':
+        return True
+    return any(marker in path for marker in TOPIC_PATH_MARKERS)
+
+
 def _fetch_html(url: str):
     try:
         response = consumer.SESSION.get(url, timeout=18, allow_redirects=True)
@@ -105,7 +121,7 @@ def _link_score(url: str, text: str, tokens: list[str]) -> int:
     hay = consumer.fold(f'{text} {url}')
     score = sum(4 for token in tokens if token in hay)
     score += sum(1 for term in DISCUSSION_TERMS if consumer.fold(term) in hay)
-    if any(marker in url.lower() for marker in TOPIC_MARKERS):
+    if _topic_url(url):
         score += 2
     return score
 
@@ -129,8 +145,7 @@ def _extract_links(html: str, base_url: str, tokens: list[str], limit: int = 40)
 
 
 def _topicish(row: dict) -> bool:
-    url = str(row.get('url') or '').lower()
-    return any(marker in url for marker in TOPIC_MARKERS) and int(row.get('crawl_score') or 0) >= 3
+    return _topic_url(str(row.get('url') or '')) and int(row.get('crawl_score') or 0) >= 3
 
 
 def _crawl_seed(seed: str, tokens: list[str]):
