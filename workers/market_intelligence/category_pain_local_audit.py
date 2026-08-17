@@ -132,23 +132,37 @@ def _validate_nested(data: Mapping[str, Any], evidence_count: int) -> tuple[bool
 
 
 def _models() -> tuple[str, str]:
+    # Qwen3.5 4B is the smallest model that passed the SocialMarket local AI V2
+    # qualification suite 5/5 on the real GitHub-hosted runner. Smaller tested
+    # models remain unqualified and are intentionally not production defaults.
     return (
-        os.getenv("CATEGORY_PAIN_TIER1_MODEL", "qwen3.5:0.8b").strip(),
-        os.getenv("CATEGORY_PAIN_TIER2_MODEL", "qwen3.5:4b").strip(),
+        os.getenv("CATEGORY_PAIN_TIER1_MODEL", "qwen3.5:4b").strip(),
+        os.getenv("CATEGORY_PAIN_TIER2_MODEL", "").strip(),
     )
+
+
+def _cache_and_sink():
+    durable = os.getenv("AI_TASK_RUNTIME_DURABLE", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if not durable:
+        return InMemoryTaskCache(), None
+    from supabase_runtime import AITaskRuntimeClient, SupabaseTaskCache, SupabaseTaskResultSink  # noqa: E402
+
+    client = AITaskRuntimeClient()
+    return SupabaseTaskCache(client), SupabaseTaskResultSink(client)
 
 
 def make_router() -> AITaskRouter:
     endpoint = os.getenv("LOCAL_OLLAMA_URL", "http://127.0.0.1:11434")
     tier1, tier2 = _models()
     executors = [
-        OllamaExecutor(name="category-pain-tier1", tier=1, model=tier1, endpoint=endpoint, timeout_seconds=150),
+        OllamaExecutor(name="category-pain-tier1", tier=1, model=tier1, endpoint=endpoint, timeout_seconds=180),
     ]
     if tier2 and tier2 != tier1:
         executors.append(
-            OllamaExecutor(name="category-pain-tier2", tier=2, model=tier2, endpoint=endpoint, timeout_seconds=180)
+            OllamaExecutor(name="category-pain-tier2", tier=2, model=tier2, endpoint=endpoint, timeout_seconds=240)
         )
-    return AITaskRouter(executors=executors, cache=InMemoryTaskCache())
+    cache, sink = _cache_and_sink()
+    return AITaskRouter(executors=executors, cache=cache, result_sink=sink)
 
 
 def audit_items(items: list[Mapping[str, Any]], router: AITaskRouter | None = None) -> dict[str, Any]:
