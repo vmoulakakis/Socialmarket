@@ -9,6 +9,16 @@
 
 ---
 
+## 0. Implementation gate summary
+
+**GO** to Phase 2 engineering, but only through replacement interfaces and acceptance tests.  
+**NO-GO** to deleting existing production paths until the replacement path proves parity.  
+**NO-GO** to calling the current system fully autonomous/production-ready yet.
+
+The first implementation seam must be a **provider-neutral AI Task Router + canonical Autopilot control plane**, not another versioned ranking script.
+
+---
+
 ## 1. Executive verdict
 
 SocialMarket AI has a strong deterministic ingestion/commercial foundation and a coherent intended SocialMarket → SocialScheduler boundary, but the authoritative autonomous intelligence chain is **not production-complete**.
