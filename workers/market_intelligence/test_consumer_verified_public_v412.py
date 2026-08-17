@@ -63,7 +63,7 @@ class VerifiedPublicV412Tests(unittest.TestCase):
             'Κάθε βράδυ θέλει πάλι φούσκωμα για να είναι έτοιμο για ύπνο.'
         )
         row = {'url': seed['url'], 'title': seed['title']}
-        pain_stems = (*verified.consumer.PAIN_STEMS, 'χανει αερ', 'ξεφουσκ')
+        pain_stems = (*verified.consumer.PAIN_STEMS, 'χανει αερ', 'χανουν αερ', 'ξεφουσκ')
         first_stems = (*verified.consumer.FIRST_PERSON_STEMS, 'εχοντας')
         with patch.object(verified.consumer, 'PAIN_STEMS', pain_stems), patch.object(
             verified.consumer, 'FIRST_PERSON_STEMS', first_stems
