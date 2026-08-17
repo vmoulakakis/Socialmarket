@@ -48,17 +48,49 @@ create index if not exists ai_task_attempts_status_time_idx
 create index if not exists ai_task_attempts_input_contract_idx
   on ops.ai_task_attempts (input_hash, contract_hash, created_at desc);
 
+create table if not exists ops.ai_task_results (
+  id bigint generated always as identity primary key,
+  task_type text not null,
+  input_hash text not null,
+  contract_hash text not null,
+  status text not null check (status in ('ok','safe_hold')),
+  from_cache boolean not null default false,
+  reason text,
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  selected_executor text,
+  selected_tier smallint check (selected_tier is null or (selected_tier >= 0 and selected_tier <= 9)),
+  selected_route text,
+  selected_model text,
+  output_hash text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists ai_task_results_task_time_idx
+  on ops.ai_task_results (task_type, created_at desc);
+
+create index if not exists ai_task_results_status_time_idx
+  on ops.ai_task_results (status, created_at desc);
+
+create index if not exists ai_task_results_input_contract_idx
+  on ops.ai_task_results (input_hash, contract_hash, created_at desc);
+
 comment on table ops.ai_task_cache is
   'Immutable-hash AI task result cache. Stores bounded structured outputs only; raw evidence payloads are intentionally excluded.';
 
 comment on table ops.ai_task_attempts is
-  'Provider-neutral AI task execution telemetry. Stores hashes, routing, latency and validation outcomes; never raw prompt/evidence payloads.';
+  'Provider-neutral AI task attempt telemetry. Stores hashes, routing, latency and validation outcomes; never raw prompt/evidence payloads.';
+
+comment on table ops.ai_task_results is
+  'One final decision record per AI task execution, including SAFE_HOLD and cache reuse, without raw prompts/evidence.';
 
 revoke all on table ops.ai_task_cache from anon, authenticated;
 revoke all on table ops.ai_task_attempts from anon, authenticated;
+revoke all on table ops.ai_task_results from anon, authenticated;
 
 grant select, insert, update, delete on table ops.ai_task_cache to service_role;
 grant select, insert on table ops.ai_task_attempts to service_role;
+grant select, insert on table ops.ai_task_results to service_role;
 grant usage, select on sequence ops.ai_task_attempts_id_seq to service_role;
+grant usage, select on sequence ops.ai_task_results_id_seq to service_role;
 
 commit;
