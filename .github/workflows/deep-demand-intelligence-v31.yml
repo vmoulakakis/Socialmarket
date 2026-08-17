@@ -11,6 +11,10 @@ on:
     workflows: ['Semantic Category Pain Intelligence']
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - '.github/deep-demand-final-trigger'
 
 permissions:
   contents: read
