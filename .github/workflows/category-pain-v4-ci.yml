@@ -9,6 +9,8 @@ on:
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/consumer_source_expansion_v43.py'
       - 'workers/market_intelligence/consumer_direct_social_v44.py'
+      - 'workers/market_intelligence/consumer_direct_greek_v46.py'
+      - 'workers/market_intelligence/consumer_searx_forum_v47.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'workers/market_intelligence/test_*v4*.py'
       - 'supabase/functions/evidence-gateway/**'
@@ -22,6 +24,8 @@ on:
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/consumer_source_expansion_v43.py'
       - 'workers/market_intelligence/consumer_direct_social_v44.py'
+      - 'workers/market_intelligence/consumer_direct_greek_v46.py'
+      - 'workers/market_intelligence/consumer_searx_forum_v47.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'workers/market_intelligence/test_*v4*.py'
       - 'supabase/functions/evidence-gateway/**'
@@ -44,10 +48,10 @@ jobs:
       - name: Install evidence dependencies
         run: pip install requests trafilatura yt-dlp
       - name: Compile V4 workers
-        run: python -m py_compile workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
+        run: python -m py_compile workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/consumer_direct_greek_v46.py workers/market_intelligence/consumer_searx_forum_v47.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
       - name: Test consumer extraction and market/context invariants
         working-directory: workers/market_intelligence
-        run: python -m unittest -v test_consumer_evidence_v4.py test_consumer_direct_social_v44.py test_category_pain_v4.py
+        run: python -m unittest -v test_consumer_evidence_v4.py test_consumer_direct_social_v44.py test_consumer_searx_forum_v47.py test_category_pain_v4.py
       - name: Type-check hardened evidence gateway
         run: deno check --node-modules-dir=auto supabase/functions/evidence-gateway/index.ts
       - name: Guard V4 truth semantics
@@ -59,3 +63,4 @@ jobs:
           grep -R "not search volume" workers/market_intelligence/category_pain_intelligence_v4.py
           grep -R "_EXTRACT_LOCK" workers/market_intelligence/category_pain_intelligence_v42.py
           grep -R "observed public user statement; not a population estimate" workers/market_intelligence/consumer_direct_social_v44.py
+          grep -R "search snippets are discovery diagnostics only" workers/market_intelligence/consumer_searx_forum_v47.py
