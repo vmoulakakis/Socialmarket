@@ -1,0 +1,89 @@
+name: Local AI Benchmark
+
+on:
+  push:
+    branches:
+      - feat/autopilot-ai-task-router
+    paths:
+      - '.github/workflows/local-ai-benchmark.yml'
+      - '.github/local-ai-benchmark-trigger'
+      - 'workers/ai_runtime/benchmark_local_models.py'
+      - 'workers/ai_runtime/ollama_executor.py'
+      - 'workers/ai_runtime/task_contract.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: socialmarket-local-ai-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      LOCAL_OLLAMA_URL: http://127.0.0.1:11434
+      LOCAL_MODEL_TIMEOUT_SECONDS: '150'
+      OLLAMA_BENCH_MODELS: qwen3.5:0.8b,qwen3.5:4b
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start Ollama
+        run: |
+          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/ollama.log
+          exit 1
+
+      - name: Pull benchmark models
+        run: |
+          ollama pull qwen3.5:0.8b
+          ollama pull qwen3.5:4b
+          ollama list
+
+      - name: Run SocialMarket local-model benchmark
+        working-directory: workers/ai_runtime
+        run: python benchmark_local_models.py --output ../../local-ai-benchmark.json
+
+      - name: Publish benchmark summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('local-ai-benchmark.json')
+          if not p.exists():
+              raise SystemExit(0)
+          data=json.loads(p.read_text(encoding='utf-8'))
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as f:
+              f.write('## Local AI benchmark\n\n')
+              f.write('| Model | Passed | Pass rate | Median latency | Max latency | Cost |\n')
+              f.write('|---|---:|---:|---:|---:|---:|\n')
+              for row in data.get('models',[]):
+                  f.write(f"| {row['model']} | {row['passed']}/{row['total']} | {row['pass_rate']:.0%} | {row['median_latency_ms']} ms | {row['max_latency_ms']} ms | $0 |\n")
+          PY
+
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: socialmarket-local-ai-benchmark
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            local-ai-benchmark.json
+            /tmp/ollama.log
