@@ -17,7 +17,7 @@ from task_contract import AITask  # noqa: E402
 INSTRUCTIONS = """You are SocialMarket Greek Consumer Pain Skeptic.
 Use ONLY the supplied real extracted consumer-text rows for the exact category/subcategory. Identify product problems, unmet needs, alternative requests or purchase frictions. Reject navigation, SEO/product copy, generic articles, unrelated merchant complaints, keyword coincidences and pure praise. Never invent demand, prevalence, prices, features or popularity.
 A candidate cluster needs at least 3 supplied rows supporting the SAME commercially meaningful need. Validated also requires independent support: at least 2 domains AND either 2 source families or 3 domains. NEVER output a cluster with fewer than 3 evidence_indices; omit it instead. If nothing qualifies, return clusters: [].
-Return strict JSON only, no markdown, with keys clusters, audit_summary, rejected_patterns. Return at most 2 clusters. Each cluster requires canonical_text, cluster_type (pain|unmet_need|alternative_request|complaint), evidence_indices, pain_severity 0-100, commercial_intent 0-100, audit_score 0-100, confidence 0-1, rationale, verdict (validated|needs_review|rejected). Keep canonical_text <=180 characters, rationale <=160 characters, audit_summary <=220 characters, and rejected_patterns to at most 4 strings <=80 characters each."""
+Return strict JSON only, no markdown, with keys clusters, audit_summary, rejected_patterns. Return at most 2 clusters. Each cluster requires canonical_text, cluster_type (pain|unmet_need|alternative_request|complaint), evidence_indices, pain_severity 0-100, commercial_intent 0-100, audit_score 0-100, confidence 0-1, rationale, verdict (validated|needs_review|rejected). Keep canonical_text <=180 characters, rationale <=160 characters, audit_summary concise, and rejected_patterns to at most 4 strings <=80 characters each."""
 
 
 def _host(url: str | None) -> str:
@@ -53,18 +53,11 @@ def _selection_score(evidence: Mapping[str, Any]) -> float:
     if not isinstance(pain_language, list):
         pain_language = []
     first_person = 1.0 if metadata.get("first_person_signal") is True else 0.0
-    # Language score dominates. Confidence/pain markers only break recall ties.
     return language * 10.0 + confidence * 5.0 + min(len(pain_language), 4) * 1.5 + first_person
 
 
 def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Build a small source-diverse evidence pack before any LLM call.
-
-    Millions of source/feed rows must never reach the model. Even within one
-    taxonomy job the skeptic does not need dozens of near-duplicate comments:
-    the deterministic persistence gate requires corroboration, so select one
-    strong row per independent domain first and fill only a bounded remainder.
-    """
+    """Build a small source-diverse evidence pack before any LLM call."""
     max_rows = _bounded_int("CATEGORY_PAIN_AUDIT_MAX_EVIDENCE", 10, 6, 18)
     body_chars = _bounded_int("CATEGORY_PAIN_AUDIT_BODY_CHARS", 600, 320, 800)
 
@@ -92,7 +85,6 @@ def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
             }
         )
 
-    # Stable ordering keeps cache keys and reruns reproducible.
     candidates.sort(
         key=lambda row: (
             -float(row.get("_score") or 0),
@@ -105,7 +97,6 @@ def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
     selected_urls: set[str] = set()
     seen_domains: set[str] = set()
 
-    # Pass 1: preserve independent corroboration opportunities.
     for row in candidates:
         domain = str(row.get("source_domain") or "")
         url = str(row.get("source_url") or "")
@@ -117,7 +108,6 @@ def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
         if len(selected) >= max_rows:
             break
 
-    # Pass 2: add the strongest remaining rows for same-need recurrence.
     if len(selected) < max_rows:
         for row in candidates:
             url = str(row.get("source_url") or "")
@@ -218,15 +208,15 @@ def _validate_nested(data: Mapping[str, Any], evidence_count: int) -> tuple[bool
             return False, "cluster_text_too_long"
         if len(str(cluster.get("rationale") or "")) > 220:
             return False, "cluster_rationale_too_long"
-    if len(str(data.get("audit_summary") or "")) > 320:
+    # This is presentation metadata, not a validation dimension. Keep it bounded
+    # by the already-small 500-output-token contract without rejecting an
+    # otherwise valid evidence decision solely for prose length.
+    if len(str(data.get("audit_summary") or "")) > 800:
         return False, "audit_summary_too_long"
     return True, None
 
 
 def _models() -> tuple[str, str]:
-    # Qwen3.5 4B is the smallest model that passed the SocialMarket local AI V2
-    # qualification suite 5/5 on the real GitHub-hosted runner. Smaller tested
-    # models remain unqualified and are intentionally not production defaults.
     return (
         os.getenv("CATEGORY_PAIN_TIER1_MODEL", "qwen3.5:4b").strip(),
         os.getenv("CATEGORY_PAIN_TIER2_MODEL", "").strip(),
