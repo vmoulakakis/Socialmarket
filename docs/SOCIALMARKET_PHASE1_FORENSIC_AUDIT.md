@@ -19,6 +19,8 @@ The first implementation seam must be a **provider-neutral AI Task Router + cano
 
 Phase 2 must be implemented behind compatibility boundaries so existing production data-plane components continue to operate while the new zero-paid AI path is benchmarked and validated. The first code changes must therefore be additive and reversible; legacy provider-specific paths are retired only after equivalent or better acceptance results are recorded.
 
+**Canonical implementation decision:** preserve the working Linkwise/merchant/statistical/semantic storage foundations, then move AI reasoning behind a single task contract consumed by Category Pain, Product Ranking, Audit and Creative. No production workflow may invoke a provider directly after its migration to the task contract.
+
 ---
 
 ## 1. Executive verdict
