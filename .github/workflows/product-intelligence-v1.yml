@@ -33,42 +33,40 @@ jobs:
       PRODUCT_RANKING_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway
       PRODUCT_CREATIVE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-creative-gateway
       PRODUCT_RUN_OBSERVABILITY_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-run-observability-gateway
-      PRODUCT_RANK_RAG_PRESELECT: '20000'
-      PRODUCT_RANK_PRESELECT: '5000'
-      PRODUCT_RANK_AI_MAX: '320'
-      PRODUCT_RANK_AI_WORKERS: '3'
-      PRODUCT_RANK_SAVE_LIMIT: '200'
+      AI_TASK_RUNTIME_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/ai-task-runtime-gateway
+      AI_TASK_RUNTIME_DURABLE: 'true'
+      LOCAL_OLLAMA_URL: http://127.0.0.1:11434
+      PRODUCT_AI_ROUTE: local_router
+      PRODUCT_LOCAL_MODEL: qwen3.5:4b
+      PRODUCT_LOCAL_AI_WORKERS: '1'
+      PRODUCT_LOCAL_MAX_PAIN_CONTEXT: '3'
+      PRODUCT_LOCAL_MAX_THEME_CONTEXT: '2'
+      PRODUCT_RANK_RAG_PRESELECT: '12000'
+      PRODUCT_RANK_PRESELECT: '2000'
+      PRODUCT_RANK_AI_MAX: '120'
+      PRODUCT_RANK_SAVE_LIMIT: '100'
       PRODUCT_RANK_MIN_FINAL: '100'
-      PRODUCT_RANK_SEO_LIMIT: '200'
-      PRODUCT_RANK_SEO_BATCH: '10'
-      PRODUCT_RANK_SEO_WORKERS: '3'
       PRODUCT_RANK_CREATIVE_LIMIT: '20'
-      PRODUCT_RANK_CREATIVE_BATCH: '5'
-      PRODUCT_RANK_CREATIVE_WORKERS: '3'
       PRODUCT_CREATIVE_ASSET_WORKERS: '4'
       PRODUCT_CREATIVE_BRAND_SLUG: lyseis-pou-axizoun
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight ranking + creative gateways
-        id: preflight
+      - name: Preflight persistence + AI task runtime gateways
         run: |
           python - <<'PY'
-          import json, os, urllib.request
+          import json, urllib.request
           urls={
             'ranking':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway',
             'creative':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-creative-gateway',
             'observability':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-run-observability-gateway',
+            'ai_runtime':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/ai-task-runtime-gateway',
           }
-          health={}
           for name,url in urls.items():
-              with urllib.request.urlopen(url, timeout=30) as r: health[name]=json.loads(r.read().decode())
-              print(name,{k:health[name].get(k) for k in ('ok','service','version','deepseek_configured','deepseek_model','contract')})
-              if not health[name].get('ok'): raise SystemExit(f'{name} gateway unhealthy')
-          ai_ok=all(health[x].get('deepseek_configured') for x in ('ranking','creative'))
-          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              f.write(f"ranking_ai={'true' if ai_ok else 'false'}\n")
+              with urllib.request.urlopen(url,timeout=30) as r: health=json.loads(r.read().decode())
+              print(name,{k:health.get(k) for k in ('ok','service','version','contract')})
+              if not health.get('ok'):raise SystemExit(f'{name} gateway unhealthy')
           PY
 
       - name: Start durable Product Ranking run
@@ -83,6 +81,38 @@ jobs:
 
       - name: Install product intelligence dependencies
         run: pip install -r workers/product_intelligence/requirements.txt
+
+      - name: Install local Ollama runtime
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start local Ollama and load qualified model
+        run: |
+          if ! curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+            nohup ollama serve > /tmp/ollama-product-ranking.log 2>&1 &
+          fi
+          for i in $(seq 1 40); do
+            if curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null
+          ollama pull "$PRODUCT_LOCAL_MODEL"
+          ollama list
+
+      - name: Validate local zero-paid inference route
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0,'workers/ai_runtime')
+          from ollama_executor import OllamaExecutor
+          from task_contract import AITask
+          ex=OllamaExecutor(name='preflight',tier=2,model='qwen3.5:4b',max_output_tokens=80)
+          task=AITask(task_type='preflight',role='validator',instructions='Return JSON with ok true.',payload={'ok':True},required_keys=('ok',),cacheable=False,max_tier=2)
+          assert ex.available(task), 'local model unavailable'
+          data,telemetry=ex.run(task)
+          assert data.get('ok') is True, data
+          assert float(telemetry.get('cost_usd') or 0)==0, telemetry
+          print({'local_model':telemetry.get('model'),'route':telemetry.get('route'),'cost_usd':telemetry.get('cost_usd')})
+          PY
 
       - name: Validate live Linkwise feed contract
         run: python workers/product_intelligence/linkwise_direct_feed.py --probe
@@ -101,42 +131,41 @@ jobs:
           test -s "$PRODUCT_SOURCE_FEED"
           python - <<'PY'
           from pathlib import Path
-          p=Path('linkwise-products.json')
-          size=p.stat().st_size
-          print({'feed_bytes':size})
-          if size < 10_000_000:
-              raise SystemExit('Product source unexpectedly small; refusing incomplete run')
+          p=Path('linkwise-products.json');size=p.stat().st_size;print({'feed_bytes':size})
+          if size < 10_000_000:raise SystemExit('Product source unexpectedly small; refusing incomplete run')
           PY
 
-      - name: Phase A — deterministic commercial universe scan
+      - name: Phase A — deterministic commercial universe scan at €15 floor
         run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
 
       - name: Enforce source-universe completeness
         run: |
           python - <<'PY'
           import json, os
-          with open('product-commercial-scan-profile.json',encoding='utf-8') as f:
-              p=json.load(f)
-          seen=int(p.get('records_seen') or 0)
-          eligible=int(p.get('unique_commission_eligible_products') or 0)
-          offers=int(p.get('commission_eligible_offers') or 0)
-          print({'source':os.getenv('PRODUCT_SOURCE'),'records_seen':seen,'unique_commission_eligible_products':eligible,'commission_eligible_offers':offers})
-          if seen < 2_000_000:
-              raise SystemExit(f'Product universe incomplete: only {seen} complete records')
-          if eligible < 10_000 or offers < 10_000:
-              raise SystemExit(f'Commercial universe unexpectedly thin: products={eligible}, offers={offers}')
+          with open('product-commercial-scan-profile.json',encoding='utf-8') as f:p=json.load(f)
+          seen=int(p.get('records_seen') or 0);eligible=int(p.get('unique_commission_eligible_products') or 0);offers=int(p.get('commission_eligible_offers') or 0)
+          print({'source':os.getenv('PRODUCT_SOURCE'),'records_seen':seen,'unique_commission_eligible_products':eligible,'commission_eligible_offers':offers,'min_commission_eur':15})
+          if seen < 2_000_000:raise SystemExit(f'Product universe incomplete: only {seen} complete records')
+          if eligible < 100 or offers < 100:raise SystemExit(f'Commercial universe too thin for Top100 after €15 gate: products={eligible}, offers={offers}')
           PY
 
-      - name: Final Ranking V3.6.4 — durable Top 100+ + complete SEO + 20 READY creative packs + 60 durable assets
+      - name: Final Local Autopilot Ranking — Top 100 + deterministic SEO + 20 audited creative packs
         id: final_rank
-        if: steps.preflight.outputs.ranking_ai == 'true'
         run: python workers/product_intelligence/product_ranking_v363_production.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Fail if final AI services are unavailable
-        if: steps.preflight.outputs.ranking_ai != 'true'
+      - name: Verify zero-paid final profile
         run: |
-          echo 'Final ranking requires both ranking and creative AI gateways. No partial production list will be published.'
-          exit 1
+          python - <<'PY'
+          import json
+          with open('product-ranking-v3-profile.json',encoding='utf-8') as f:p=json.load(f)
+          assert int(p.get('saved_rankings') or 0) >= 100, p.get('saved_rankings')
+          assert float(p.get('owner_min_expected_commission_eur') or 0) >= 15, p.get('owner_min_expected_commission_eur')
+          assert p.get('bulk_feed_to_llm') is False
+          assert p.get('paid_llm_required') is False
+          assert float(p.get('paid_inference_cost_usd') or 0) == 0
+          assert float(p.get('creative_paid_inference_cost_usd') or 0) == 0
+          print({'saved_rankings':p.get('saved_rankings'),'local_model':p.get('local_model'),'paid_inference_cost_usd':p.get('paid_inference_cost_usd'),'bulk_feed_to_llm':p.get('bulk_feed_to_llm')})
+          PY
 
       - name: Mark pre-final Product workflow failure
         if: failure() && steps.durable_run.outcome == 'success' && steps.final_rank.outcome != 'failure'
@@ -153,6 +182,7 @@ jobs:
             product-commercial-scan-sample.json
             product-feed-safety-profile.json
             product-ranking-v3-profile.json
+            /tmp/ollama-product-ranking.log
 
       - name: Remove raw feed and local staging from runner
         if: always()
