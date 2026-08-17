@@ -95,8 +95,20 @@ def _topic_url(url: str) -> bool:
 
 
 def _fetch_html(url: str):
+    """Fetch one public HTML surface using the canonical consumer HTTP stack.
+
+    `consumer_evidence_v4` exposes the imported `requests` module and its UA,
+    not a requests.Session object. Using that canonical stack keeps timeout,
+    redirect and anti-bot behavior explicit and prevents the V4.8 seed crawler
+    from failing before the first network request.
+    """
     try:
-        response = consumer.SESSION.get(url, timeout=18, allow_redirects=True)
+        response = consumer.requests.get(
+            url,
+            headers=consumer.UA,
+            timeout=18,
+            allow_redirects=True,
+        )
         if response.status_code in (401, 403, 429):
             return None, f'http_{response.status_code}'
         response.raise_for_status()
