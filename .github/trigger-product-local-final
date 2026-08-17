@@ -1,0 +1,6 @@
+first-authoritative-local-autopilot
+owner_min_expected_commission_eur=15
+model=qwen3.5:4b
+bulk_feed_to_llm=false
+paid_inference_required=false
+triggered_at=2026-08-17T09:48:00Z
