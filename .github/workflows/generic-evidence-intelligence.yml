@@ -43,6 +43,7 @@ jobs:
       CATEGORY_PAIN_AI_BATCH: '1'
       CATEGORY_CONSUMER_FETCH_WORKERS: '6'
       CATEGORY_CONSUMER_MAX_URLS: '72'
+      CATEGORY_PAIN_REQUIRE_VALIDATED_OUTPUT: ${{ github.event_name == 'push' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -99,11 +100,11 @@ jobs:
         run: |
           set -euo pipefail
           python category_pain_intelligence_v42.py | tee semantic-category-pain-output.json
-      - name: Assert structured research completion
+      - name: Assert structured research completion and useful intelligence
         working-directory: workers/market_intelligence
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           lines=[x for x in Path('semantic-category-pain-output.json').read_text(encoding='utf-8').splitlines() if x.strip()]
           parsed=[]
@@ -115,7 +116,15 @@ jobs:
           summary=summaries[-1]
           assert summary.get('failed') == 0, f"Category Pain reported failures: {summary}"
           assert summary.get('status') == 'completed', f"Research did not complete cleanly: {summary}"
-          print(summary)
+          results=[x for x in parsed if x.get('ok') is True and x.get('category')]
+          pain_candidates=sum(int(x.get('pain_candidates') or 0) for x in results)
+          validated_clusters=sum(int(x.get('validated_clusters') or 0) for x in results)
+          qualification=os.getenv('CATEGORY_PAIN_REQUIRE_VALIDATED_OUTPUT','false').strip().lower() == 'true'
+          quality={'processed':summary.get('processed'),'pain_candidates':pain_candidates,'validated_clusters':validated_clusters,'qualification_required':qualification}
+          print(quality)
+          if qualification:
+              assert pain_candidates > 0, f'Category Pain qualification produced zero consumer pain candidates: {quality}'
+              assert validated_clusters > 0, f'Category Pain qualification produced zero validated clusters: {quality}'
           PY
       - uses: actions/upload-artifact@v4
         if: always()
