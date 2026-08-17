@@ -6,6 +6,7 @@ on:
     paths:
       - 'workers/market_intelligence/category_pain_intelligence_v4.py'
       - 'workers/market_intelligence/category_pain_intelligence_v42.py'
+      - 'workers/market_intelligence/category_pain_local_audit.py'
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/consumer_source_expansion_v43.py'
       - 'workers/market_intelligence/consumer_direct_social_v44.py'
@@ -14,6 +15,7 @@ on:
       - 'workers/market_intelligence/consumer_forum_seed_crawl_v48.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'workers/market_intelligence/test_*v4*.py'
+      - 'workers/market_intelligence/test_category_pain_local_audit.py'
       - 'supabase/functions/evidence-gateway/**'
       - '.github/workflows/generic-evidence-intelligence.yml'
       - '.github/workflows/category-pain-v4-ci.yml'
@@ -22,6 +24,7 @@ on:
     paths:
       - 'workers/market_intelligence/category_pain_intelligence_v4.py'
       - 'workers/market_intelligence/category_pain_intelligence_v42.py'
+      - 'workers/market_intelligence/category_pain_local_audit.py'
       - 'workers/market_intelligence/consumer_evidence_v4.py'
       - 'workers/market_intelligence/consumer_source_expansion_v43.py'
       - 'workers/market_intelligence/consumer_direct_social_v44.py'
@@ -30,6 +33,7 @@ on:
       - 'workers/market_intelligence/consumer_forum_seed_crawl_v48.py'
       - 'workers/market_intelligence/authoritative_context_v3.py'
       - 'workers/market_intelligence/test_*v4*.py'
+      - 'workers/market_intelligence/test_category_pain_local_audit.py'
       - 'supabase/functions/evidence-gateway/**'
       - '.github/workflows/category-pain-v4-ci.yml'
 
@@ -50,13 +54,13 @@ jobs:
       - name: Install evidence dependencies
         run: pip install requests trafilatura yt-dlp
       - name: Compile V4 workers
-        run: python -m py_compile workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/consumer_direct_greek_v46.py workers/market_intelligence/consumer_searx_forum_v47.py workers/market_intelligence/consumer_forum_seed_crawl_v48.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
-      - name: Test consumer extraction and market/context invariants
+        run: python -m py_compile workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/consumer_direct_greek_v46.py workers/market_intelligence/consumer_searx_forum_v47.py workers/market_intelligence/consumer_forum_seed_crawl_v48.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_local_audit.py workers/market_intelligence/category_pain_intelligence_v42.py
+      - name: Test consumer extraction and compact local-audit invariants
         working-directory: workers/market_intelligence
-        run: python -m unittest -v test_consumer_evidence_v4.py test_consumer_direct_social_v44.py test_consumer_searx_forum_v47.py test_consumer_forum_seed_crawl_v48.py test_category_pain_v4.py
+        run: python -m unittest -v test_consumer_evidence_v4.py test_consumer_direct_social_v44.py test_consumer_searx_forum_v47.py test_consumer_forum_seed_crawl_v48.py test_category_pain_v4.py test_category_pain_local_audit.py
       - name: Type-check hardened evidence gateway
         run: deno check --node-modules-dir=auto supabase/functions/evidence-gateway/index.ts
-      - name: Guard V4 truth semantics
+      - name: Guard V4 truth and bounded-AI semantics
         run: |
           grep -R "consumer_text===true" supabase/functions/evidence-gateway/index.ts
           grep -R "marketReady" supabase/functions/evidence-gateway/index.ts
@@ -68,3 +72,5 @@ jobs:
           grep -R "search snippets are discovery diagnostics only" workers/market_intelligence/consumer_searx_forum_v47.py
           grep -R "metadata never become pain evidence" workers/market_intelligence/consumer_forum_seed_crawl_v48.py
           grep -R "actual text must pass the same" workers/market_intelligence/consumer_forum_seed_crawl_v48.py
+          grep -R "source_diverse_compact_v1" workers/market_intelligence/category_pain_local_audit.py
+          grep -R "CATEGORY_PAIN_AUDIT_MAX_EVIDENCE" workers/market_intelligence/category_pain_local_audit.py

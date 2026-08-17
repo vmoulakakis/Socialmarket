@@ -15,14 +15,9 @@ from task_contract import AITask  # noqa: E402
 
 
 INSTRUCTIONS = """You are SocialMarket Greek Consumer Pain Skeptic.
-Extract ONLY product-related consumer problems, unmet needs, alternative requests or purchase frictions actually supported by REAL EXTRACTED CONSUMER TEXT for the EXACT canonical category/subcategory.
-Reject navigation text, product descriptions, SEO copy, generic articles, news, social problems, merchant/company complaints unrelated to product need, locations, brands, campaign themes, keyword coincidences and pure positive reviews.
-Do not infer population prevalence from one review. Do not invent search volume, market share, competition, features, prices or popularity.
-A cluster can be validated only when at least 3 relevant consumer evidence rows support the SAME commercially meaningful need and support is independent: at least 2 domains AND either at least 2 source families or at least 3 domains.
-Prefer recurring desired outcomes and solvable product frictions.
-Return strict JSON with keys clusters, audit_summary, rejected_patterns.
-Each cluster must contain canonical_text, cluster_type (pain|unmet_need|alternative_request|complaint), evidence_indices, pain_severity 0-100, commercial_intent 0-100, audit_score 0-100, confidence 0-1, rationale, verdict (validated|needs_review|rejected).
-If evidence does not meet the standard, return no validated cluster."""
+Use ONLY the supplied real extracted consumer-text rows for the exact category/subcategory. Identify product problems, unmet needs, alternative requests or purchase frictions. Reject navigation, SEO/product copy, generic articles, unrelated merchant complaints, keyword coincidences and pure praise. Never invent demand, prevalence, prices, features or popularity.
+A validated cluster needs at least 3 supplied rows supporting the SAME commercially meaningful need, with independent support: at least 2 domains AND either 2 source families or 3 domains. Otherwise use needs_review/rejected or return no cluster.
+Return strict JSON keys clusters, audit_summary, rejected_patterns. Each cluster requires canonical_text, cluster_type (pain|unmet_need|alternative_request|complaint), evidence_indices, pain_severity 0-100, commercial_intent 0-100, audit_score 0-100, confidence 0-1, rationale, verdict (validated|needs_review|rejected)."""
 
 
 def _host(url: str | None) -> str:
@@ -34,8 +29,46 @@ def _host(url: str | None) -> str:
         return ""
 
 
+def _bounded_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)).strip())
+    except Exception:
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def _numeric(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _selection_score(evidence: Mapping[str, Any]) -> float:
+    """Cheap deterministic recall score; never becomes an opportunity score."""
+    metadata = evidence.get("metadata") or {}
+    language = _numeric(metadata.get("consumer_language_score"), 0.0)
+    confidence = _numeric(evidence.get("confidence"), 0.0)
+    pain_language = metadata.get("pain_language") or []
+    if not isinstance(pain_language, list):
+        pain_language = []
+    first_person = 1.0 if metadata.get("first_person_signal") is True else 0.0
+    # Language score dominates. Confidence/pain markers only break recall ties.
+    return language * 10.0 + confidence * 5.0 + min(len(pain_language), 4) * 1.5 + first_person
+
+
 def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
+    """Build a small source-diverse evidence pack before any LLM call.
+
+    Millions of source/feed rows must never reach the model. Even within one
+    taxonomy job the skeptic does not need dozens of near-duplicate comments:
+    the deterministic persistence gate requires corroboration, so select one
+    strong row per independent domain first and fill only a bounded remainder.
+    """
+    max_rows = _bounded_int("CATEGORY_PAIN_AUDIT_MAX_EVIDENCE", 10, 6, 18)
+    body_chars = _bounded_int("CATEGORY_PAIN_AUDIT_BODY_CHARS", 600, 320, 800)
+
+    candidates: list[dict[str, Any]] = []
     for evidence in item.get("evidence") or []:
         metadata = evidence.get("metadata") or {}
         if evidence.get("source_kind") != "pain_candidate":
@@ -44,20 +77,63 @@ def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
             continue
         if metadata.get("eligible_for_pain_audit") is False:
             continue
-        out.append(
+        domain = _host(evidence.get("source_url"))
+        candidates.append(
             {
-                "i": len(out),
                 "source_url": evidence.get("source_url"),
-                "source_domain": _host(evidence.get("source_url")),
+                "source_domain": domain,
                 "source_family": metadata.get("source_family") or "public_web",
-                "title": evidence.get("title"),
-                "body": str(evidence.get("body") or "")[:1100],
+                "title": str(evidence.get("title") or "")[:220],
+                "body": str(evidence.get("body") or "")[:body_chars],
                 "confidence": evidence.get("confidence"),
                 "consumer_language_score": metadata.get("consumer_language_score"),
                 "pain_language": metadata.get("pain_language"),
+                "_score": _selection_score(evidence),
             }
         )
-    return out[:60]
+
+    # Stable ordering keeps cache keys and reruns reproducible.
+    candidates.sort(
+        key=lambda row: (
+            -float(row.get("_score") or 0),
+            str(row.get("source_domain") or ""),
+            str(row.get("source_url") or ""),
+        )
+    )
+
+    selected: list[dict[str, Any]] = []
+    selected_urls: set[str] = set()
+    seen_domains: set[str] = set()
+
+    # Pass 1: preserve independent corroboration opportunities.
+    for row in candidates:
+        domain = str(row.get("source_domain") or "")
+        url = str(row.get("source_url") or "")
+        if not domain or domain in seen_domains:
+            continue
+        selected.append(row)
+        seen_domains.add(domain)
+        selected_urls.add(url)
+        if len(selected) >= max_rows:
+            break
+
+    # Pass 2: add the strongest remaining rows for same-need recurrence.
+    if len(selected) < max_rows:
+        for row in candidates:
+            url = str(row.get("source_url") or "")
+            if url in selected_urls:
+                continue
+            selected.append(row)
+            selected_urls.add(url)
+            if len(selected) >= max_rows:
+                break
+
+    out: list[dict[str, Any]] = []
+    for row in selected:
+        clean = {key: value for key, value in row.items() if key != "_score"}
+        clean["i"] = len(out)
+        out.append(clean)
+    return out
 
 
 def build_task(item: Mapping[str, Any]) -> AITask:
@@ -70,15 +146,19 @@ def build_task(item: Mapping[str, Any]) -> AITask:
             "entity_id": item.get("entity_id"),
             "category": item.get("category"),
             "subcategory": item.get("subcategory"),
-            "market_evidence_quality": ((item.get("market") or {}).get("evidence_quality") or {}),
             "evidence": evidence,
         },
         required_keys=("clusters", "audit_summary", "rejected_patterns"),
-        prompt_version="category-pain-local-v1",
+        prompt_version="category-pain-local-v2-compact",
         max_tier=2,
         cacheable=True,
         material_change_capable=True,
-        metadata={"evidence_count": len(evidence), "geography": "GR"},
+        metadata={
+            "evidence_count": len(evidence),
+            "source_domains": len({str(x.get("source_domain") or "") for x in evidence if x.get("source_domain")}),
+            "geography": "GR",
+            "evidence_pack": "source_diverse_compact_v1",
+        },
     )
 
 
@@ -155,11 +235,25 @@ def make_router() -> AITaskRouter:
     endpoint = os.getenv("LOCAL_OLLAMA_URL", "http://127.0.0.1:11434")
     tier1, tier2 = _models()
     executors = [
-        OllamaExecutor(name="category-pain-tier1", tier=1, model=tier1, endpoint=endpoint, timeout_seconds=180),
+        OllamaExecutor(
+            name="category-pain-tier1",
+            tier=1,
+            model=tier1,
+            endpoint=endpoint,
+            timeout_seconds=180,
+            max_output_tokens=500,
+        ),
     ]
     if tier2 and tier2 != tier1:
         executors.append(
-            OllamaExecutor(name="category-pain-tier2", tier=2, model=tier2, endpoint=endpoint, timeout_seconds=240)
+            OllamaExecutor(
+                name="category-pain-tier2",
+                tier=2,
+                model=tier2,
+                endpoint=endpoint,
+                timeout_seconds=240,
+                max_output_tokens=500,
+            )
         )
     cache, sink = _cache_and_sink()
     return AITaskRouter(executors=executors, cache=cache, result_sink=sink)
