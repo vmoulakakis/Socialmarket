@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import consumer_forum_seed_crawl_v48 as v48
 
@@ -17,6 +17,32 @@ class ForumSeedCrawlV48Tests(unittest.TestCase):
         topic = 'https://www.e-camping.gr/forum?catid=46&id=12390&view=topic'
         self.assertFalse(v48._topic_url(category))
         self.assertTrue(v48._topic_url(topic))
+
+    def test_fetch_html_uses_canonical_consumer_requests_stack(self):
+        response = Mock()
+        response.status_code = 200
+        response.headers = {'content-type': 'text/html; charset=utf-8'}
+        response.text = '<html><body>forum</body></html>'
+        response.raise_for_status.return_value = None
+        with patch.object(v48.consumer.requests, 'get', return_value=response) as get:
+            html, error = v48._fetch_html('https://www.e-camping.gr/forum')
+        self.assertIsNone(error)
+        self.assertIn('forum', html)
+        get.assert_called_once_with(
+            'https://www.e-camping.gr/forum',
+            headers=v48.consumer.UA,
+            timeout=18,
+            allow_redirects=True,
+        )
+
+    def test_fetch_html_fails_closed_on_403(self):
+        response = Mock()
+        response.status_code = 403
+        response.headers = {'content-type': 'text/html'}
+        with patch.object(v48.consumer.requests, 'get', return_value=response):
+            html, error = v48._fetch_html('https://www.e-camping.gr/forum')
+        self.assertIsNone(html)
+        self.assertEqual(error, 'http_403')
 
     def test_index_discovers_relevant_same_domain_topic(self):
         html = '''
