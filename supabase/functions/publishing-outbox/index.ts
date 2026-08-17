@@ -5,7 +5,11 @@ const ISSUER="https://token.actions.githubusercontent.com";
 const AUDIENCE="socialmarket-v2-publishing";
 const REPOSITORY="vmoulakakis/socialscheduler";
 const REPOSITORY_ID="1334464183";
-const ALLOWED_REFS=new Set(["refs/heads/main","refs/heads/feat/socialmarket-outbox-executor"]);
+const ALLOWED_REFS=new Set([
+  "refs/heads/main",
+  "refs/heads/feat/socialmarket-outbox-executor",
+  "refs/heads/feat/brightbean-hybrid-publisher"
+]);
 const ALLOWED_WORKFLOWS=new Set([
   "vmoulakakis/socialscheduler/.github/workflows/social-scheduler.yml@refs/heads/main",
   "vmoulakakis/socialscheduler/.github/workflows/social-scheduler.yml@refs/heads/feat/socialmarket-outbox-executor",
@@ -13,7 +17,9 @@ const ALLOWED_WORKFLOWS=new Set([
   "vmoulakakis/socialscheduler/.github/workflows/migrate-legacy-backlog.yml@refs/heads/feat/socialmarket-outbox-executor",
   "vmoulakakis/socialscheduler/.github/workflows/ci.yml@refs/heads/main",
   "vmoulakakis/socialscheduler/.github/workflows/ci.yml@refs/heads/feat/socialmarket-outbox-executor",
-  "vmoulakakis/socialscheduler/.github/workflows/weekly-optimizer.yml@refs/heads/main"
+  "vmoulakakis/socialscheduler/.github/workflows/weekly-optimizer.yml@refs/heads/main",
+  "vmoulakakis/socialscheduler/.github/workflows/brightbean-publisher.yml@refs/heads/main",
+  "vmoulakakis/socialscheduler/.github/workflows/brightbean-publisher.yml@refs/heads/feat/brightbean-hybrid-publisher"
 ]);
 const JWKS=createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks`));
 
