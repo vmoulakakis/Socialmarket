@@ -39,7 +39,7 @@ jobs:
       CATEGORY_PAIN_TIER1_MODEL: qwen3.5:4b
       CATEGORY_PAIN_TIER2_MODEL: ''
       SEARXNG_BASE_URL: http://127.0.0.1:8080
-      CATEGORY_PAIN_LIMIT: ${{ github.event_name == 'push' && '5' || inputs.limit || '80' }}
+      CATEGORY_PAIN_LIMIT: ${{ github.event_name == 'push' && '1' || inputs.limit || '80' }}
       CATEGORY_PAIN_WORKERS: '3'
       CATEGORY_PAIN_AI_BATCH: '1'
       CATEGORY_CONSUMER_FETCH_WORKERS: '6'
@@ -94,7 +94,7 @@ jobs:
           docker logs socialmarket-searxng || true
           exit 1
       - name: Compile Category Pain local-router workers
-        run: python -m py_compile workers/ai_runtime/task_contract.py workers/ai_runtime/router.py workers/ai_runtime/ollama_executor.py workers/ai_runtime/supabase_runtime.py workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/consumer_direct_greek_v46.py workers/market_intelligence/consumer_searx_forum_v47.py workers/market_intelligence/consumer_forum_seed_crawl_v48.py workers/market_intelligence/niche_product_prior_v45.py workers/market_intelligence/niche_keyword_binding_v45.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_local_audit.py workers/market_intelligence/category_pain_intelligence_v42.py
+        run: python -m py_compile workers/ai_runtime/task_contract.py workers/ai_runtime/router.py workers/ai_runtime/ollama_executor.py workers/ai_runtime/supabase_runtime.py workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/consumer_direct_greek_v46.py workers/market_intelligence/consumer_searx_forum_v47.py workers/market_intelligence/consumer_forum_seed_crawl_v48.py workers/market_intelligence/consumer_verified_public_v412.py workers/market_intelligence/niche_product_prior_v45.py workers/market_intelligence/niche_keyword_binding_v45.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_local_audit.py workers/market_intelligence/category_pain_intelligence_v42.py
       - name: Run Greece-first Niche Category Pain with local AI Task Router
         working-directory: workers/market_intelligence
         shell: bash
@@ -124,6 +124,7 @@ jobs:
           quality={'processed':summary.get('processed'),'pain_candidates':pain_candidates,'validated_clusters':validated_clusters,'qualification_required':qualification}
           print(quality)
           if qualification:
+              assert summary.get('processed') == 1, f'Explicit qualification must process exactly one target: {quality}'
               assert pain_candidates > 0, f'Category Pain qualification produced zero consumer pain candidates: {quality}'
               assert validated_clusters > 0, f'Category Pain qualification produced zero validated clusters: {quality}'
           PY
