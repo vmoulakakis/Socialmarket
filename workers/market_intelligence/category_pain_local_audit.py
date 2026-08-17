@@ -152,6 +152,31 @@ def build_task(item: Mapping[str, Any]) -> AITask:
     )
 
 
+def _normalize_result(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Drop candidates that cannot possibly pass the hard evidence-count gate.
+
+    Small local models occasionally explain a correctly rejected one- or two-row
+    candidate despite the prompt telling them to omit it. That is not a runtime
+    failure and must not turn a correct SAFE_HOLD into a schema exception. The
+    software therefore removes every <3-row candidate before schema validation.
+    This can only make the result stricter: no cluster is promoted or rescored.
+    """
+    normalized = dict(data)
+    clusters = data.get("clusters")
+    if not isinstance(clusters, list):
+        return normalized
+
+    kept: list[Any] = []
+    for cluster in clusters:
+        if isinstance(cluster, Mapping):
+            indices = cluster.get("evidence_indices")
+            if isinstance(indices, list) and len(indices) < 3:
+                continue
+        kept.append(cluster)
+    normalized["clusters"] = kept
+    return normalized
+
+
 def _validate_nested(data: Mapping[str, Any], evidence_count: int) -> tuple[bool, str | None]:
     clusters = data.get("clusters")
     if not isinstance(clusters, list):
@@ -208,9 +233,6 @@ def _validate_nested(data: Mapping[str, Any], evidence_count: int) -> tuple[bool
             return False, "cluster_text_too_long"
         if len(str(cluster.get("rationale") or "")) > 220:
             return False, "cluster_rationale_too_long"
-    # This is presentation metadata, not a validation dimension. Keep it bounded
-    # by the already-small 500-output-token contract without rejecting an
-    # otherwise valid evidence decision solely for prose length.
     if len(str(data.get("audit_summary") or "")) > 800:
         return False, "audit_summary_too_long"
     return True, None
@@ -274,15 +296,16 @@ def audit_items(items: list[Mapping[str, Any]], router: AITaskRouter | None = No
             raise RuntimeError(
                 f"category_pain_local_safe_hold entity={item.get('entity_id')} reason={result.reason or result.status}"
             )
-        valid, reason = _validate_nested(result.data, len(task.payload.get("evidence") or []))
+        normalized = _normalize_result(result.data)
+        valid, reason = _validate_nested(normalized, len(task.payload.get("evidence") or []))
         if not valid:
             raise RuntimeError(f"category_pain_local_schema_invalid entity={item.get('entity_id')} reason={reason}")
         audited.append(
             {
                 "entity_id": item.get("entity_id"),
-                "clusters": list(result.data.get("clusters") or []),
-                "audit_summary": str(result.data.get("audit_summary") or ""),
-                "rejected_patterns": list(result.data.get("rejected_patterns") or []),
+                "clusters": list(normalized.get("clusters") or []),
+                "audit_summary": str(normalized.get("audit_summary") or ""),
+                "rejected_patterns": list(normalized.get("rejected_patterns") or []),
             }
         )
 

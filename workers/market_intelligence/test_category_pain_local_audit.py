@@ -90,7 +90,7 @@ class CategoryPainLocalAuditCompactTests(unittest.TestCase):
         self.assertEqual(task.metadata['evidence_pack'], 'source_diverse_compact_v2')
         self.assertLessEqual(len(task.payload['evidence']), 10)
 
-    def test_nested_contract_rejects_two_row_cluster(self):
+    def test_nested_contract_rejects_two_row_cluster_without_normalization(self):
         data = {
             'clusters': [_cluster([0, 1])],
             'audit_summary': 'Not enough independent support.',
@@ -99,6 +99,42 @@ class CategoryPainLocalAuditCompactTests(unittest.TestCase):
         valid, reason = audit._validate_nested(data, 3)
         self.assertFalse(valid)
         self.assertEqual(reason, 'cluster_insufficient_evidence_indices')
+
+    def test_normalization_drops_model_explanation_with_too_few_rows(self):
+        candidate = _cluster([0])
+        candidate['verdict'] = 'rejected'
+        data = {
+            'clusters': [candidate],
+            'audit_summary': 'One row mentions the issue, so nothing qualifies.',
+            'rejected_patterns': ['single-row candidate'],
+        }
+        normalized = audit._normalize_result(data)
+        self.assertEqual(normalized['clusters'], [])
+        valid, reason = audit._validate_nested(normalized, 3)
+        self.assertTrue(valid)
+        self.assertIsNone(reason)
+
+    def test_normalization_cannot_promote_two_row_validated_claim(self):
+        candidate = _cluster([0, 1])
+        candidate['verdict'] = 'validated'
+        normalized = audit._normalize_result({
+            'clusters': [candidate],
+            'audit_summary': 'Model overclaimed it.',
+            'rejected_patterns': [],
+        })
+        self.assertEqual(normalized['clusters'], [])
+
+    def test_normalization_keeps_three_row_cluster_for_full_validation(self):
+        data = {
+            'clusters': [_cluster([0, 1, 2])],
+            'audit_summary': 'Three corroborating rows.',
+            'rejected_patterns': [],
+        }
+        normalized = audit._normalize_result(data)
+        self.assertEqual(len(normalized['clusters']), 1)
+        valid, reason = audit._validate_nested(normalized, 3)
+        self.assertTrue(valid)
+        self.assertIsNone(reason)
 
     def test_nested_contract_accepts_concise_three_row_cluster(self):
         data = {
