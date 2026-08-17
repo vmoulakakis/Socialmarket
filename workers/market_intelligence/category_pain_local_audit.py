@@ -19,11 +19,43 @@ Use ONLY the supplied real extracted consumer-text rows for the exact category/s
 A candidate cluster needs at least 3 supplied rows supporting the SAME commercially meaningful need. Validated also requires independent support: at least 2 domains AND either 2 source families or 3 domains. NEVER output a cluster with fewer than 3 evidence_indices; omit it instead. If nothing qualifies, return clusters: [].
 Return strict JSON only, no markdown, with keys clusters, audit_summary, rejected_patterns. Return at most 2 clusters. Each cluster requires canonical_text, cluster_type (pain|unmet_need|alternative_request|complaint), evidence_indices, pain_severity 0-100, commercial_intent 0-100, audit_score 0-100, confidence 0-1, rationale, verdict (validated|needs_review|rejected). Keep canonical_text <=180 characters, rationale <=160 characters, audit_summary <=220 characters, and rejected_patterns to at most 4 strings <=80 characters each."""
 
+RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "clusters": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "canonical_text": {"type": "string", "maxLength": 220},
+                    "cluster_type": {"type": "string", "enum": ["pain", "unmet_need", "alternative_request", "complaint"]},
+                    "evidence_indices": {"type": "array", "maxItems": 10, "items": {"type": "integer"}},
+                    "pain_severity": {"type": "number", "minimum": 0, "maximum": 100},
+                    "commercial_intent": {"type": "number", "minimum": 0, "maximum": 100},
+                    "audit_score": {"type": "number", "minimum": 0, "maximum": 100},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "rationale": {"type": "string", "maxLength": 220},
+                    "verdict": {"type": "string", "enum": ["validated", "needs_review", "rejected"]},
+                },
+                "required": [
+                    "canonical_text", "cluster_type", "evidence_indices", "pain_severity",
+                    "commercial_intent", "audit_score", "confidence", "rationale", "verdict"
+                ],
+                "additionalProperties": False,
+            },
+        },
+        "audit_summary": {"type": "string", "maxLength": 800},
+        "rejected_patterns": {"type": "array", "maxItems": 4, "items": {"type": "string", "maxLength": 80}},
+    },
+    "required": ["clusters", "audit_summary", "rejected_patterns"],
+    "additionalProperties": False,
+}
+
 
 def _host(url: str | None) -> str:
     try:
         from urllib.parse import urlsplit
-
         return (urlsplit(url or "").hostname or "").lower().removeprefix("www.")
     except Exception:
         return ""
@@ -45,7 +77,6 @@ def _numeric(value: Any, default: float = 0.0) -> float:
 
 
 def _selection_score(evidence: Mapping[str, Any]) -> float:
-    """Cheap deterministic recall score; never becomes an opportunity score."""
     metadata = evidence.get("metadata") or {}
     language = _numeric(metadata.get("consumer_language_score"), 0.0)
     confidence = _numeric(evidence.get("confidence"), 0.0)
@@ -60,7 +91,6 @@ def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Build a small source-diverse evidence pack before any LLM call."""
     max_rows = _bounded_int("CATEGORY_PAIN_AUDIT_MAX_EVIDENCE", 10, 6, 18)
     body_chars = _bounded_int("CATEGORY_PAIN_AUDIT_BODY_CHARS", 600, 320, 800)
-
     candidates: list[dict[str, Any]] = []
     for evidence in item.get("evidence") or []:
         metadata = evidence.get("metadata") or {}
@@ -71,53 +101,37 @@ def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
         if metadata.get("eligible_for_pain_audit") is False:
             continue
         domain = _host(evidence.get("source_url"))
-        candidates.append(
-            {
-                "source_url": evidence.get("source_url"),
-                "source_domain": domain,
-                "source_family": metadata.get("source_family") or "public_web",
-                "title": str(evidence.get("title") or "")[:220],
-                "body": str(evidence.get("body") or "")[:body_chars],
-                "confidence": evidence.get("confidence"),
-                "consumer_language_score": metadata.get("consumer_language_score"),
-                "pain_language": metadata.get("pain_language"),
-                "_score": _selection_score(evidence),
-            }
-        )
-
-    candidates.sort(
-        key=lambda row: (
-            -float(row.get("_score") or 0),
-            str(row.get("source_domain") or ""),
-            str(row.get("source_url") or ""),
-        )
-    )
-
+        candidates.append({
+            "source_url": evidence.get("source_url"),
+            "source_domain": domain,
+            "source_family": metadata.get("source_family") or "public_web",
+            "title": str(evidence.get("title") or "")[:220],
+            "body": str(evidence.get("body") or "")[:body_chars],
+            "confidence": evidence.get("confidence"),
+            "consumer_language_score": metadata.get("consumer_language_score"),
+            "pain_language": metadata.get("pain_language"),
+            "_score": _selection_score(evidence),
+        })
+    candidates.sort(key=lambda row: (-float(row.get("_score") or 0), str(row.get("source_domain") or ""), str(row.get("source_url") or "")))
     selected: list[dict[str, Any]] = []
     selected_urls: set[str] = set()
     seen_domains: set[str] = set()
-
     for row in candidates:
         domain = str(row.get("source_domain") or "")
         url = str(row.get("source_url") or "")
         if not domain or domain in seen_domains:
             continue
-        selected.append(row)
-        seen_domains.add(domain)
-        selected_urls.add(url)
+        selected.append(row); seen_domains.add(domain); selected_urls.add(url)
         if len(selected) >= max_rows:
             break
-
     if len(selected) < max_rows:
         for row in candidates:
             url = str(row.get("source_url") or "")
             if url in selected_urls:
                 continue
-            selected.append(row)
-            selected_urls.add(url)
+            selected.append(row); selected_urls.add(url)
             if len(selected) >= max_rows:
                 break
-
     out: list[dict[str, Any]] = []
     for row in selected:
         clean = {key: value for key, value in row.items() if key != "_score"}
@@ -126,20 +140,34 @@ def _pain_evidence(item: Mapping[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _hard_topology_ready(evidence: list[Mapping[str, Any]]) -> tuple[bool, str]:
+    """Return whether any cluster could possibly satisfy the hard source gate.
+
+    This is deliberately weaker than semantic validation: it only prevents an
+    LLM call when raw evidence topology makes validation mathematically
+    impossible. Semantic consistency is still decided by the skeptic and later
+    deterministic persistence gates.
+    """
+    if len(evidence) < 3:
+        return False, "fewer_than_3_consumer_rows"
+    domains = {str(row.get("source_domain") or "") for row in evidence if row.get("source_domain")}
+    families = {str(row.get("source_family") or "") for row in evidence if row.get("source_family")}
+    if len(domains) < 2:
+        return False, "fewer_than_2_domains"
+    if len(families) < 2 and len(domains) < 3:
+        return False, "source_diversity_gate_impossible"
+    return True, "ready"
+
+
 def build_task(item: Mapping[str, Any]) -> AITask:
     evidence = _pain_evidence(item)
     return AITask(
         task_type="category_pain_audit",
         role="Independent Greek Consumer Pain Skeptic",
         instructions=INSTRUCTIONS,
-        payload={
-            "entity_id": item.get("entity_id"),
-            "category": item.get("category"),
-            "subcategory": item.get("subcategory"),
-            "evidence": evidence,
-        },
+        payload={"entity_id": item.get("entity_id"), "category": item.get("category"), "subcategory": item.get("subcategory"), "evidence": evidence},
         required_keys=("clusters", "audit_summary", "rejected_patterns"),
-        prompt_version="category-pain-local-v3-concise",
+        prompt_version="category-pain-local-v4-structured",
         max_tier=2,
         cacheable=True,
         material_change_capable=True,
@@ -147,25 +175,17 @@ def build_task(item: Mapping[str, Any]) -> AITask:
             "evidence_count": len(evidence),
             "source_domains": len({str(x.get("source_domain") or "") for x in evidence if x.get("source_domain")}),
             "geography": "GR",
-            "evidence_pack": "source_diverse_compact_v2",
+            "evidence_pack": "source_diverse_compact_v3",
+            "response_schema": RESPONSE_SCHEMA,
         },
     )
 
 
 def _normalize_result(data: Mapping[str, Any]) -> dict[str, Any]:
-    """Drop candidates that cannot possibly pass the hard evidence-count gate.
-
-    Small local models occasionally explain a correctly rejected one- or two-row
-    candidate despite the prompt telling them to omit it. That is not a runtime
-    failure and must not turn a correct SAFE_HOLD into a schema exception. The
-    software therefore removes every <3-row candidate before schema validation.
-    This can only make the result stricter: no cluster is promoted or rescored.
-    """
     normalized = dict(data)
     clusters = data.get("clusters")
     if not isinstance(clusters, list):
         return normalized
-
     kept: list[Any] = []
     for cluster in clusters:
         if isinstance(cluster, Mapping):
@@ -179,134 +199,92 @@ def _normalize_result(data: Mapping[str, Any]) -> dict[str, Any]:
 
 def _validate_nested(data: Mapping[str, Any], evidence_count: int) -> tuple[bool, str | None]:
     clusters = data.get("clusters")
-    if not isinstance(clusters, list):
-        return False, "clusters_not_array"
-    if len(clusters) > 2:
-        return False, "too_many_clusters"
-    if not isinstance(data.get("rejected_patterns"), list):
-        return False, "rejected_patterns_not_array"
-    if len(data.get("rejected_patterns") or []) > 4:
-        return False, "too_many_rejected_patterns"
-    if not isinstance(data.get("audit_summary"), str):
-        return False, "audit_summary_not_string"
-
+    if not isinstance(clusters, list): return False, "clusters_not_array"
+    if len(clusters) > 2: return False, "too_many_clusters"
+    if not isinstance(data.get("rejected_patterns"), list): return False, "rejected_patterns_not_array"
+    if len(data.get("rejected_patterns") or []) > 4: return False, "too_many_rejected_patterns"
+    if not isinstance(data.get("audit_summary"), str): return False, "audit_summary_not_string"
     allowed_types = {"pain", "unmet_need", "alternative_request", "complaint"}
     allowed_verdicts = {"validated", "needs_review", "rejected"}
-    required = {
-        "canonical_text",
-        "cluster_type",
-        "evidence_indices",
-        "pain_severity",
-        "commercial_intent",
-        "audit_score",
-        "confidence",
-        "rationale",
-        "verdict",
-    }
+    required = {"canonical_text", "cluster_type", "evidence_indices", "pain_severity", "commercial_intent", "audit_score", "confidence", "rationale", "verdict"}
     for cluster in clusters:
-        if not isinstance(cluster, Mapping):
-            return False, "cluster_not_object"
-        if not required.issubset(cluster):
-            return False, "cluster_missing_required_fields"
-        if str(cluster.get("cluster_type")) not in allowed_types:
-            return False, "cluster_type_invalid"
-        if str(cluster.get("verdict")) not in allowed_verdicts:
-            return False, "cluster_verdict_invalid"
+        if not isinstance(cluster, Mapping): return False, "cluster_not_object"
+        if not required.issubset(cluster): return False, "cluster_missing_required_fields"
+        if str(cluster.get("cluster_type")) not in allowed_types: return False, "cluster_type_invalid"
+        if str(cluster.get("verdict")) not in allowed_verdicts: return False, "cluster_verdict_invalid"
         indices = cluster.get("evidence_indices")
-        if not isinstance(indices, list):
-            return False, "evidence_indices_not_array"
-        if len(indices) < 3:
-            return False, "cluster_insufficient_evidence_indices"
+        if not isinstance(indices, list): return False, "evidence_indices_not_array"
+        if len(indices) < 3: return False, "cluster_insufficient_evidence_indices"
         for idx in indices:
-            if not isinstance(idx, int) or isinstance(idx, bool) or idx < 0 or idx >= evidence_count:
-                return False, "evidence_index_out_of_range"
+            if not isinstance(idx, int) or isinstance(idx, bool) or idx < 0 or idx >= evidence_count: return False, "evidence_index_out_of_range"
         try:
-            severity = float(cluster.get("pain_severity"))
-            intent = float(cluster.get("commercial_intent"))
-            audit = float(cluster.get("audit_score"))
-            confidence = float(cluster.get("confidence"))
+            severity=float(cluster.get("pain_severity")); intent=float(cluster.get("commercial_intent")); audit=float(cluster.get("audit_score")); confidence=float(cluster.get("confidence"))
         except Exception:
             return False, "cluster_score_not_numeric"
-        if not (0 <= severity <= 100 and 0 <= intent <= 100 and 0 <= audit <= 100 and 0 <= confidence <= 1):
-            return False, "cluster_score_out_of_range"
-        if len(str(cluster.get("canonical_text") or "")) > 220:
-            return False, "cluster_text_too_long"
-        if len(str(cluster.get("rationale") or "")) > 220:
-            return False, "cluster_rationale_too_long"
-    if len(str(data.get("audit_summary") or "")) > 800:
-        return False, "audit_summary_too_long"
+        if not (0 <= severity <= 100 and 0 <= intent <= 100 and 0 <= audit <= 100 and 0 <= confidence <= 1): return False, "cluster_score_out_of_range"
+        if len(str(cluster.get("canonical_text") or "")) > 220: return False, "cluster_text_too_long"
+        if len(str(cluster.get("rationale") or "")) > 220: return False, "cluster_rationale_too_long"
+    if len(str(data.get("audit_summary") or "")) > 800: return False, "audit_summary_too_long"
     return True, None
 
 
 def _models() -> tuple[str, str]:
-    return (
-        os.getenv("CATEGORY_PAIN_TIER1_MODEL", "qwen3.5:4b").strip(),
-        os.getenv("CATEGORY_PAIN_TIER2_MODEL", "").strip(),
-    )
+    return (os.getenv("CATEGORY_PAIN_TIER1_MODEL", "qwen3.5:4b").strip(), os.getenv("CATEGORY_PAIN_TIER2_MODEL", "").strip())
 
 
 def _cache_and_sink():
     durable = os.getenv("AI_TASK_RUNTIME_DURABLE", "false").strip().lower() in {"1", "true", "yes", "on"}
-    if not durable:
-        return InMemoryTaskCache(), None
+    if not durable: return InMemoryTaskCache(), None
     from supabase_runtime import AITaskRuntimeClient, SupabaseTaskCache, SupabaseTaskResultSink  # noqa: E402
-
-    client = AITaskRuntimeClient()
-    return SupabaseTaskCache(client), SupabaseTaskResultSink(client)
+    client = AITaskRuntimeClient(); return SupabaseTaskCache(client), SupabaseTaskResultSink(client)
 
 
 def make_router() -> AITaskRouter:
     endpoint = os.getenv("LOCAL_OLLAMA_URL", "http://127.0.0.1:11434")
     tier1, tier2 = _models()
-    executors = [
-        OllamaExecutor(
-            name="category-pain-tier1",
-            tier=1,
-            model=tier1,
-            endpoint=endpoint,
-            timeout_seconds=180,
-            max_output_tokens=500,
-        ),
-    ]
+    executors = [OllamaExecutor(name="category-pain-tier1", tier=1, model=tier1, endpoint=endpoint, timeout_seconds=180, max_output_tokens=420)]
     if tier2 and tier2 != tier1:
-        executors.append(
-            OllamaExecutor(
-                name="category-pain-tier2",
-                tier=2,
-                model=tier2,
-                endpoint=endpoint,
-                timeout_seconds=240,
-                max_output_tokens=500,
-            )
-        )
-    cache, sink = _cache_and_sink()
-    return AITaskRouter(executors=executors, cache=cache, result_sink=sink)
+        executors.append(OllamaExecutor(name="category-pain-tier2", tier=2, model=tier2, endpoint=endpoint, timeout_seconds=240, max_output_tokens=420))
+    cache, sink = _cache_and_sink(); return AITaskRouter(executors=executors, cache=cache, result_sink=sink)
 
 
 def audit_items(items: list[Mapping[str, Any]], router: AITaskRouter | None = None) -> dict[str, Any]:
     active_router = router or make_router()
     audited: list[dict[str, Any]] = []
     telemetry: list[dict[str, Any]] = []
-
     for item in items:
         task = build_task(item)
+        evidence_pack = list(task.payload.get("evidence") or [])
+        topology_ready, topology_reason = _hard_topology_ready(evidence_pack)
+        if not topology_ready:
+            audited.append({
+                "entity_id": item.get("entity_id"),
+                "clusters": [],
+                "audit_summary": f"SAFE_HOLD before AI: {topology_reason}.",
+                "rejected_patterns": [topology_reason],
+            })
+            telemetry.append({
+                "task_type": "category_pain_audit",
+                "executor": "deterministic-preflight",
+                "tier": 0,
+                "status": "safe_hold",
+                "input_hash": task.input_hash,
+                "contract_hash": task.contract_hash,
+                "latency_ms": 0,
+                "model": None,
+                "route": "deterministic",
+                "output_hash": None,
+                "error": None,
+                "metadata": {"reason": topology_reason, "evidence_count": len(evidence_pack)},
+            })
+            continue
         result = active_router.execute(task)
         telemetry.extend(attempt.as_dict() for attempt in result.attempts)
         if not result.ok or result.data is None:
-            raise RuntimeError(
-                f"category_pain_local_safe_hold entity={item.get('entity_id')} reason={result.reason or result.status}"
-            )
+            raise RuntimeError(f"category_pain_local_safe_hold entity={item.get('entity_id')} reason={result.reason or result.status}")
         normalized = _normalize_result(result.data)
-        valid, reason = _validate_nested(normalized, len(task.payload.get("evidence") or []))
+        valid, reason = _validate_nested(normalized, len(evidence_pack))
         if not valid:
             raise RuntimeError(f"category_pain_local_schema_invalid entity={item.get('entity_id')} reason={reason}")
-        audited.append(
-            {
-                "entity_id": item.get("entity_id"),
-                "clusters": list(normalized.get("clusters") or []),
-                "audit_summary": str(normalized.get("audit_summary") or ""),
-                "rejected_patterns": list(normalized.get("rejected_patterns") or []),
-            }
-        )
-
+        audited.append({"entity_id": item.get("entity_id"), "clusters": list(normalized.get("clusters") or []), "audit_summary": str(normalized.get("audit_summary") or ""), "rejected_patterns": list(normalized.get("rejected_patterns") or [])})
     return {"items": audited, "route": "local_ai_task_router", "telemetry": telemetry}
