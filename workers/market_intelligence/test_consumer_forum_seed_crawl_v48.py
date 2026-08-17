@@ -12,6 +12,12 @@ class ForumSeedCrawlV48Tests(unittest.TestCase):
         self.assertTrue(v48._same_domain('https://e-camping.gr/forum?catid=46&view=category', seed))
         self.assertFalse(v48._same_domain('https://example.com/forum?catid=46', seed))
 
+    def test_topic_classifier_does_not_confuse_catid_with_id(self):
+        category = 'https://www.e-camping.gr/forum?catid=46&view=category'
+        topic = 'https://www.e-camping.gr/forum?catid=46&id=12390&view=topic'
+        self.assertFalse(v48._topic_url(category))
+        self.assertTrue(v48._topic_url(topic))
+
     def test_index_discovers_relevant_same_domain_topic(self):
         html = '''
         <html><body>
