@@ -1,6 +1,10 @@
 name: Semantic Category Pain Intelligence
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/generic-evidence-intelligence.yml'
   workflow_dispatch:
     inputs:
       limit:
@@ -34,7 +38,7 @@ jobs:
       CATEGORY_PAIN_TIER1_MODEL: qwen3.5:4b
       CATEGORY_PAIN_TIER2_MODEL: ''
       SEARXNG_BASE_URL: http://127.0.0.1:8080
-      CATEGORY_PAIN_LIMIT: ${{ inputs.limit || '80' }}
+      CATEGORY_PAIN_LIMIT: ${{ github.event_name == 'push' && '5' || inputs.limit || '80' }}
       CATEGORY_PAIN_WORKERS: '3'
       CATEGORY_PAIN_AI_BATCH: '1'
       CATEGORY_CONSUMER_FETCH_WORKERS: '6'
