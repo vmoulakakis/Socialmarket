@@ -67,11 +67,16 @@ class OllamaExecutor:
             "Never invent sources, observations, product facts, demand numbers, merchant facts, prices, commissions or URLs. "
             "Return one strict JSON object only. Do not use Markdown."
         )
+        response_schema = task.metadata.get("response_schema") if isinstance(task.metadata, Mapping) else None
+        structured_output = isinstance(response_schema, Mapping) and bool(response_schema)
         request_payload = {
             "model": self.model,
             "stream": False,
             "think": False,
-            "format": "json",
+            # Ollama accepts either the generic `json` mode or a task-scoped JSON
+            # schema. Business validation remains outside the model; the schema is
+            # only a serialization/shape constraint and never a truth gate.
+            "format": dict(response_schema) if structured_output else "json",
             "options": {
                 "temperature": 0,
                 "num_predict": self.max_output_tokens,
@@ -94,6 +99,7 @@ class OllamaExecutor:
                 "model": self.model,
                 "cost_usd": 0,
                 "error": "empty_model_content",
+                "structured_output": structured_output,
             }
         try:
             parsed = json.loads(content)
@@ -113,4 +119,5 @@ class OllamaExecutor:
             "eval_count": int(response.get("eval_count") or 0),
             "total_duration_ns": int(response.get("total_duration") or 0),
             "thinking": False,
+            "structured_output": structured_output,
         }
