@@ -17,6 +17,7 @@ import product_intelligence_v1 as v1
 import product_ranking_v3 as v3
 import product_ranking_v32 as v32
 import product_local_autopilot as local_ai
+import product_local_validated as validated_ai
 from runtime_config import apply_runtime_config, load_runtime_config
 
 ENGINE_VERSION='ranking_v4.0_local_autopilot'
@@ -75,7 +76,7 @@ def main(feed):
     cfg=load_runtime_config(v1);apply_runtime_config(v1,cfg)
     v3.ENGINE_VERSION=ENGINE_VERSION
     v3.preselect=v32.preselect_v32
-    v3.rank_with_ai=local_ai.rank_with_local_ai
+    v3.rank_with_ai=validated_ai.rank_with_validated_local_ai
     v3.enrich_final_rows=local_ai.enrich_final_rows_local
     v3.rank_gateway=production_gateway
 
@@ -103,10 +104,7 @@ def main(feed):
         stage='preselect';shortlist,shortlist_stats=v32.preselect_v32(v1.iter_best_offers(db,v1.AI_OFFERS_PER_PRODUCT),context,decision_index)
         if len(shortlist)<v32.FINAL_MIN_RANKED:raise RuntimeError(f'bounded frontier too small for Top100 contract: {len(shortlist)}')
 
-        stage='local_ai_ranking';ai_outputs,ai_stats=local_ai.rank_with_local_ai(shortlist)
-        held=sum(1 for x in ai_outputs.values() if str((x.get('audit') or {}).get('verdict') or '').upper()!='VALIDATED')
-        ai_outputs={h:x for h,x in ai_outputs.items() if str((x.get('audit') or {}).get('verdict') or '').upper()=='VALIDATED'}
-        ai_stats=dict(ai_stats);ai_stats['local_validated']=len(ai_outputs);ai_stats['local_nonvalidated_held']=held
+        stage='local_ai_ranking';ai_outputs,ai_stats=validated_ai.rank_with_validated_local_ai(shortlist)
         if len(ai_outputs)<v32.FINAL_MIN_RANKED:raise RuntimeError(f'VALIDATED-only Top100 contract requires {v32.FINAL_MIN_RANKED}; got {len(ai_outputs)}')
         rows=[v3.final_row(item,ai_outputs[str(item['product']['source_record_hash'])]) for item in shortlist if str(item['product']['source_record_hash']) in ai_outputs]
         rows.sort(key=lambda x:(x['rank_score'],x['ai_confidence'],v3.num(x['expected_commission_eur'])),reverse=True);rows=rows[:v3.SAVE_LIMIT]
