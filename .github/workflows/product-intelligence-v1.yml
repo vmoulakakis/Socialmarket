@@ -26,7 +26,7 @@ jobs:
       LINKWISE_DEEPLINK_FIELD: tracking_url
       LINKWISE_OPTIONAL_FIELDS: thumb_url
       PRODUCT_REUSE_STAGE_DB: 'true'
-      PRODUCT_MIN_COMMISSION_EUR: '10'
+      PRODUCT_MIN_COMMISSION_EUR: '15'
       PRODUCT_MIN_MERCHANT_TRUST: '50'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway

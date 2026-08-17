@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 
 import consumer_evidence_v4 as consumer
@@ -40,6 +41,22 @@ def _serial_extract(*args,**kwargs):
 consumer.trafilatura.extract=_serial_extract
 
 import category_pain_intelligence_v4 as v4  # noqa: E402
+
+
+# Compatibility seam for the Autopilot AI Task Router. Production remains on
+# the existing gateway unless CATEGORY_PAIN_AI_ROUTE=local_router is explicitly
+# enabled by the workflow after benchmark qualification.
+if os.getenv('CATEGORY_PAIN_AI_ROUTE','legacy_gateway').strip().lower() == 'local_router':
+    from category_pain_local_audit import audit_items  # noqa: E402
+
+    _ORIGINAL_GATEWAY=v4.base.gateway
+
+    def _routed_gateway(action,**payload):
+        if action == 'audit_batch':
+            return {'ok':True,**audit_items(list(payload.get('items') or []))}
+        return _ORIGINAL_GATEWAY(action,**payload)
+
+    v4.base.gateway=_routed_gateway
 
 
 if __name__=='__main__':
