@@ -186,8 +186,6 @@ def collect_consumer_evidence(category: str, subcategory: str | None, aliases: l
 
     for seed in seeds:
         rows, diagnostic = _extract_seed(dict(seed), keywords)
-        # Put direct-fetch diagnostics ahead of broad discovery diagnostics so
-        # bounded persistence retains exact fetch/reject reasons for qualification.
         direct_diagnostics.append(diagnostic)
         for item in rows:
             key = (consumer.host(item.get('source_url')), item.get('content_hash'))
@@ -217,11 +215,10 @@ def apply():
     if _APPLIED:
         return
     # Lexical recall extensions only; numeric scorer/audit thresholds remain unchanged.
-    extra_pain_stems = ('βουλ', 'χανει αερ', 'ξεφουσκ', 'δεν ξεφουσκ', 'τρυπ', 'μπελ')
+    extra_pain_stems = ('βουλ', 'χανει αερ', 'χανουν αερ', 'ξεφουσκ', 'δεν ξεφουσκ', 'τρυπ', 'μπελ')
     for stem in extra_pain_stems:
         if stem not in consumer.PAIN_STEMS:
             consumer.PAIN_STEMS = (*consumer.PAIN_STEMS, stem)
-    # First-person inflection used in real Greek forum experience reports.
     if 'εχοντας' not in consumer.FIRST_PERSON_STEMS:
         consumer.FIRST_PERSON_STEMS = (*consumer.FIRST_PERSON_STEMS, 'εχοντας')
     _ORIGINAL_COLLECT = consumer.collect_consumer_evidence
