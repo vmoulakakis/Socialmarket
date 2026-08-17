@@ -24,6 +24,20 @@ def _row(domain: str, idx: int, score: int = 8, body_size: int = 1400):
     }
 
 
+def _cluster(indices):
+    return {
+        'canonical_text': 'Οι σταλάκτες βουλώνουν και το πότισμα γίνεται αναξιόπιστο.',
+        'cluster_type': 'pain',
+        'evidence_indices': indices,
+        'pain_severity': 75,
+        'commercial_intent': 60,
+        'audit_score': 85,
+        'confidence': 0.88,
+        'rationale': 'Τρεις ανεξάρτητες consumer πηγές περιγράφουν το ίδιο failure mode.',
+        'verdict': 'validated',
+    }
+
+
 class CategoryPainLocalAuditCompactTests(unittest.TestCase):
     def test_filters_non_consumer_and_ineligible_rows(self):
         item = {'evidence': [
@@ -71,9 +85,40 @@ class CategoryPainLocalAuditCompactTests(unittest.TestCase):
         }
         task = audit.build_task(item)
         self.assertNotIn('market_evidence_quality', task.payload)
-        self.assertEqual(task.prompt_version, 'category-pain-local-v2-compact')
+        self.assertEqual(task.prompt_version, 'category-pain-local-v3-concise')
         self.assertEqual(task.metadata['source_domains'], 3)
+        self.assertEqual(task.metadata['evidence_pack'], 'source_diverse_compact_v2')
         self.assertLessEqual(len(task.payload['evidence']), 10)
+
+    def test_nested_contract_rejects_two_row_cluster(self):
+        data = {
+            'clusters': [_cluster([0, 1])],
+            'audit_summary': 'Not enough independent support.',
+            'rejected_patterns': [],
+        }
+        valid, reason = audit._validate_nested(data, 3)
+        self.assertFalse(valid)
+        self.assertEqual(reason, 'cluster_insufficient_evidence_indices')
+
+    def test_nested_contract_accepts_concise_three_row_cluster(self):
+        data = {
+            'clusters': [_cluster([0, 1, 2])],
+            'audit_summary': 'Three corroborating rows support the same irrigation failure.',
+            'rejected_patterns': ['generic gardening difficulty'],
+        }
+        valid, reason = audit._validate_nested(data, 3)
+        self.assertTrue(valid)
+        self.assertIsNone(reason)
+
+    def test_nested_contract_rejects_unbounded_cluster_count(self):
+        data = {
+            'clusters': [_cluster([0, 1, 2]), _cluster([0, 1, 2]), _cluster([0, 1, 2])],
+            'audit_summary': 'Too many.',
+            'rejected_patterns': [],
+        }
+        valid, reason = audit._validate_nested(data, 3)
+        self.assertFalse(valid)
+        self.assertEqual(reason, 'too_many_clusters')
 
 
 if __name__ == '__main__':
