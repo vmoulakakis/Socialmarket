@@ -2,10 +2,9 @@ from __future__ import annotations
 
 """Bounded verified-public corroboration for Category Pain.
 
-These URLs are recall seeds only. The worker performs a fresh public HTTP fetch,
+Every URL below is recall only. Production performs a fresh public HTTP fetch,
 extracts actual page text, and applies the same consumer/taxonomy scorer. Seed
-labels and search snippets are never pain evidence. The goal is independent
-source corroboration, not easier validation.
+labels and search snippets never become pain evidence.
 """
 
 import hashlib
@@ -35,19 +34,36 @@ VERIFIED_PUBLIC_SEEDS = {
         },
     ),
     ('Sports & Outdoors', 'Camping & Hiking'): (
+        # Same E-Camping discussion family, separate exact pages/threads. Each is
+        # freshly fetched and content-hash deduped, so repeated statements cannot
+        # be manufactured by duplicating one URL.
         {
-            'url': 'https://www.e-camping.gr/forum?catid=46&id=124&start=70&view=topic',
+            'url': 'https://www.e-camping.gr/forum?catid=46&id=124&view=topic',
             'title': 'E-Camping - Στρώματα: Ένα θέμα που καίει',
             'source_family': 'community_forum',
-            'binding_terms': ('στρώμα', 'στρώματα', 'φουσκωτό', 'χάνει αέρα', 'ξεφουσκώνει', 'φούσκωμα'),
+            'binding_terms': ('στρώμα', 'στρώματα', 'φουσκωτό', 'χάνει αέρα', 'ξεφουσκώνει', 'έσκασε', 'έσκασαν', 'βαλβίδα'),
             'confidence': .86,
         },
         {
-            'url': 'https://www.insomnia.gr/forums/topic/775912-%CE%B1%CE%B3%CE%BF%CF%81%CE%AC-%CF%86%CE%BF%CF%85%CF%83%CE%BA%CF%89%CF%84%CE%BF%CF%8D-%CF%83%CF%84%CF%81%CF%8E%CE%BC%CE%B1%CF%84%CE%BF%CF%82-%CE%B5%CE%B4%CE%AC%CF%86%CE%BF%CF%85%CF%82/',
-            'title': 'Insomnia - Αγορά φουσκωτού στρώματος εδάφους',
+            'url': 'https://www.e-camping.gr/forum?catid=46&id=124&start=70&view=topic',
+            'title': 'E-Camping - Στρώματα: καθημερινή απώλεια αέρα',
             'source_family': 'community_forum',
-            'binding_terms': ('στρώμα', 'φουσκωτό', 'χάνει αέρα', 'ξεφουσκώνει', 'κάθε νύχτα', 'κάθε βράδυ', 'φούσκωμα'),
-            'confidence': .82,
+            'binding_terms': ('στρώμα', 'φουσκωτό', 'χάνει αέρα', 'μισό αέρα', 'κάθε βράδυ', 'κάθε πρωί', 'φούσκωμα'),
+            'confidence': .86,
+        },
+        {
+            'url': 'https://www.e-camping.gr/forum?catid=47&id=12237&view=topic',
+            'title': 'E-Camping - Στρώμα camping',
+            'source_family': 'community_forum',
+            'binding_terms': ('στρώμα camping', 'φουσκωτό στρώμα', 'ξεφουσκώνει', 'χάνει αέρα', 'ύπνος'),
+            'confidence': .86,
+        },
+        {
+            'url': 'https://www.e-camping.gr/forum?catid=46&id=12141&view=topic',
+            'title': 'E-Camping - Ράντζο ή αυτοφούσκωτο',
+            'source_family': 'community_forum',
+            'binding_terms': ('στρώμα', 'αυτοφούσκωτο', 'φουσκωτό', 'ξεφουσκώνει', 'χάνει αέρα', 'έμεινα κάτω'),
+            'confidence': .86,
         },
         {
             'url': 'https://www.lightgear.gr/blogs/blog/pos-na-epileksete-ypostroma-camping',
@@ -84,9 +100,7 @@ def _explain_reject(segment: str, title: str, keywords: list[str], family: str, 
         return 'editorial_surface'
     purchase = [x for x in consumer.PURCHASE_STEMS if x in folded]
     first = any(x in folded for x in consumer.FIRST_PERSON_STEMS)
-    if family in ('community_forum', 'social_forum', 'marketplace_review', 'social_video') and not first and not purchase:
-        return 'no_first_person_or_purchase'
-    if family == 'community_blog' and not first and not purchase:
+    if family in ('community_forum', 'community_blog', 'social_forum', 'marketplace_review', 'social_video') and not first and not purchase:
         return 'no_first_person_or_purchase'
     return 'score_below_threshold'
 
@@ -123,7 +137,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
                 'source_url': url,
                 'title': title[:500],
                 'body': segment[:1600],
-                'collector': 'verified_public_extract_v416',
+                'collector': 'verified_public_extract_v418',
                 'confidence': round(min(.95, base_conf + min(.05, score * .001)), 3),
                 'content_hash': digest,
                 'metadata': {
@@ -141,7 +155,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
                     'first_person_signal': first,
                     'consumer_language_score': score,
                     'ugc_surface': consumer._ugc_surface(url, family, segment),
-                    'retrieval_version': 'verified_public_v4.16',
+                    'retrieval_version': 'verified_public_v4.18',
                     'source_role': 'pain_only',
                     'social_metrics_eligible_for_demand': False,
                     'metric_semantics': 'actual freshly fetched public consumer text; seed/search metadata excluded from proof',
@@ -153,7 +167,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
         'source_url': url,
         'title': row['title'],
         'body': '',
-        'collector': 'verified_public_seed_v416',
+        'collector': 'verified_public_seed_v418',
         'confidence': .45 if error else .70,
         'metadata': {
             'geography': 'GR',
@@ -165,7 +179,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
             'segments_examined': segment_count,
             'pain_candidates_emitted': len(evidence),
             'reject_reasons': dict(reasons),
-            'retrieval_version': 'verified_public_v4.16',
+            'retrieval_version': 'verified_public_v4.18',
             'metric_semantics': 'verified public URL seed only; actual fetched text must independently pass the consumer scorer',
         },
     }
@@ -198,13 +212,7 @@ def collect_consumer_evidence(category: str, subcategory: str | None, aliases: l
         if len(pains) >= max_rows:
             break
 
-    pains.sort(
-        key=lambda x: (
-            (x.get('metadata') or {}).get('consumer_language_score', 0),
-            x.get('confidence', 0),
-        ),
-        reverse=True,
-    )
+    pains.sort(key=lambda x: ((x.get('metadata') or {}).get('consumer_language_score', 0), x.get('confidence', 0)), reverse=True)
     remaining = max(0, max_rows - len(pains))
     diagnostics = direct_diagnostics + base_diagnostics
     return pains[:max_rows] + diagnostics[:remaining]
@@ -214,13 +222,17 @@ def apply():
     global _ORIGINAL_COLLECT, _APPLIED
     if _APPLIED:
         return
-    # Lexical recall extensions only; numeric scorer/audit thresholds remain unchanged.
-    extra_pain_stems = ('βουλ', 'χανει αερ', 'χανουν αερ', 'ξεφουσκ', 'δεν ξεφουσκ', 'τρυπ', 'μπελ')
+    # Greek lexical recall only; numeric scorer/audit thresholds remain unchanged.
+    extra_pain_stems = (
+        'βουλ', 'χανει αερ', 'χανουν αερ', 'μισο αερ', 'ξεφουσκ', 'δεν ξεφουσκ',
+        'εσκα', 'σκασ', 'τρυπ', 'βαλβιδ', 'επισκευ', 'μπελ',
+    )
     for stem in extra_pain_stems:
         if stem not in consumer.PAIN_STEMS:
             consumer.PAIN_STEMS = (*consumer.PAIN_STEMS, stem)
-    if 'εχοντας' not in consumer.FIRST_PERSON_STEMS:
-        consumer.FIRST_PERSON_STEMS = (*consumer.FIRST_PERSON_STEMS, 'εχοντας')
+    for stem in ('εχοντας', 'αγορασα', 'πηρα'):
+        if stem not in consumer.FIRST_PERSON_STEMS:
+            consumer.FIRST_PERSON_STEMS = (*consumer.FIRST_PERSON_STEMS, stem)
     _ORIGINAL_COLLECT = consumer.collect_consumer_evidence
     consumer.collect_consumer_evidence = collect_consumer_evidence
     _APPLIED = True
