@@ -17,6 +17,8 @@
 
 The first implementation seam must be a **provider-neutral AI Task Router + canonical Autopilot control plane**, not another versioned ranking script.
 
+Phase 2 must be implemented behind compatibility boundaries so existing production data-plane components continue to operate while the new zero-paid AI path is benchmarked and validated. The first code changes must therefore be additive and reversible; legacy provider-specific paths are retired only after equivalent or better acceptance results are recorded.
+
 ---
 
 ## 1. Executive verdict
