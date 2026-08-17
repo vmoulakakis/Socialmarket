@@ -27,6 +27,12 @@ jobs:
     timeout-minutes: 240
     env:
       EVIDENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/evidence-gateway
+      AI_TASK_RUNTIME_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/ai-task-runtime-gateway
+      AI_TASK_RUNTIME_DURABLE: 'true'
+      CATEGORY_PAIN_AI_ROUTE: local_router
+      LOCAL_OLLAMA_URL: http://127.0.0.1:11434
+      CATEGORY_PAIN_TIER1_MODEL: qwen3.5:4b
+      CATEGORY_PAIN_TIER2_MODEL: ''
       SEARXNG_BASE_URL: http://127.0.0.1:8080
       CATEGORY_PAIN_LIMIT: ${{ inputs.limit || '80' }}
       CATEGORY_PAIN_WORKERS: '3'
@@ -40,19 +46,38 @@ jobs:
           python-version: '3.12'
       - name: Install deep evidence dependencies
         run: pip install requests trafilatura yt-dlp
-      - name: Preflight evidence gateway and AI skeptic
+      - name: Preflight evidence persistence and AI runtime gateways
         run: |
-          HEALTH=$(curl -fsS "$EVIDENCE_GATEWAY")
-          echo "$HEALTH"
-          python - <<'PY' "$HEALTH"
+          EVIDENCE_HEALTH=$(curl -fsS "$EVIDENCE_GATEWAY")
+          AI_RUNTIME_HEALTH=$(curl -fsS "$AI_TASK_RUNTIME_GATEWAY")
+          echo "$EVIDENCE_HEALTH"
+          echo "$AI_RUNTIME_HEALTH"
+          python - <<'PY' "$EVIDENCE_HEALTH" "$AI_RUNTIME_HEALTH"
           import json,sys
-          h=json.loads(sys.argv[1])
-          assert h.get('ok') is True
-          assert str(h.get('version')) == '4.0', f"Category Pain V4.6 requires compatible evidence-gateway 4.0; got {h.get('version')}"
-          assert h.get('collection_type') == 'semantic_category_pain_v4', f"Wrong collection type: {h.get('collection_type')}"
-          assert h.get('retrieval') == 'greek_consumer_evidence_v4+direct_authoritative_context_v3', f"Wrong retrieval contract: {h.get('retrieval')}"
-          assert h.get('deepseek_configured') is True, 'DeepSeek audit must be configured; fail closed instead of silently accepting un-audited pains'
+          e=json.loads(sys.argv[1]);a=json.loads(sys.argv[2])
+          assert e.get('ok') is True
+          assert str(e.get('version')) == '4.0', f"Category Pain requires compatible evidence-gateway 4.0; got {e.get('version')}"
+          assert e.get('collection_type') == 'semantic_category_pain_v4', f"Wrong collection type: {e.get('collection_type')}"
+          assert e.get('retrieval') == 'greek_consumer_evidence_v4+direct_authoritative_context_v3', f"Wrong retrieval contract: {e.get('retrieval')}"
+          assert a.get('ok') is True
+          assert a.get('contract') == 'autopilot-ai-task-v1', f"Wrong AI runtime contract: {a.get('contract')}"
+          assert a.get('stores_raw_prompts') is False
+          assert a.get('stores_raw_evidence') is False
           PY
+      - name: Install local Ollama runtime
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start local Ollama and load qualified Category Pain model
+        run: |
+          if ! curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+            nohup ollama serve > /tmp/ollama-category-pain.log 2>&1 &
+          fi
+          for i in $(seq 1 40); do
+            if curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null
+          ollama pull "$CATEGORY_PAIN_TIER1_MODEL"
+          ollama list
       - name: Start ephemeral SearXNG discovery engine
         run: |
           docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
@@ -62,9 +87,9 @@ jobs:
           done
           docker logs socialmarket-searxng || true
           exit 1
-      - name: Compile Category Pain V4.6 workers
-        run: python -m py_compile workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/consumer_direct_greek_v46.py workers/market_intelligence/niche_product_prior_v45.py workers/market_intelligence/niche_keyword_binding_v45.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_intelligence_v42.py
-      - name: Run Greece-first Niche Category Pain V4.6
+      - name: Compile Category Pain local-router workers
+        run: python -m py_compile workers/ai_runtime/task_contract.py workers/ai_runtime/router.py workers/ai_runtime/ollama_executor.py workers/ai_runtime/supabase_runtime.py workers/market_intelligence/semantic_taxonomy.py workers/market_intelligence/market_query_aliases.py workers/market_intelligence/category_pain_intelligence.py workers/market_intelligence/consumer_evidence_v4.py workers/market_intelligence/consumer_source_expansion_v43.py workers/market_intelligence/consumer_direct_social_v44.py workers/market_intelligence/consumer_direct_greek_v46.py workers/market_intelligence/niche_product_prior_v45.py workers/market_intelligence/niche_keyword_binding_v45.py workers/market_intelligence/authoritative_context_v3.py workers/market_intelligence/category_pain_intelligence_v4.py workers/market_intelligence/category_pain_local_audit.py workers/market_intelligence/category_pain_intelligence_v42.py
+      - name: Run Greece-first Niche Category Pain with local AI Task Router
         working-directory: workers/market_intelligence
         shell: bash
         run: |
@@ -82,15 +107,17 @@ jobs:
               try: parsed.append(json.loads(line))
               except Exception: pass
           summaries=[x for x in parsed if x.get('status') in ('completed','completed_with_failures') and 'processed' in x]
-          assert summaries, 'Missing structured Category Pain V4.6 completion summary'
+          assert summaries, 'Missing structured Category Pain completion summary'
           summary=summaries[-1]
-          assert summary.get('failed') == 0, f"Category Pain V4.6 reported failures: {summary}"
+          assert summary.get('failed') == 0, f"Category Pain reported failures: {summary}"
           assert summary.get('status') == 'completed', f"Research did not complete cleanly: {summary}"
           print(summary)
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: semantic-category-pain-v46-output
+          name: semantic-category-pain-local-router-output
           retention-days: 30
-          path: workers/market_intelligence/semantic-category-pain-output.json
+          path: |
+            workers/market_intelligence/semantic-category-pain-output.json
+            /tmp/ollama-category-pain.log
