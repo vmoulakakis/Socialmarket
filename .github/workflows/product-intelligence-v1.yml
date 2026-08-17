@@ -6,6 +6,10 @@ on:
     workflows: ['Deep Demand Intelligence V3.1']
     types: [completed]
     branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - '.github/trigger-product-local-final'
 
 concurrency:
   group: socialmarket-product-ranking-weekly
