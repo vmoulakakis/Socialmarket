@@ -15,8 +15,10 @@ class ForumSeedCrawlV48Tests(unittest.TestCase):
     def test_topic_classifier_does_not_confuse_catid_with_id(self):
         category = 'https://www.e-camping.gr/forum?catid=46&view=category'
         topic = 'https://www.e-camping.gr/forum?catid=46&id=12390&view=topic'
+        kithara = 'https://forum.kithara.gr/index.php?topic=49601.0'
         self.assertFalse(v48._topic_url(category))
         self.assertTrue(v48._topic_url(topic))
+        self.assertTrue(v48._topic_url(kithara))
 
     def test_fetch_html_uses_canonical_consumer_requests_stack(self):
         response = Mock()
@@ -77,6 +79,33 @@ class ForumSeedCrawlV48Tests(unittest.TestCase):
         self.assertIn('id=12390', rows[0]['url'])
         self.assertGreaterEqual(len(diagnostics), 2)
         self.assertEqual(diagnostics[0]['metadata']['topic_urls_selected'], 1)
+
+    def test_verified_camping_direct_seeds_span_two_extra_domains(self):
+        rows, diagnostics = v48._direct_candidates(
+            'Sports & Outdoors', 'Camping & Hiking', ['camping', 'power', 'bank']
+        )
+        domains = {v48._host(row['url']) for row in rows}
+        self.assertIn('insomnia.gr', domains)
+        self.assertIn('forum.kithara.gr', domains)
+        self.assertEqual(len(rows), len(diagnostics))
+        self.assertTrue(all(not d['metadata']['eligible_for_pain_audit'] for d in diagnostics))
+
+    def test_verified_garden_direct_seeds_span_two_extra_domains(self):
+        rows, _ = v48._direct_candidates(
+            'Home & Garden', 'Garden & Outdoor Living', ['ποτισμα', 'μπαλκονι']
+        )
+        domains = {v48._host(row['url']) for row in rows}
+        self.assertIn('insomnia.gr', domains)
+        self.assertIn('kalliergo.gr', domains)
+
+    def test_direct_seed_metadata_never_becomes_pain_proof(self):
+        rows, diagnostics = v48._direct_candidates(
+            'Sports & Outdoors', 'Camping & Hiking', ['camping']
+        )
+        self.assertGreaterEqual(len(rows), 2)
+        self.assertTrue(all(d['source_kind'] == 'consumer_discovery' for d in diagnostics))
+        self.assertTrue(all(d['body'] == '' for d in diagnostics))
+        self.assertTrue(all(d['metadata']['evidence_mode'] == 'discovery_only' for d in diagnostics))
 
     def test_known_camping_seed_is_registered(self):
         seeds = v48.SEEDS[('Sports & Outdoors', 'Camping & Hiking')]

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-"""Shallow public-forum seed crawler for Category Pain V4.8.
+"""Public-forum acquisition for Category Pain V4.10.
 
-This channel is intentionally independent of search-engine site operators. It
-starts from verified public forum/index surfaces, follows only same-domain links,
-and still requires actual fetched page text to pass the unchanged V4 consumer
-pain scorer. It never bypasses login, robots, 403/CAPTCHA or anti-bot controls.
+The crawler combines shallow same-domain index discovery with a very small set
+of verified direct public discussion URLs for niches where generic site search
+has repeatedly under-returned. Direct URLs are *seeds only*: every page is
+fetched again by the production worker and its actual text must pass the same
+V4 consumer/taxonomy scorer and independent skeptic. Search snippets or seed
+metadata never become pain evidence.
+
+No login, robots bypass, CAPTCHA bypass, 403 bypass or restricted API is used.
 """
 
 import concurrent.futures
@@ -18,6 +22,7 @@ import consumer_searx_forum_v47 as v47
 _ORIGINAL_COLLECT = None
 _APPLIED = False
 
+# Index/category seeds used for bounded same-domain discovery.
 SEEDS = {
     ('Sports & Outdoors', 'Camping & Hiking'): (
         'https://www.e-camping.gr/forum',
@@ -33,6 +38,33 @@ SEEDS = {
     ('Sports & Outdoors', 'Cycling'): (
         'https://www.podilates.gr/forum',
         'https://greekwatchforum.gr/',
+    ),
+}
+
+# Verified public discussion pages are a recall aid only. They are not trusted
+# evidence until the worker fetches them and the unchanged scorer accepts actual
+# consumer text. Multiple independent domains are intentional because the
+# skeptic requires cross-source support before validation.
+DIRECT_DISCUSSION_SEEDS = {
+    ('Sports & Outdoors', 'Camping & Hiking'): (
+        {
+            'url': 'https://www.insomnia.gr/forums/topic/770685-%CE%B5%CE%BE%CE%BF%CF%80%CE%BB%CE%B9%CF%83%CE%BC%CF%8C%CF%82-camping/',
+            'title': 'εξοπλισμός camping',
+        },
+        {
+            'url': 'https://forum.kithara.gr/index.php?topic=49601.0',
+            'title': 'Camping',
+        },
+    ),
+    ('Home & Garden', 'Garden & Outdoor Living'): (
+        {
+            'url': 'https://www.insomnia.gr/forums/topic/710154-%CE%B7-%CE%B3%CF%89%CE%BD%CE%B9%CE%AC-%CF%84%CE%BF%CF%85-%CF%86%CF%85%CF%84%CE%BF%CF%84%CE%AD%CF%87%CE%BD%CE%B7/page/11/',
+            'title': 'Η γωνιά του φυτοτέχνη - αυτόματο πότισμα',
+        },
+        {
+            'url': 'https://www.kalliergo.gr/forum/kalliergeies-poli/%CF%80%CF%81%CF%8C%CE%B2%CE%BB%CE%B7%CE%BC%CE%B1-%CE%BC%CE%B5-%CF%86%CF%85%CF%84%CE%AC-%CF%83%CE%B5-%CE%BC%CF%80%CE%B1%CE%BB%CE%BA%CF%8C%CE%BD%CE%B9/',
+            'title': 'Πρόβλημα με φυτά σε μπαλκόνι',
+        },
     ),
 }
 
@@ -78,30 +110,20 @@ def _same_domain(url: str, seed: str) -> bool:
 
 
 def _topic_url(url: str) -> bool:
-    """Classify real topic URLs without substring collisions such as catid=id.
-
-    Forum URL contracts differ, so use exact query semantics where available
-    and well-known topic path forms otherwise. Generic `id=` / `t=` substring
-    matching is intentionally forbidden because category/index URLs can contain
-    those character sequences (for example `catid=`).
-    """
+    """Classify common forum topic URL forms without substring collisions."""
     parsed = urlparse(str(url or ''))
     path = parsed.path.lower()
     query = parse_qs(parsed.query, keep_blank_values=True)
     view = str((query.get('view') or [''])[0]).lower()
     if view == 'topic':
         return True
+    if query.get('topic'):
+        return True
     return any(marker in path for marker in TOPIC_PATH_MARKERS)
 
 
 def _fetch_html(url: str):
-    """Fetch one public HTML surface using the canonical consumer HTTP stack.
-
-    `consumer_evidence_v4` exposes the imported `requests` module and its UA,
-    not a requests.Session object. Using that canonical stack keeps timeout,
-    redirect and anti-bot behavior explicit and prevents the V4.8 seed crawler
-    from failing before the first network request.
-    """
+    """Fetch one public HTML surface using the canonical consumer HTTP stack."""
     try:
         response = consumer.requests.get(
             url,
@@ -167,7 +189,7 @@ def _crawl_seed(seed: str, tokens: list[str]):
         'source_url': seed,
         'title': f'Public forum seed crawl: {_host(seed)}',
         'body': '',
-        'collector': 'forum_seed_crawl_v48',
+        'collector': 'forum_seed_crawl_v410',
         'confidence': .68 if first_html else .40,
         'metadata': {
             'geography': 'GR',
@@ -177,7 +199,7 @@ def _crawl_seed(seed: str, tokens: list[str]):
             'fetch_error': first_error,
             'seed_url': seed,
             'depth': 0,
-            'retrieval_version': 'forum_seed_crawl_v4.8',
+            'retrieval_version': 'forum_seed_crawl_v4.10',
         },
     }
     if not first_html:
@@ -199,7 +221,7 @@ def _crawl_seed(seed: str, tokens: list[str]):
             'source_url': branch['url'],
             'title': str(branch.get('title') or '')[:500],
             'body': '',
-            'collector': 'forum_seed_crawl_v48',
+            'collector': 'forum_seed_crawl_v410',
             'confidence': .64 if html else .40,
             'metadata': {
                 'geography': 'GR',
@@ -210,7 +232,7 @@ def _crawl_seed(seed: str, tokens: list[str]):
                 'seed_url': seed,
                 'depth': 1,
                 'links_found': len(links),
-                'retrieval_version': 'forum_seed_crawl_v4.8',
+                'retrieval_version': 'forum_seed_crawl_v4.10',
             },
         })
 
@@ -233,10 +255,49 @@ def _crawl_seed(seed: str, tokens: list[str]):
     return deduped, [diag, *branch_diags]
 
 
+def _direct_candidates(category: str, subcategory: str | None, tokens: list[str]):
+    """Return bounded verified URL seeds; no page text is trusted here."""
+    rows = []
+    diagnostics = []
+    for seed in DIRECT_DISCUSSION_SEEDS.get((str(category or ''), str(subcategory or '')), ()):
+        url = str(seed.get('url') or '').strip()
+        if not url or _host(url) == '':
+            continue
+        title = str(seed.get('title') or 'Verified public discussion')[:500]
+        rows.append({
+            'url': url,
+            'title': title,
+            'snippet': '',
+            'crawl_score': 100,
+            'query': f'verified-direct-seed:{_host(url)}',
+            'query_term': ' '.join(tokens[:6]),
+            'expected_domain': _host(url),
+        })
+        diagnostics.append({
+            'source_kind': 'consumer_discovery',
+            'source_url': url,
+            'title': title,
+            'body': '',
+            'collector': 'verified_direct_forum_seed_v410',
+            'confidence': .70,
+            'metadata': {
+                'geography': 'GR',
+                'source_family': 'community_forum',
+                'evidence_mode': 'discovery_only',
+                'eligible_for_pain_audit': False,
+                'expected_domain': _host(url),
+                'retrieval_version': 'forum_seed_crawl_v4.10',
+                'metric_semantics': 'Verified public URL seed only; actual fetched page text must pass the unchanged consumer scorer.',
+            },
+        })
+    return rows, diagnostics
+
+
 def collect_consumer_evidence(category: str, subcategory: str | None, aliases: list[str], keywords: list[str], max_rows: int = 100):
     base_rows = _ORIGINAL_COLLECT(category, subcategory, aliases, keywords, max_rows=max_rows)
     seed_urls = SEEDS.get((str(category or ''), str(subcategory or '')), ())
-    if not seed_urls:
+    direct_seed_specs = DIRECT_DISCUSSION_SEEDS.get((str(category or ''), str(subcategory or '')), ())
+    if not seed_urls and not direct_seed_specs:
         return base_rows
 
     tokens = _anchor_tokens(category, subcategory, aliases)
@@ -247,11 +308,26 @@ def collect_consumer_evidence(category: str, subcategory: str | None, aliases: l
         candidates.extend(rows)
         diagnostics.extend(diag)
 
+    direct_rows, direct_diags = _direct_candidates(category, subcategory, tokens)
+    candidates.extend(direct_rows)
+    diagnostics.extend(direct_diags)
+
+    # URL-level dedupe before network fetch avoids repeated work when dynamic
+    # discovery and a verified direct seed converge on the same public page.
+    deduped_candidates = []
+    seen_urls = set()
+    for row in sorted(candidates, key=lambda x: int(x.get('crawl_score') or 0), reverse=True):
+        url = str(row.get('url') or '')
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        deduped_candidates.append(row)
+
     direct = []
     fetch_diags = []
-    if candidates:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(candidates))) as pool:
-            futures = [pool.submit(v47._extract_one, row, keywords) for row in candidates]
+    if deduped_candidates:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(deduped_candidates))) as pool:
+            futures = [pool.submit(v47._extract_one, row, keywords) for row in deduped_candidates]
             for future in concurrent.futures.as_completed(futures):
                 evidence, diagnostic = future.result()
                 direct.extend(evidence)
