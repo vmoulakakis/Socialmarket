@@ -110,6 +110,26 @@ class CategoryPainLocalAuditCompactTests(unittest.TestCase):
         self.assertTrue(valid)
         self.assertIsNone(reason)
 
+    def test_longer_summary_is_presentation_only_and_does_not_override_evidence_gate(self):
+        data = {
+            'clusters': [_cluster([0, 1, 2])],
+            'audit_summary': 'A' * 600,
+            'rejected_patterns': [],
+        }
+        valid, reason = audit._validate_nested(data, 3)
+        self.assertTrue(valid)
+        self.assertIsNone(reason)
+
+    def test_summary_still_has_hard_bound(self):
+        data = {
+            'clusters': [_cluster([0, 1, 2])],
+            'audit_summary': 'A' * 801,
+            'rejected_patterns': [],
+        }
+        valid, reason = audit._validate_nested(data, 3)
+        self.assertFalse(valid)
+        self.assertEqual(reason, 'audit_summary_too_long')
+
     def test_nested_contract_rejects_unbounded_cluster_count(self):
         data = {
             'clusters': [_cluster([0, 1, 2]), _cluster([0, 1, 2]), _cluster([0, 1, 2])],
