@@ -10,22 +10,24 @@ class FakeOllamaExecutor(OllamaExecutor):
     def __init__(self, responses):
         super().__init__(name="fake", tier=1, model="qwen-test", endpoint="http://local.invalid")
         self.responses = list(responses)
+        self.requests = []
 
     def _request_json(self, path, payload=None):
-        del path, payload
+        self.requests.append((path, payload))
         if not self.responses:
             raise AssertionError("unexpected Ollama request")
         return self.responses.pop(0)
 
 
 class OllamaExecutorTests(unittest.TestCase):
-    def task(self):
+    def task(self, metadata=None):
         return AITask(
             task_type="unit_test",
             role="Test Skeptic",
             instructions="Return the supplied fact only.",
             payload={"fact": "grounded"},
             required_keys=("verdict",),
+            metadata=metadata or {},
         )
 
     def test_available_requires_model_tag(self):
@@ -48,6 +50,23 @@ class OllamaExecutorTests(unittest.TestCase):
         self.assertEqual(telemetry["cost_usd"], 0)
         self.assertEqual(telemetry["route"], "local_ollama")
         self.assertFalse(telemetry["thinking"])
+        self.assertFalse(telemetry["structured_output"])
+        self.assertEqual(executor.requests[-1][1]["format"], "json")
+
+    def test_task_response_schema_is_forwarded_as_ollama_format(self):
+        schema = {
+            "type": "object",
+            "properties": {"verdict": {"type": "string", "enum": ["VALIDATED", "REJECTED"]}},
+            "required": ["verdict"],
+            "additionalProperties": False,
+        }
+        executor = FakeOllamaExecutor([
+            {"message": {"content": '{"verdict":"REJECTED"}'}}
+        ])
+        data, telemetry = executor.run(self.task({"response_schema": schema}))
+        self.assertEqual(data["verdict"], "REJECTED")
+        self.assertEqual(executor.requests[-1][1]["format"], schema)
+        self.assertTrue(telemetry["structured_output"])
 
     def test_invalid_model_json_fails_closed(self):
         executor = FakeOllamaExecutor([
