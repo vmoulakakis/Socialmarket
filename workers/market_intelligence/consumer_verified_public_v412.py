@@ -46,15 +46,15 @@ VERIFIED_PUBLIC_SEEDS = {
             'url': 'https://www.insomnia.gr/forums/topic/775912-%CE%B1%CE%B3%CE%BF%CF%81%CE%AC-%CF%86%CE%BF%CF%85%CF%83%CE%BA%CF%89%CF%84%CE%BF%CF%8D-%CF%83%CF%84%CF%81%CF%8E%CE%BC%CE%B1%CF%84%CE%BF%CF%82-%CE%B5%CE%B4%CE%AC%CF%86%CE%BF%CF%85%CF%82/',
             'title': 'Insomnia - Αγορά φουσκωτού στρώματος εδάφους',
             'source_family': 'community_forum',
-            'binding_terms': ('στρώμα', 'φουσκωτό', 'ξεφουσκώνει', 'κάθε νύχτα', 'φούσκωμα'),
+            'binding_terms': ('στρώμα', 'φουσκωτό', 'χάνει αέρα', 'ξεφουσκώνει', 'κάθε νύχτα', 'κάθε βράδυ', 'φούσκωμα'),
             'confidence': .82,
         },
         {
-            'url': 'https://advride.gr/threads/%CE%9A%CF%81%CE%B5%CE%B2%CE%AC%CF%84%CE%B9-%CE%BA%CE%B1%CF%84%CE%B1%CF%83%CE%BA%CE%AE%CE%BD%CF%89%CF%83%CE%B7%CF%82.775/page-2',
-            'title': 'ADVride - Κρεβάτι κατασκήνωσης και φουσκωτά στρώματα',
-            'source_family': 'community_forum',
-            'binding_terms': ('στρώμα', 'φουσκωτά στρώματα', 'φουσκώνεις', 'ξεφουσκώνεις', 'κάθε μέρα', 'κατασκήνωση'),
-            'confidence': .82,
+            'url': 'https://www.lightgear.gr/blogs/blog/pos-na-epileksete-ypostroma-camping',
+            'title': 'Lightgear - Πως να επιλέξετε υπόστρωμα camping - σχόλια χρηστών',
+            'source_family': 'community_blog',
+            'binding_terms': ('υπόστρωμα camping', 'φουσκωτό υπόστρωμα', 'αυτοφούσκωτο', 'φούσκωμα', 'ξεφούσκωμα', 'δεν ξεφουσκώνει'),
+            'confidence': .72,
         },
     ),
 }
@@ -85,6 +85,8 @@ def _explain_reject(segment: str, title: str, keywords: list[str], family: str, 
     purchase = [x for x in consumer.PURCHASE_STEMS if x in folded]
     first = any(x in folded for x in consumer.FIRST_PERSON_STEMS)
     if family in ('community_forum', 'social_forum', 'marketplace_review', 'social_video') and not first and not purchase:
+        return 'no_first_person_or_purchase'
+    if family == 'community_blog' and not first and not purchase:
         return 'no_first_person_or_purchase'
     return 'score_below_threshold'
 
@@ -121,7 +123,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
                 'source_url': url,
                 'title': title[:500],
                 'body': segment[:1600],
-                'collector': 'verified_public_extract_v415',
+                'collector': 'verified_public_extract_v416',
                 'confidence': round(min(.95, base_conf + min(.05, score * .001)), 3),
                 'content_hash': digest,
                 'metadata': {
@@ -139,7 +141,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
                     'first_person_signal': first,
                     'consumer_language_score': score,
                     'ugc_surface': consumer._ugc_surface(url, family, segment),
-                    'retrieval_version': 'verified_public_v4.15',
+                    'retrieval_version': 'verified_public_v4.16',
                     'source_role': 'pain_only',
                     'social_metrics_eligible_for_demand': False,
                     'metric_semantics': 'actual freshly fetched public consumer text; seed/search metadata excluded from proof',
@@ -151,7 +153,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
         'source_url': url,
         'title': row['title'],
         'body': '',
-        'collector': 'verified_public_seed_v415',
+        'collector': 'verified_public_seed_v416',
         'confidence': .45 if error else .70,
         'metadata': {
             'geography': 'GR',
@@ -163,7 +165,7 @@ def _extract_seed(seed: dict[str, Any], keywords: list[str]):
             'segments_examined': segment_count,
             'pain_candidates_emitted': len(evidence),
             'reject_reasons': dict(reasons),
-            'retrieval_version': 'verified_public_v4.15',
+            'retrieval_version': 'verified_public_v4.16',
             'metric_semantics': 'verified public URL seed only; actual fetched text must independently pass the consumer scorer',
         },
     }
@@ -178,12 +180,15 @@ def collect_consumer_evidence(category: str, subcategory: str | None, aliases: l
         return base
 
     pains = [x for x in base if x.get('source_kind') == 'pain_candidate']
-    diagnostics = [x for x in base if x.get('source_kind') != 'pain_candidate']
+    base_diagnostics = [x for x in base if x.get('source_kind') != 'pain_candidate']
+    direct_diagnostics = []
     seen = {(consumer.host(x.get('source_url')), x.get('content_hash')) for x in pains}
 
     for seed in seeds:
         rows, diagnostic = _extract_seed(dict(seed), keywords)
-        diagnostics.append(diagnostic)
+        # Put direct-fetch diagnostics ahead of broad discovery diagnostics so
+        # bounded persistence retains exact fetch/reject reasons for qualification.
+        direct_diagnostics.append(diagnostic)
         for item in rows:
             key = (consumer.host(item.get('source_url')), item.get('content_hash'))
             if key in seen:
@@ -203,6 +208,7 @@ def collect_consumer_evidence(category: str, subcategory: str | None, aliases: l
         reverse=True,
     )
     remaining = max(0, max_rows - len(pains))
+    diagnostics = direct_diagnostics + base_diagnostics
     return pains[:max_rows] + diagnostics[:remaining]
 
 
@@ -211,10 +217,13 @@ def apply():
     if _APPLIED:
         return
     # Lexical recall extensions only; numeric scorer/audit thresholds remain unchanged.
-    extra_pain_stems = ('βουλ', 'χανει αερ', 'ξεφουσκ', 'τρυπ', 'μπελ')
+    extra_pain_stems = ('βουλ', 'χανει αερ', 'ξεφουσκ', 'δεν ξεφουσκ', 'τρυπ', 'μπελ')
     for stem in extra_pain_stems:
         if stem not in consumer.PAIN_STEMS:
             consumer.PAIN_STEMS = (*consumer.PAIN_STEMS, stem)
+    # First-person inflection used in real Greek forum experience reports.
+    if 'εχοντας' not in consumer.FIRST_PERSON_STEMS:
+        consumer.FIRST_PERSON_STEMS = (*consumer.FIRST_PERSON_STEMS, 'εχοντας')
     _ORIGINAL_COLLECT = consumer.collect_consumer_evidence
     consumer.collect_consumer_evidence = collect_consumer_evidence
     _APPLIED = True
