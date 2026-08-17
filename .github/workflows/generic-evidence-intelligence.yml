@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/generic-evidence-intelligence.yml'
+      - '.github/category-pain-final-trigger'
   workflow_dispatch:
     inputs:
       limit:
