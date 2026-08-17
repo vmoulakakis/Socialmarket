@@ -11,8 +11,9 @@ from niche_keyword_binding_v45 import apply as apply_niche_keyword_binding
 from consumer_direct_greek_v46 import apply as apply_direct_greek
 from consumer_searx_forum_v47 import apply as apply_searx_forum
 from consumer_forum_seed_crawl_v48 import apply as apply_forum_seed_crawl
+from consumer_verified_public_v412 import apply as apply_verified_public
 
-# V4.8 source policy:
+# V4.12 source policy:
 # 1) crawlable Greek consumer communities,
 # 2) direct YouTube public-comment acquisition for product-bound pain,
 # 3) no Reddit JSON collection in this commercial pipeline,
@@ -21,9 +22,11 @@ from consumer_forum_seed_crawl_v48 import apply as apply_forum_seed_crawl
 # 6) legacy DDG/Bing direct-Greek discovery retained for diagnostic parity,
 # 7) domain-bound SearXNG discovery retained as a secondary discovery path,
 # 8) verified public forum index seeds are crawled shallowly, same-domain only,
-# 9) search snippets/index text remain discovery-only; actual fetched topic text is mandatory,
-# 10) no login/CAPTCHA/403/anti-bot bypass,
-# 11) social/forum evidence is PAIN ONLY: no views/likes/followers as demand proof.
+# 9) a tiny verified-public URL set may add cross-family corroboration, but every
+#    URL is freshly fetched and actual text must pass the unchanged scorer,
+# 10) seed/search snippets remain discovery-only and never become pain proof,
+# 11) no login/CAPTCHA/403/anti-bot bypass,
+# 12) social/forum/review evidence is PAIN ONLY: no engagement as demand proof.
 # Quality thresholds and cross-source skeptic gates remain unchanged.
 apply_source_expansion()
 direct_social.apply()
@@ -33,6 +36,7 @@ apply_niche_keyword_binding()
 apply_direct_greek()
 apply_searx_forum()
 apply_forum_seed_crawl()
+apply_verified_public()
 
 # libxml/lxml-backed extraction can abort the interpreter when several
 # Trafilatura parses run concurrently in the same GitHub runner process. Keep
