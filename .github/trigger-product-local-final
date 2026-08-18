@@ -1,6 +1,8 @@
 first-authoritative-local-autopilot
 owner_min_expected_commission_eur=15
+owner_min_merchant_trust=50
+config_precedence=environment_hard_floor_max_runtime_config
 model=qwen3.5:4b
 bulk_feed_to_llm=false
 paid_inference_required=false
-triggered_at=2026-08-17T09:48:00Z
+triggered_at=2026-08-18T21:03:00+03:00
