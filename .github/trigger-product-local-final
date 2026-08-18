@@ -1,6 +1,10 @@
-affiliate-night-brain-v1
+affiliate-night-brain-v1.1
 owner_min_expected_commission_eur=10
+commission_gate=agent_bounded_never_below_10
+tracking=decoded_destination_merchant_domain_validated
+missing_image=bounded_recovery_from_validated_landing
+merchant_block=explicit_evidence_only
 strategy=exploit_explore_winners_opportunities_must_buy
 bulk_feed_to_llm=false
 paid_inference_required=false
-triggered_at=2026-08-18T21:10:00+03:00
+triggered_at=2026-08-18T21:38:00+03:00
