@@ -57,15 +57,35 @@ def _int(cfg, key, fallback):
         return int(fallback)
 
 
-def apply_runtime_config(v1, cfg):
-    """Patch the V1 worker so database configuration is authoritative.
+def _env_num(name, fallback):
+    try:
+        raw = os.getenv(name)
+        return float(raw) if raw not in (None, '') else float(fallback)
+    except Exception:
+        return float(fallback)
 
-    Security invariants are not configurable here: unresolved merchants,
+
+def apply_runtime_config(v1, cfg):
+    """Patch the V1 worker while preserving production hard safety floors.
+
+    Database configuration may tighten production gates but may never lower the
+    deployment-owned commission/trust floors. This prevents stale admin config
+    from silently weakening an authoritative Product Intelligence run.
+
+    Other security invariants are not configurable here: unresolved merchants,
     dominant/blocked merchants, invalid price/currency/tracking/image, and
     non-VALIDATED AI results still cannot be persisted.
     """
-    v1.MIN_COMMISSION = max(10.0, _num(cfg, 'min_expected_commission_eur', v1.MIN_COMMISSION))
-    v1.MIN_MERCHANT_TRUST = max(0.0, min(100.0, _num(cfg, 'min_merchant_trust', v1.MIN_MERCHANT_TRUST)))
+    env_commission_floor = max(10.0, _env_num('PRODUCT_MIN_COMMISSION_EUR', v1.MIN_COMMISSION))
+    env_trust_floor = max(0.0, min(100.0, _env_num('PRODUCT_MIN_MERCHANT_TRUST', v1.MIN_MERCHANT_TRUST)))
+    cfg_commission = _num(cfg, 'min_expected_commission_eur', env_commission_floor)
+    cfg_trust = _num(cfg, 'min_merchant_trust', env_trust_floor)
+    v1.MIN_COMMISSION = max(10.0, env_commission_floor, cfg_commission)
+    v1.MIN_MERCHANT_TRUST = max(env_trust_floor, max(0.0, min(100.0, cfg_trust)))
+    cfg['_effective_min_expected_commission_eur'] = v1.MIN_COMMISSION
+    cfg['_effective_min_merchant_trust'] = v1.MIN_MERCHANT_TRUST
+    cfg['_production_floor_source'] = 'environment_max_runtime_config'
+
     v1.MIN_VALIDATED_PAIN_CLUSTERS = max(1, _int(cfg, 'min_validated_pain_clusters', v1.MIN_VALIDATED_PAIN_CLUSTERS))
     v1.MIN_AUDIT_OVERALL = max(0.0, min(100.0, _num(cfg, 'min_audit_overall', v1.MIN_AUDIT_OVERALL)))
     v1.MIN_PAIN_FIT = max(0.0, min(100.0, _num(cfg, 'min_pain_fit', v1.MIN_PAIN_FIT)))
