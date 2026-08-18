@@ -2,17 +2,17 @@ name: Product Intelligence + Promotion Ranking
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Deep Demand Intelligence V3.1']
-    types: [completed]
-    branches: [main]
+  schedule:
+    # 22:15 UTC = 01:15 Athens during summer time. Deep Demand runs independently
+    # earlier; Night Brain uses the freshest available context but never waits on it.
+    - cron: '15 22 * * *'
   push:
     branches: [main]
     paths:
       - '.github/trigger-product-local-final'
 
 concurrency:
-  group: socialmarket-product-ranking-weekly
+  group: socialmarket-affiliate-night-brain
   cancel-in-progress: false
 
 permissions:
@@ -21,7 +21,6 @@ permissions:
 
 jobs:
   product-intelligence:
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'push') }}
     runs-on: ubuntu-latest
     timeout-minutes: 330
     env:
@@ -29,8 +28,8 @@ jobs:
       PRODUCT_SOURCE_FEED: linkwise-products.json
       LINKWISE_DEEPLINK_FIELD: tracking_url
       LINKWISE_OPTIONAL_FIELDS: thumb_url
-      PRODUCT_REUSE_STAGE_DB: 'true'
-      PRODUCT_MIN_COMMISSION_EUR: '15'
+      PRODUCT_REUSE_STAGE_DB: 'false'
+      PRODUCT_MIN_COMMISSION_EUR: '10'
       PRODUCT_MIN_MERCHANT_TRUST: '50'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
@@ -42,14 +41,11 @@ jobs:
       LOCAL_OLLAMA_URL: http://127.0.0.1:11434
       PRODUCT_AI_ROUTE: local_router
       PRODUCT_LOCAL_MODEL: qwen3.5:4b
-      PRODUCT_LOCAL_AI_WORKERS: '1'
+      PRODUCT_LOCAL_AI_WORKERS: '2'
       PRODUCT_LOCAL_MAX_PAIN_CONTEXT: '3'
       PRODUCT_LOCAL_MAX_THEME_CONTEXT: '2'
-      PRODUCT_RANK_RAG_PRESELECT: '12000'
-      PRODUCT_RANK_PRESELECT: '2000'
-      PRODUCT_RANK_AI_MAX: '120'
-      PRODUCT_RANK_SAVE_LIMIT: '100'
       PRODUCT_RANK_MIN_FINAL: '100'
+      PRODUCT_RANK_SAVE_LIMIT: '100'
       PRODUCT_RANK_CREATIVE_LIMIT: '20'
       PRODUCT_CREATIVE_ASSET_WORKERS: '4'
       PRODUCT_CREATIVE_BRAND_SLUG: lyseis-pou-axizoun
@@ -57,7 +53,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight persistence + AI task runtime gateways
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: workers/product_intelligence/requirements.txt
+
+      - name: Install product intelligence dependencies
+        run: pip install -r workers/product_intelligence/requirements.txt
+
+      - name: Preflight persistence + runtime gateways
         run: |
           python - <<'PY'
           import json, urllib.request
@@ -70,21 +75,8 @@ jobs:
           for name,url in urls.items():
               with urllib.request.urlopen(url,timeout=30) as r: health=json.loads(r.read().decode())
               print(name,{k:health.get(k) for k in ('ok','service','version','contract')})
-              if not health.get('ok'):raise SystemExit(f'{name} gateway unhealthy')
+              if not health.get('ok'): raise SystemExit(f'{name} gateway unhealthy')
           PY
-
-      - name: Start durable Product Ranking run
-        id: durable_run
-        run: python workers/product_intelligence/product_run_lifecycle.py start
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: workers/product_intelligence/requirements.txt
-
-      - name: Install product intelligence dependencies
-        run: pip install -r workers/product_intelligence/requirements.txt
 
       - name: Install local Ollama runtime
         run: curl -fsSL https://ollama.com/install.sh | sh
@@ -102,14 +94,14 @@ jobs:
           ollama pull "$PRODUCT_LOCAL_MODEL"
           ollama list
 
-      - name: Validate local zero-paid inference route
+      - name: Validate zero-paid local inference
         run: |
           python - <<'PY'
           import sys
           sys.path.insert(0,'workers/ai_runtime')
           from ollama_executor import OllamaExecutor
           from task_contract import AITask
-          ex=OllamaExecutor(name='preflight',tier=2,model='qwen3.5:4b',max_output_tokens=80)
+          ex=OllamaExecutor(name='night-brain-preflight',tier=2,model='qwen3.5:4b',max_output_tokens=80)
           task=AITask(task_type='preflight',role='validator',instructions='Return JSON with ok true.',payload={'ok':True},required_keys=('ok',),cacheable=False,max_tier=2)
           assert ex.available(task), 'local model unavailable'
           data,telemetry=ex.run(task)
@@ -135,56 +127,43 @@ jobs:
           test -s "$PRODUCT_SOURCE_FEED"
           python - <<'PY'
           from pathlib import Path
-          p=Path('linkwise-products.json');size=p.stat().st_size;print({'feed_bytes':size})
-          if size < 10_000_000:raise SystemExit('Product source unexpectedly small; refusing incomplete run')
+          p=Path('linkwise-products.json'); size=p.stat().st_size
+          print({'feed_bytes':size})
+          if size < 10_000_000: raise SystemExit('Product source unexpectedly small; refusing incomplete run')
           PY
 
-      - name: Phase A — deterministic commercial universe scan at €15 floor
-        run: python workers/product_intelligence/product_commercial_scan.py "$PRODUCT_SOURCE_FEED"
+      - name: Night Brain — opportunistic Affiliate Top 100
+        id: night_brain
+        run: python workers/product_intelligence/affiliate_night_brain.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Enforce source-universe completeness
-        run: |
-          python - <<'PY'
-          import json, os
-          with open('product-commercial-scan-profile.json',encoding='utf-8') as f:p=json.load(f)
-          seen=int(p.get('records_seen') or 0);eligible=int(p.get('unique_commission_eligible_products') or 0);offers=int(p.get('commission_eligible_offers') or 0)
-          print({'source':os.getenv('PRODUCT_SOURCE'),'records_seen':seen,'unique_commission_eligible_products':eligible,'commission_eligible_offers':offers,'min_commission_eur':15})
-          if seen < 2_000_000:raise SystemExit(f'Product universe incomplete: only {seen} complete records')
-          if eligible < 100 or offers < 100:raise SystemExit(f'Commercial universe too thin for Top100 after €15 gate: products={eligible}, offers={offers}')
-          PY
-
-      - name: Final Local Autopilot Ranking — Top 100 + deterministic SEO + 20 audited creative packs
-        id: final_rank
-        run: python workers/product_intelligence/product_ranking_v363_production.py "$PRODUCT_SOURCE_FEED"
-
-      - name: Verify zero-paid final profile
+      - name: Verify authoritative Top 100 contract
         run: |
           python - <<'PY'
           import json
-          with open('product-ranking-v3-profile.json',encoding='utf-8') as f:p=json.load(f)
+          with open('product-ranking-v3-profile.json',encoding='utf-8') as f: p=json.load(f)
+          assert p.get('engine_version') == 'affiliate_night_brain_v1', p.get('engine_version')
           assert int(p.get('saved_rankings') or 0) >= 100, p.get('saved_rankings')
-          assert float(p.get('owner_min_expected_commission_eur') or 0) >= 15, p.get('owner_min_expected_commission_eur')
+          assert float(p.get('owner_min_expected_commission_eur') or 0) >= 10, p.get('owner_min_expected_commission_eur')
           assert p.get('bulk_feed_to_llm') is False
           assert p.get('paid_llm_required') is False
           assert float(p.get('paid_inference_cost_usd') or 0) == 0
-          assert float(p.get('creative_paid_inference_cost_usd') or 0) == 0
-          print({'saved_rankings':p.get('saved_rankings'),'local_model':p.get('local_model'),'paid_inference_cost_usd':p.get('paid_inference_cost_usd'),'bulk_feed_to_llm':p.get('bulk_feed_to_llm')})
+          print({
+            'saved_rankings':p.get('saved_rankings'),
+            'renewal_pct':p.get('renewal_pct'),
+            'portfolio_counts':p.get('portfolio_counts'),
+            'creative_status':(p.get('creative') or {}).get('creative_status'),
+            'paid_inference_cost_usd':p.get('paid_inference_cost_usd')
+          })
           PY
 
-      - name: Mark pre-final Product workflow failure
-        if: failure() && steps.durable_run.outcome == 'success' && steps.final_rank.outcome != 'failure'
-        run: python workers/product_intelligence/product_run_lifecycle.py fail workflow_pre_final
-
-      - name: Upload compact decision profiles only
+      - name: Upload Night Brain decision profile
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: product-ranking-weekly-profile
+          name: affiliate-night-brain-profile
           retention-days: 30
+          if-no-files-found: warn
           path: |
-            product-commercial-scan-profile.json
-            product-commercial-scan-sample.json
-            product-feed-safety-profile.json
             product-ranking-v3-profile.json
             /tmp/ollama-product-ranking.log
 
