@@ -96,7 +96,7 @@ def _compact_product(item:Mapping[str,Any])->dict[str,Any]:
 
 
 def _normalize_channels(value:Any)->list[str]:
-    allowed=('instagram','facebook','tiktok')
+    allowed=('instagram','facebook','tiktok','linkedin')
     raw=value if isinstance(value,list) else [value] if value else []
     out=[]
     for x in raw:
@@ -254,9 +254,13 @@ def _creative_payload(row:Mapping[str,Any])->dict[str,Any]:
         'source_record_hash':row.get('source_record_hash'),
         'product':{'name':row.get('product_name'),'brand':row.get('brand_name'),'model':row.get('model_name'),'category':row.get('category'),'price_eur':row.get('effective_price'),'discount_pct':row.get('discount_pct')},
         'merchant_name':row.get('merchant_name'),
-        'promotion':{'angle':row.get('promotion_angle'),'reason':row.get('promotion_reason'),'audience':row.get('audience')},
+        'merchant_media':{'image_url':row.get('image_url'),'image_provenance':row.get('image_provenance') or 'merchant_feed'},
+        'tracking':{'url_present':bool(str(row.get('tracking_url') or '').startswith('https://')),'immutable':True},
+        'promotion':{'angle':row.get('promotion_angle'),'reason':row.get('promotion_reason'),'audience':row.get('audience'),'recommended_channels':row.get('recommended_channels') or []},
+        'seasonality':row.get('seasonality') or row.get('seasonal_context') or {},
+        'risk_flags':row.get('risk_flags') or [],
         'verified_bullets':(row.get('seo_content') or {}).get('feature_bullets') or [],
-        'rules':{'language':'el-GR','no_invented_features':True,'no_fake_scarcity':True,'no_internal_kpis':True,'affiliate_disclosure':True},
+        'rules':{'language':'el-GR','no_invented_features':True,'no_fake_scarcity':True,'no_internal_kpis':True,'affiliate_disclosure':True,'use_real_merchant_image':True},
     }
 
 
@@ -307,27 +311,55 @@ def _normalize_pack(row:Mapping[str,Any],data:Mapping[str,Any])->dict[str,Any]|N
     return {'source_record_hash':h,'campaign_theme':_clip_text(data.get('campaign_theme'),160),'emotional_angle':_clip_text(data.get('emotional_angle'),160),'audience':_clip_text(data.get('audience'),180),'primary_message':_clip_text(data.get('primary_message'),220),'variants':variants}
 
 
+def _seasonal_angle_grounded(row:Mapping[str,Any])->bool:
+    """Reject obvious seasonal/category mismatches before creative generation."""
+    angle=' '.join(str(row.get(k) or '') for k in ('promotion_angle','promotion_reason','audience')).lower()
+    product=' '.join(str(row.get(k) or '') for k in ('product_name','category','subcategory')).lower()
+    markers=('back to school','σχολ','μαθητ','φοιτητ')
+    relevant=('σχολ','γραφ','τετράδ','τσάντ','laptop','tablet','εκτυπωτ','καρέκλ','γραφείο','ακουστικ','power bank','οργάνω')
+    return not (any(x in angle for x in markers) and not any(x in product for x in relevant))
+
+
 def enrich_creatives_local(rows:list[dict[str,Any]])->tuple[list[dict[str,Any]],dict[str,Any]]:
-    target=rows[:LOCAL_CREATIVE_LIMIT]
-    if len(target)<LOCAL_CREATIVE_LIMIT:raise RuntimeError(f'local creative contract requires {LOCAL_CREATIVE_LIMIT} ranked rows')
+    if len(rows)<LOCAL_CREATIVE_LIMIT:raise RuntimeError(f'local creative contract requires {LOCAL_CREATIVE_LIMIT} ranked rows')
     creative_router=_router(LOCAL_CREATIVE_OUTPUT_TOKENS);audit_router=_router(LOCAL_CREATIVE_AUDIT_TOKENS)
-    generated=0;ready=0;calls=0;cache_hits=0
-    for idx,row in enumerate(target,1):
-        pack_raw,stats=_run_task(creative_router,_creative_task(row));calls+=int(stats.get('status')=='ok' and not stats.get('from_cache'));cache_hits+=int(bool(stats.get('from_cache')))
-        pack=_normalize_pack(row,pack_raw or {}) if pack_raw else None
-        if not pack:raise RuntimeError(f'local creative invalid for {row.get("source_record_hash")}')
-        audit,astats=_run_task(audit_router,_creative_audit_task(row,pack));calls+=int(astats.get('status')=='ok' and not astats.get('from_cache'));cache_hits+=int(bool(astats.get('from_cache')))
-        if not audit:raise RuntimeError(f'local creative audit unavailable for {row.get("source_record_hash")}')
-        verdict=str(audit.get('verdict') or '').upper();audit=dict(audit);audit['verdict']=verdict
-        row['creative_pack']=pack;row['creative_audit']=audit;row['creative_status']='ready' if verdict=='READY' else 'needs_review';row['creative_generated_at']=datetime.now(timezone.utc).isoformat();row['creative_global_rank']=idx
-        generated+=1;ready+=int(verdict=='READY')
-        if verdict!='READY':raise RuntimeError(f'local creative skeptic requires READY for Top20; {row.get("source_record_hash")}={verdict}')
+    generated=0;calls=0;cache_hits=0;skipped=[];ready_rows=[];attempt_limit=min(len(rows),LOCAL_CREATIVE_LIMIT*3)
+    for row in rows[:attempt_limit]:
+        h=str(row.get('source_record_hash') or '')
+        if not str(row.get('image_url') or '').startswith(('https://','http://')):
+            row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':'missing_merchant_image'});continue
+        if not str(row.get('tracking_url') or '').startswith('https://'):
+            row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':'missing_exact_tracking_url'});continue
+        if row.get('risk_flags'):
+            row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':'risk_flags_present'});continue
+        if not _seasonal_angle_grounded(row):
+            row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':'seasonality_category_mismatch'});continue
+        try:
+            pack_raw,stats=_run_task(creative_router,_creative_task(row));calls+=int(stats.get('status')=='ok' and not stats.get('from_cache'));cache_hits+=int(bool(stats.get('from_cache')))
+            pack=_normalize_pack(row,pack_raw or {}) if pack_raw else None
+            if not pack:raise RuntimeError('invalid_creative_json')
+            audit,astats=_run_task(audit_router,_creative_audit_task(row,pack));calls+=int(astats.get('status')=='ok' and not astats.get('from_cache'));cache_hits+=int(bool(astats.get('from_cache')))
+            if not audit:raise RuntimeError('creative_audit_unavailable')
+            verdict=str(audit.get('verdict') or '').upper();audit=dict(audit);audit['verdict']=verdict
+            row['creative_pack']=pack;row['creative_audit']=audit;row['creative_status']='ready' if verdict=='READY' else 'needs_review';row['creative_generated_at']=datetime.now(timezone.utc).isoformat()
+            generated+=1
+            if verdict!='READY':
+                skipped.append({'source_record_hash':h,'reason':f'audit_{verdict.lower() or "invalid"}'});continue
+            ready_rows.append(row)
+            if len(ready_rows)>=LOCAL_CREATIVE_LIMIT:break
+        except Exception as exc:
+            row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':str(exc)[:180]});continue
+    if len(ready_rows)<LOCAL_CREATIVE_LIMIT:
+        raise RuntimeError(f'only {len(ready_rows)}/{LOCAL_CREATIVE_LIMIT} verified creatives after {attempt_limit} candidates; rejected={json.dumps(skipped[:8],ensure_ascii=False)}')
+    ready_ids={id(x) for x in ready_rows}
+    rows=ready_rows+[x for x in rows if id(x) not in ready_ids]
+    for idx,row in enumerate(rows[:LOCAL_CREATIVE_LIMIT],1):row['creative_global_rank']=idx
     rows,asset_stats=v32.attach_durable_assets(rows)
     return rows,{
-        'creative_target':len(target),'creative_generated':generated,'creative_ready':ready,'creative_model':LOCAL_MODEL,'creative_local_model_calls':calls,'creative_cache_hits':cache_hits,
-        'creative_paid_inference_cost_usd':0,'creative_policy':'Top20 only; local open-weight generation + independent local skeptic; deterministic QR/tracking URL; 3 durable assets',**asset_stats,
+        'creative_target':LOCAL_CREATIVE_LIMIT,'creative_candidates_attempted':attempt_limit,'creative_generated':generated,'creative_ready':len(ready_rows),
+        'creative_rejected':len(skipped),'creative_rejection_sample':skipped[:8],'creative_model':LOCAL_MODEL,'creative_local_model_calls':calls,'creative_cache_hits':cache_hits,
+        'creative_paid_inference_cost_usd':0,'creative_policy':'verified replacements; merchant image only; grounded seasonality; independent skeptic; exact QR; 3 durable platform assets',**asset_stats,
     }
-
 
 def enrich_final_rows_local(rows:list[dict[str,Any]])->tuple[list[dict[str,Any]],dict[str,Any]]:
     v32.assert_final_contract(rows)
