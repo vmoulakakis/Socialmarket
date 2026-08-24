@@ -114,7 +114,7 @@ def _rank_task(item:Mapping[str,Any])->AITask:
             'Score 0-100: product_market_fit_score, creative_potential_score, value_score, confidence_score. Missing pain evidence is not proof of no demand and is not automatic rejection; it gives no pain bonus. '
             'Missing competition evidence gives no inverse-competition bonus. Network KPIs are merchant/program baselines, never product sales. '
             'Use only supplied facts. Keep promotion_angle, promotion_reason, audience and rationale concise and in natural Greek. '
-            'recommended_channels may contain only instagram, facebook, tiktok. Return the exact supplied source_record_hash.'
+            'recommended_channels may contain only instagram, facebook, tiktok, linkedin. Return the exact supplied source_record_hash.'
         ),payload=_compact_product(item),metadata={'bounded_context':True,'bulk_feed_exposed':False},
     )
 
