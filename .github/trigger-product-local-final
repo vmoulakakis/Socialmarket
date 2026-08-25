@@ -1,4 +1,4 @@
-affiliate-night-brain-v1.1
+affiliate-night-brain-v1.2
 owner_min_expected_commission_eur=10
 commission_gate=agent_bounded_never_below_10
 tracking=decoded_destination_merchant_domain_validated
@@ -7,4 +7,6 @@ merchant_block=explicit_evidence_only
 strategy=exploit_explore_winners_opportunities_must_buy
 bulk_feed_to_llm=false
 paid_inference_required=false
-triggered_at=2026-08-18T21:38:00+03:00
+poster_gate=three_png_real_image_exact_qr_unique_copy_tags
+creative_fallback=deterministic_facts_only
+triggered_at=2026-08-26T00:26:00+03:00
