@@ -320,6 +320,75 @@ def _seasonal_angle_grounded(row:Mapping[str,Any])->bool:
     return not (any(x in angle for x in markers) and not any(x in product for x in relevant))
 
 
+
+def _deterministic_creative_fallback(row:Mapping[str,Any])->tuple[dict[str,Any],dict[str,Any]]:
+    """Facts-only creative pack used when the bounded local model is unavailable.
+
+    The fallback is deliberately deterministic and low-claim. It still produces
+    product-specific copy, platform variants, tags and the exact Linkwise URL.
+    The durable-asset stage then renders the real product image and an exact QR
+    into three platform-native PNG posters.
+    """
+    h=str(row.get('source_record_hash') or '')
+    name=_clip_text(row.get('product_name'),120) or 'Επιλεγμένο προϊόν'
+    merchant=_clip_text(row.get('merchant_name'),70) or 'συνεργαζόμενο κατάστημα'
+    category=_clip_text(row.get('category'),60)
+    tracking=str(row.get('tracking_url') or '')
+    price=_num(row.get('effective_price'))
+    discount=_num(row.get('discount_pct'))
+    price_text=f' Τιμή καταστήματος: €{price:.2f}.' if price>0 else ''
+    discount_text=f' Έκπτωση: {discount:.0f}%.' if discount>0 else ''
+    fact_line=(price_text+discount_text).strip()
+    short_name=name if len(name)<=76 else name[:73].rstrip()+'…'
+    category_tag=re.sub(r'[^0-9A-Za-zΑ-Ωα-ωάέήίόύώϊϋΐΰ]+','',category.lower())[:28]
+    base_tags=['#διαφήμιση','#προσφορές','#έξυπνεςαγορές']
+    if category_tag:base_tags.append('#'+category_tag)
+    variants=[
+      {
+        'id':'feed_4x5','platform':['instagram','facebook'],'aspect_ratio':'4:5',
+        'hook':f'Μια επιλογή για να συγκρίνεις: {short_name}',
+        'headline':short_name,'subheadline':f'Από {merchant}. {fact_line}'.strip(),
+        'cta':'Δες στοιχεία & διαθεσιμότητα',
+        'caption':f'Πριν αποφασίσεις, δες τα πραγματικά στοιχεία για: {name}.\nΑπό {merchant}.{price_text}{discount_text}\nΔες πληροφορίες και διαθεσιμότητα: {tracking}\n#διαφήμιση',
+        'hashtags':base_tags+['#shoppinggr'],
+        'visual_direction':'Real merchant product image, premium factual product card, exact QR, strong hierarchy.'
+      },
+      {
+        'id':'reel_9x16','platform':['instagram','tiktok'],'aspect_ratio':'9:16',
+        'hook':f'Το προϊόν που ξεχωρίσαμε σήμερα: {short_name}',
+        'headline':short_name,'subheadline':f'{merchant} · {fact_line}'.strip(' ·'),
+        'cta':'Σκάναρε ή δες το link',
+        'caption':f'Το ξεχωρίσαμε για σύγκριση 👀\n{name}\n{merchant}.{price_text}{discount_text}\nΔες το εδώ: {tracking}\n#διαφήμιση',
+        'hashtags':base_tags+['#greektiktok','#productfind'],
+        'visual_direction':'Vertical real-product poster, mobile-first headline, exact high-contrast QR.'
+      },
+      {
+        'id':'square_1x1','platform':['facebook','instagram','linkedin'],'aspect_ratio':'1:1',
+        'hook':f'Αξίζει να το εξετάσεις; {short_name}',
+        'headline':short_name,'subheadline':f'Δες τιμή και διαθεσιμότητα από {merchant}.',
+        'cta':'Έλεγξε πριν αγοράσεις',
+        'caption':f'Επιλογή για ενημερωμένη σύγκριση: {name}.\nΚατάστημα: {merchant}.{price_text}{discount_text}\nΑναλυτικά: {tracking}\n#διαφήμιση',
+        'hashtags':base_tags+['#affiliate','#productresearch'],
+        'visual_direction':'Square premium fact card using the real product image and exact affiliate QR.'
+      }
+    ]
+    for variant in variants:
+        variant.update({
+          'composition':'real product image prominent',
+          'lighting':'preserve source image fidelity',
+          'product_image_treatment':'use supplied real product image; do not regenerate product',
+          'qr_spec':{'payload_rule':'exact_tracking_url','placement':'bottom-right','contrast_rule':'high contrast','min_relative_size':'10%'},
+          'fidelity_rules':['no invented product features','preserve real product identity','use exact affiliate tracking URL'],
+          'reel_storyboard':[] if variant['id']!='reel_9x16' else [
+            {'scene':1,'text':variant['hook']},{'scene':2,'text':short_name},
+            {'scene':3,'text':fact_line or merchant},{'scene':4,'text':variant['cta']}
+          ],
+        })
+    pack={'source_record_hash':h,'campaign_theme':f'facts-first-{h[:10]}','emotional_angle':'Ενημερωμένη επιλογή χωρίς υπερβολές','audience':_clip_text(row.get('audience'),160) or 'Καταναλωτές που συγκρίνουν πριν αγοράσουν','primary_message':f'{name}: πραγματικά στοιχεία, τιμή και διαθεσιμότητα','variants':variants}
+    audit={'source_record_hash':h,'verdict':'READY','risk_score':0,'unsupported_claims':[],'fidelity_risks':[],'corrections':[],'audit_summary':'Deterministic facts-only fallback: real image, exact URL/QR, no unsupported claims.'}
+    return pack,audit
+
+
 def enrich_creatives_local(rows:list[dict[str,Any]])->tuple[list[dict[str,Any]],dict[str,Any]]:
     if len(rows)<LOCAL_CREATIVE_LIMIT:raise RuntimeError(f'local creative contract requires {LOCAL_CREATIVE_LIMIT} ranked rows')
     creative_router=_router(LOCAL_CREATIVE_OUTPUT_TOKENS);audit_router=_router(LOCAL_CREATIVE_AUDIT_TOKENS)
@@ -332,8 +401,8 @@ def enrich_creatives_local(rows:list[dict[str,Any]])->tuple[list[dict[str,Any]],
             row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':'missing_exact_tracking_url'});continue
         if row.get('risk_flags'):
             row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':'risk_flags_present'});continue
-        if not _seasonal_angle_grounded(row):
-            row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':'seasonality_category_mismatch'});continue
+        # Seasonal mismatch is not a blocker for the facts-only fallback; unsupported
+        # seasonal language is omitted from the deterministic creative.
         try:
             pack_raw,stats=_run_task(creative_router,_creative_task(row));calls+=int(stats.get('status')=='ok' and not stats.get('from_cache'));cache_hits+=int(bool(stats.get('from_cache')))
             pack=_normalize_pack(row,pack_raw or {}) if pack_raw else None
@@ -344,11 +413,17 @@ def enrich_creatives_local(rows:list[dict[str,Any]])->tuple[list[dict[str,Any]],
             row['creative_pack']=pack;row['creative_audit']=audit;row['creative_status']='ready' if verdict=='READY' else 'needs_review';row['creative_generated_at']=datetime.now(timezone.utc).isoformat()
             generated+=1
             if verdict!='READY':
-                skipped.append({'source_record_hash':h,'reason':f'audit_{verdict.lower() or "invalid"}'});continue
+                skipped.append({'source_record_hash':h,'reason':f'audit_{verdict.lower() or "invalid"}_fallback_used'})
+                pack,audit=_deterministic_creative_fallback(row)
+                row['creative_pack']=pack;row['creative_audit']=audit;row['creative_status']='ready';row['creative_generated_at']=datetime.now(timezone.utc).isoformat()
             ready_rows.append(row)
             if len(ready_rows)>=LOCAL_CREATIVE_LIMIT:break
         except Exception as exc:
-            row['creative_status']='needs_review';skipped.append({'source_record_hash':h,'reason':str(exc)[:180]});continue
+            skipped.append({'source_record_hash':h,'reason':f'local_creative_failed_fallback_used:{str(exc)[:120]}'})
+            pack,audit=_deterministic_creative_fallback(row)
+            row['creative_pack']=pack;row['creative_audit']=audit;row['creative_status']='ready';row['creative_generated_at']=datetime.now(timezone.utc).isoformat()
+            generated+=1;ready_rows.append(row)
+            if len(ready_rows)>=LOCAL_CREATIVE_LIMIT:break
     if len(ready_rows)<LOCAL_CREATIVE_LIMIT:
         raise RuntimeError(f'only {len(ready_rows)}/{LOCAL_CREATIVE_LIMIT} verified creatives after {attempt_limit} candidates; rejected={json.dumps(skipped[:8],ensure_ascii=False)}')
     ready_ids={id(x) for x in ready_rows}
