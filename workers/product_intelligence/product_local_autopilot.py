@@ -108,7 +108,7 @@ def _normalize_channels(value:Any)->list[str]:
 
 def _rank_task(item:Mapping[str,Any])->AITask:
     return AITask(
-        task_type='product_promotion_rank',role='Greek Affiliate Product Ranking Analyst',prompt_version='local-v1',max_tier=2,cacheable=True,material_change_capable=True,
+        task_type='product_promotion_rank',role='Greek Affiliate Product Ranking Analyst',prompt_version='local-v10',max_tier=2,cacheable=True,material_change_capable=True,
         required_keys=('source_record_hash','product_market_fit_score','creative_potential_score','value_score','confidence_score','promotion_angle','promotion_reason','audience','recommended_channels','rationale'),
         instructions=(
             'Evaluate this already deterministic-eligible product as a promotion opportunity in Greece. The owner hard commission floor has absolute priority and cannot be changed. '
@@ -125,7 +125,7 @@ def _audit_task(item:Mapping[str,Any],ranking:Mapping[str,Any])->AITask:
     payload['proposed_ranking']={k:ranking.get(k) for k in (
         'source_record_hash','product_market_fit_score','creative_potential_score','value_score','confidence_score','promotion_angle','promotion_reason','audience','recommended_channels','rationale')}
     return AITask(
-        task_type='product_promotion_skeptic',role='Independent Affiliate Product Skeptic',prompt_version='local-v1',max_tier=2,cacheable=True,material_change_capable=True,
+        task_type='product_promotion_skeptic',role='Independent Affiliate Product Skeptic',prompt_version='local-v10',max_tier=2,cacheable=True,material_change_capable=True,
         required_keys=('source_record_hash','verdict','risk_score','risk_flags','reasons','audit_summary'),
         instructions=(
             'Try to disprove the proposed product promotion ranking using only supplied evidence. Verify the € owner commission hard gate, factual grounding, product-pain fit, merchant evidence and unsupported claims. '
@@ -267,7 +267,7 @@ def _creative_payload(row:Mapping[str,Any])->dict[str,Any]:
 
 def _creative_task(row:Mapping[str,Any])->AITask:
     return AITask(
-        task_type='product_promotion_creative',role='Greek Affiliate Creative Director',prompt_version='local-v1',max_tier=2,cacheable=True,
+        task_type='product_promotion_creative',role='Greek Affiliate Creative Director',prompt_version='local-v10',max_tier=2,cacheable=True,
         required_keys=('source_record_hash','campaign_theme','emotional_angle','audience','primary_message','variants'),
         instructions=(
             'Create exactly three concise Greek social variants from supplied verified facts only. Never invent features, reviews, guarantees, shipping, scarcity or savings. '
@@ -279,7 +279,7 @@ def _creative_task(row:Mapping[str,Any])->AITask:
 
 def _creative_audit_task(row:Mapping[str,Any],pack:Mapping[str,Any])->AITask:
     return AITask(
-        task_type='product_promotion_creative_skeptic',role='Independent Creative Skeptic',prompt_version='local-v1',max_tier=2,cacheable=True,
+        task_type='product_promotion_creative_skeptic',role='Independent Creative Skeptic',prompt_version='local-v10',max_tier=2,cacheable=True,
         required_keys=('source_record_hash','verdict','risk_score','unsupported_claims','fidelity_risks','corrections','audit_summary'),
         instructions=(
             'Audit the proposed Greek creative against supplied product facts. Reject unsupported features, wrong price/discount, fake scarcity/social proof, misleading benefit claims or internal KPI language. '
@@ -435,7 +435,7 @@ def enrich_creatives_local(rows:list[dict[str,Any]])->tuple[list[dict[str,Any]],
     return rows,{
         'creative_target':LOCAL_CREATIVE_LIMIT,'creative_candidates_attempted':attempt_limit,'creative_generated':generated,'creative_ready':len(ready_rows),
         'creative_rejected':len(skipped),'creative_rejection_sample':skipped[:8],'creative_model':LOCAL_MODEL,'creative_local_model_calls':calls,'creative_cache_hits':cache_hits,
-        'creative_paid_inference_cost_usd':0,'creative_policy':'verified replacements; merchant image only; grounded seasonality; independent skeptic; exact QR; 3 durable platform assets',**asset_stats,
+        'creative_paid_inference_cost_usd':0,'creative_policy':'v10 no-hotels; unique copy/tags; first-party short affiliate URL; exact short-link QR; 3 durable platform assets','creative_contract_version':'v10',**asset_stats,
     }
 
 def enrich_final_rows_local(rows:list[dict[str,Any]])->tuple[list[dict[str,Any]],dict[str,Any]]:
