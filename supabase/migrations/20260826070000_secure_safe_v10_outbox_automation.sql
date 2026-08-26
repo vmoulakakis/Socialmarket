@@ -35,6 +35,9 @@ end
 $function$;
 
 revoke all on function public.worker_v10_poster_outbox_refill_safe(integer, boolean) from public;
+revoke execute on function public.worker_v10_poster_outbox_refill_safe(integer, boolean) from anon, authenticated;
+-- v8 predates the v10 poster gate and must not remain callable through PostgREST.
+revoke execute on function public.worker_v8_outbox_refill(integer, boolean) from anon, authenticated;
 grant execute on function public.worker_v10_poster_outbox_refill_safe(integer, boolean) to service_role;
 
 do $migration$
