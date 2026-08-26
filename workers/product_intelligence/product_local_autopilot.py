@@ -28,6 +28,7 @@ from task_contract import AITask
 import product_intelligence_v1 as v1
 import product_ranking_v3 as v3
 import product_ranking_v32 as v32
+from creative_contract_v10 import finalize_creative_rows
 
 LOCAL_MODEL=os.getenv('PRODUCT_LOCAL_MODEL','qwen3.5:4b')
 LOCAL_AI_WORKERS=max(1,min(2,int(os.getenv('PRODUCT_LOCAL_AI_WORKERS','1'))))
@@ -429,6 +430,7 @@ def enrich_creatives_local(rows:list[dict[str,Any]])->tuple[list[dict[str,Any]],
     ready_ids={id(x) for x in ready_rows}
     rows=ready_rows+[x for x in rows if id(x) not in ready_ids]
     for idx,row in enumerate(rows[:LOCAL_CREATIVE_LIMIT],1):row['creative_global_rank']=idx
+    rows=finalize_creative_rows(rows,LOCAL_CREATIVE_LIMIT)
     rows,asset_stats=v32.attach_durable_assets(rows)
     return rows,{
         'creative_target':LOCAL_CREATIVE_LIMIT,'creative_candidates_attempted':attempt_limit,'creative_generated':generated,'creative_ready':len(ready_rows),
