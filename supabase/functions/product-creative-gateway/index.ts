@@ -89,13 +89,17 @@ async function persistContent(b:any){
   if(!brand[0])throw new Error(`creative_brand_not_found:${brandSlug}`)
   const verdict=String(audit.verdict||'').toUpperCase(),approved=verdict==='READY'
   const productName=String(b.product_name||'Ranked product'),merchantId=String(b.merchant_id||'').match(/^[0-9a-f-]{36}$/i)?String(b.merchant_id):null,trackingUrl=String(b.tracking_url||'')
-  if(!trackingUrl.startsWith('http'))throw new Error('tracking_url_required')
+  if(!/^https:\/\/go[.]linkwi[.]se\//i.test(trackingUrl))throw new Error('exact_linkwise_tracking_url_required')
+  const affiliateShortUrl=String(b.affiliate_short_url||'')
+  const slug=affiliateShortUrl.split('/').filter(Boolean).at(-1)||''
+  if(!affiliateShortUrl.startsWith(`${SHORT_BASE}/r-`)||!/^r-[a-f0-9]{12}$/.test(slug))throw new Error('validated_affiliate_short_url_required')
+  await sql`insert into publish.affiliate_short_links(slug,run_id,source_record_hash,destination_url,active,metadata,updated_at) values(${slug},${runId}::uuid,${hash},${trackingUrl},true,${sql.json({origin:'ranked_product_creative_v10'})},now()) on conflict(slug) do update set run_id=excluded.run_id,source_record_hash=excluded.source_record_hash,destination_url=excluded.destination_url,active=true,metadata=excluded.metadata,updated_at=now()`
   const schedules=b.schedules&&typeof b.schedules==='object'?b.schedules:{}
   const contentIds:any[]=[];let queued=0
   for(const variant of variants){
     const variantId=String(variant.id||''),sourceKey=`ranked:${runId}:${hash}:${variantId}`,caption=String(variant.caption||''),assetUrl=String(variant.asset_url||'')
     if(!variantId||!caption)throw new Error(`creative_variant_incomplete:${variantId}`)
-    const metadata={origin:'ranked_product_creative',creative_run_id:runId,source_record_hash:hash,global_rank:b.global_rank??null,variant_id:variantId,aspect_ratio:variant.aspect_ratio??null,platforms:platforms(variant.platform),hashtags:Array.isArray(variant.hashtags)?variant.hashtags.slice(0,10):[],creative_audit:audit,product_image_url:b.image_url??null,product_name:productName,merchant_name:b.merchant_name??null,affiliate_disclosure:true}
+    const metadata={origin:'ranked_product_creative',creative_run_id:runId,source_record_hash:hash,global_rank:b.global_rank??null,variant_id:variantId,aspect_ratio:variant.aspect_ratio??null,platforms:platforms(variant.platform),hashtags:Array.isArray(variant.hashtags)?variant.hashtags.slice(0,10):[],creative_audit:audit,product_image_url:b.image_url??null,product_name:productName,merchant_name:b.merchant_name??null,affiliate_disclosure:true,affiliate_short_url:affiliateShortUrl,affiliate_destination_url:trackingUrl,hook:String(variant.hook||''),creative_contract_version:'v10',post_text:`${caption}\n\n${(Array.isArray(variant.hashtags)?variant.hashtags:[]).join(' ')}`}
     const rows=await sql`insert into content.items(source_key,brand_site_id,merchant_id,title,angle,core_copy,cta,tracking_url,media_url,status,approved_at,metadata,updated_at)
       values(${sourceKey},${brand[0].id}::uuid,${merchantId}::uuid,${`${productName} — ${variantId}`},${String(pack.campaign_theme||pack.emotional_angle||'')},${caption},${String(variant.cta||'')},${affiliateShortUrl},${assetUrl},${approved?'approved':'draft'},${approved?new Date().toISOString():null}::timestamptz,${sql.json(metadata)},now())
       on conflict(source_key) do update set title=excluded.title,angle=excluded.angle,core_copy=excluded.core_copy,cta=excluded.cta,tracking_url=excluded.tracking_url,media_url=excluded.media_url,metadata=excluded.metadata,status=case when content.items.status in('queued','completed') then content.items.status else excluded.status end,approved_at=case when content.items.status in('queued','completed') then content.items.approved_at else excluded.approved_at end,updated_at=now() returning id,status`
