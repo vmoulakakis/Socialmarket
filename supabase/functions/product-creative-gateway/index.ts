@@ -14,6 +14,7 @@ const DEEPSEEK_MODEL=Deno.env.get('DEEPSEEK_MODEL')||'deepseek-v4-pro'
 const SUPABASE_URL=Deno.env.get('SUPABASE_URL')||''
 const SERVICE_KEY=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||''
 const CREATIVE_BUCKET='socialmarket-creatives'
+const SHORT_BASE=`${SUPABASE_URL}/functions/v1/socialscheduler-go`
 const DEFAULT_BRAND_SLUG=Deno.env.get('PRODUCT_CREATIVE_BRAND_SLUG')||'lyseis-pou-axizoun'
 const json=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{'content-type':'application/json','cache-control':'no-store'}})
 
@@ -96,7 +97,7 @@ async function persistContent(b:any){
     if(!variantId||!caption)throw new Error(`creative_variant_incomplete:${variantId}`)
     const metadata={origin:'ranked_product_creative',creative_run_id:runId,source_record_hash:hash,global_rank:b.global_rank??null,variant_id:variantId,aspect_ratio:variant.aspect_ratio??null,platforms:platforms(variant.platform),hashtags:Array.isArray(variant.hashtags)?variant.hashtags.slice(0,10):[],creative_audit:audit,product_image_url:b.image_url??null,product_name:productName,merchant_name:b.merchant_name??null,affiliate_disclosure:true}
     const rows=await sql`insert into content.items(source_key,brand_site_id,merchant_id,title,angle,core_copy,cta,tracking_url,media_url,status,approved_at,metadata,updated_at)
-      values(${sourceKey},${brand[0].id}::uuid,${merchantId}::uuid,${`${productName} — ${variantId}`},${String(pack.campaign_theme||pack.emotional_angle||'')},${caption},${String(variant.cta||'')},${trackingUrl},${assetUrl},${approved?'approved':'draft'},${approved?new Date().toISOString():null}::timestamptz,${sql.json(metadata)},now())
+      values(${sourceKey},${brand[0].id}::uuid,${merchantId}::uuid,${`${productName} — ${variantId}`},${String(pack.campaign_theme||pack.emotional_angle||'')},${caption},${String(variant.cta||'')},${affiliateShortUrl},${assetUrl},${approved?'approved':'draft'},${approved?new Date().toISOString():null}::timestamptz,${sql.json(metadata)},now())
       on conflict(source_key) do update set title=excluded.title,angle=excluded.angle,core_copy=excluded.core_copy,cta=excluded.cta,tracking_url=excluded.tracking_url,media_url=excluded.media_url,metadata=excluded.metadata,status=case when content.items.status in('queued','completed') then content.items.status else excluded.status end,approved_at=case when content.items.status in('queued','completed') then content.items.approved_at else excluded.approved_at end,updated_at=now() returning id,status`
     const item=rows[0];contentIds.push({id:item.id,variant_id:variantId,status:item.status,media_url:assetUrl})
     const variantSchedules=schedules[variantId]&&typeof schedules[variantId]==='object'?schedules[variantId]:{}
@@ -105,7 +106,7 @@ async function persistContent(b:any){
       for(const p of platforms(variant.platform)){
         const scheduledFor=String(variantSchedules[p]||'')
         if(!scheduledFor)continue
-        payloads[p]={caption,hashtags:Array.isArray(variant.hashtags)?variant.hashtags:[],format:platformFormat(variantId,p),media_url:assetUrl,tracking_url:trackingUrl,scheduled_for:scheduledFor,priority:Math.max(1,Math.min(100,Number(b.priority||50)))}
+        payloads[p]={caption,hashtags:Array.isArray(variant.hashtags)?variant.hashtags:[],format:platformFormat(variantId,p),media_url:assetUrl,tracking_url:affiliateShortUrl,post_text:metadata.post_text,scheduled_for:scheduledFor,priority:Math.max(1,Math.min(100,Number(b.priority||50)))}
       }
       if(Object.keys(payloads).length){
         await sql`select * from publish.queue_content_item_v2(${item.id}::uuid,${sql.json(payloads)},null::timestamptz)`;queued+=Object.keys(payloads).length

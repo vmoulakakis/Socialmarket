@@ -1,5 +1,6 @@
 import collections, json, os, sqlite3, sys, time, urllib.parse, urllib.request
 from pathlib import Path
+from creative_contract_v10 import excluded_vertical
 import ijson
 
 from stream_feed import iter_records, normalize, normalize_domain
@@ -137,6 +138,8 @@ def stage_feed(feed,context):
             merchant,resolution_method=resolve_merchant(p,by_program,aliases,by_domain)
             if not merchant:
                 reasons['merchant_unresolved']+=1;continue
+            if excluded_vertical({**p,'merchant_name':merchant.get('canonical_name')}):
+                reasons['excluded_hotel_accommodation_travel_package']+=1;continue
             resolution_methods[resolution_method]+=1
             p['merchant_resolution_method']=resolution_method
             mid=str(merchant.get('merchant_id'))
@@ -210,7 +213,10 @@ def iter_best_offers(db,max_offers_per_product=1):
       from candidates
     ) where rn<=? order by preliminary_score desc'''
     for (payload,) in db.execute(q,(max_offers_per_product,)):
-        yield json.loads(payload)
+        product=json.loads(payload)
+        if excluded_vertical(product):
+            continue
+        yield product
 
 
 def build_ai_item(p,context):
