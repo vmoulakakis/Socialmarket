@@ -213,7 +213,10 @@ def iter_best_offers(db,max_offers_per_product=1):
       from candidates
     ) where rn<=? order by preliminary_score desc'''
     for (payload,) in db.execute(q,(max_offers_per_product,)):
-        yield json.loads(payload)
+        product=json.loads(payload)
+        if excluded_vertical(product):
+            continue
+        yield product
 
 
 def build_ai_item(p,context):
