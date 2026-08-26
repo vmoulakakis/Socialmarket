@@ -257,7 +257,7 @@ def enrich_final_rows_v34(rows):
 
 
 def _persist_creative_content(run_id,item):
-    result=creative_gateway('persist_content',run_id=run_id,source_record_hash=item.get('source_record_hash'),brand_slug=CREATIVE_BRAND_SLUG,merchant_id=item.get('merchant_id'),merchant_name=item.get('merchant_name'),product_name=item.get('product_name'),tracking_url=item.get('tracking_url'),image_url=item.get('image_url'),global_rank=item.get('creative_global_rank'),creative_pack=item.get('creative_pack') or {},creative_audit=item.get('creative_audit') or {},priority=max(50,101-int(item.get('creative_global_rank') or 50)))
+    result=creative_gateway('persist_content',run_id=run_id,source_record_hash=item.get('source_record_hash'),brand_slug=CREATIVE_BRAND_SLUG,merchant_id=item.get('merchant_id'),merchant_name=item.get('merchant_name'),product_name=item.get('product_name'),tracking_url=item.get('tracking_url'),affiliate_short_url=item.get('affiliate_short_url'),image_url=item.get('image_url'),global_rank=item.get('creative_global_rank'),creative_pack=item.get('creative_pack') or {},creative_audit=item.get('creative_audit') or {},priority=max(50,101-int(item.get('creative_global_rank') or 50)))
     if len(result.get('content_items') or [])!=3:raise RuntimeError(f'canonical creative content persistence incomplete for {item.get("source_record_hash")}')
     if not result.get('approved'):raise RuntimeError(f'creative content not approved by skeptic for {item.get("source_record_hash")}')
     return result
