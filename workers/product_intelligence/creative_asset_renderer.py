@@ -171,6 +171,9 @@ def render_variant(
 
 
 def render_pack(row: dict[str, Any]) -> list[dict[str, Any]]:
+    short_url = str(row.get("affiliate_short_url") or "")
+    if not short_url.startswith("https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/socialscheduler-go/r-"):
+        raise ValueError("validated affiliate short URL required")
     pack = row.get("creative_pack") or {}
     variants = list(pack.get("variants") or [])
     if len(variants) != 3:
@@ -186,7 +189,7 @@ def render_pack(row: dict[str, Any]) -> list[dict[str, Any]]:
             variant=variant,
             product_name=str(row.get("product_name") or ""),
             merchant_name=str(row.get("merchant_name") or ""),
-            tracking_url=str(row.get("tracking_url") or ""),
+            tracking_url=short_url,
             effective_price=row.get("effective_price"),
         )
         results.append({"variant_id": variant_id, "png": png})
