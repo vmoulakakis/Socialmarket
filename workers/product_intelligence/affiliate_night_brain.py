@@ -3,7 +3,7 @@
 One nightly autonomous affiliate pipeline:
   live catalog -> hard commercial gates -> 5-signal opportunity scoring ->
   bounded local AI opportunity reasoning -> diversified exploit/explore portfolio ->
-  durable Top 100 -> best-effort mixed Top 20 creatives -> SocialScheduler handoff.
+  durable Top 100 -> mandatory mixed Top 20 creatives -> SocialScheduler handoff.
 
 Business invariant: expected commission >= EUR 10 is a hard economic floor, not the
 ranking objective. Ranking optimizes profitable conversion opportunity using
@@ -32,6 +32,7 @@ import product_intelligence_v1 as v1
 import product_ranking_v3 as v3
 import product_ranking_v32 as v32
 import product_local_autopilot as local_ai
+from creative_contract_v10 import excluded_vertical
 from product_agents import clamp
 from runtime_config import apply_runtime_config, load_runtime_config
 
@@ -518,6 +519,12 @@ def main(feed: str) -> dict[str, Any]:
         db, stream_stats = v1.stage_feed(feed, context); stream_stats = dict(stream_stats)
         stage = 'five_signal_frontier'
         shortlist, shortlist_stats = build_frontier(db, context, decision_index, policy)
+        # Defence in depth: the streaming gate is authoritative, but no excluded
+        # vertical may enter agent ranking even if a future staging implementation
+        # omits the canonical publication policy.
+        excluded_from_frontier = sum(1 for row in shortlist if excluded_vertical(row))
+        shortlist = [row for row in shortlist if not excluded_vertical(row)]
+        shortlist_stats = {**shortlist_stats, 'excluded_verticals_from_frontier': excluded_from_frontier}
         if len(shortlist) < 100:
             raise RuntimeError(f'Night Brain frontier too small for Top100: {len(shortlist)}')
 
@@ -530,6 +537,8 @@ def main(feed: str) -> dict[str, Any]:
             raise RuntimeError(f'Night Brain Top100 completeness failed: {len(final_rows)}')
         if any(num(x.get('expected_commission_eur')) + 1e-9 < 10 for x in final_rows):
             raise RuntimeError('EUR10 commission hard gate violation after portfolio selection')
+        if any(excluded_vertical(x) for x in final_rows):
+            raise RuntimeError('excluded vertical hard gate violation before Top100 persistence')
 
         # Deterministic SEO is safe and cheap. It is part of ranking persistence, but no
         # generative/creative dependency can block the Top100.
@@ -549,25 +558,31 @@ def main(feed: str) -> dict[str, Any]:
             metadata={'shortlist': shortlist_stats, 'agent': agent_stats, 'portfolio': portfolio_stats,
                       'seo': seo_stats, 'orchestrator': ENGINE_VERSION, 'ranking_survives_creative_failure': True})
 
-        creative_stats: dict[str, Any] = {'creative_status': 'not_started'}
-        stage = 'best_effort_creatives'
-        try:
-            mix = creative_mix(final_rows, policy)
-            # Put the selected exploit/explore mix first because the local creative engine
-            # intentionally works on rows[:20].
-            rest = [dict(x) for x in final_rows if x.get('source_record_hash') not in {m.get('source_record_hash') for m in mix}]
-            creative_rows = mix + rest
-            creative_rows, generated = local_ai.enrich_creatives_local(creative_rows)
-            creative_items = creative_rows[:policy['creative_top_n']]
-            persisted = 0
-            for i in range(0, len(creative_items), 40):
-                persisted += int(v32.rank_gateway_final('save_rankings', run_id=run_id, items=creative_items[i:i+40]).get('saved') or 0)
-            creative_stats = {**generated, 'creative_status': 'completed', 'creative_rankings_persisted': persisted,
-                              'mix': dict(collections.Counter(x.get('_strategy_segment','CORE') for x in creative_items))}
-        except Exception as creative_exc:
-            creative_stats = {'creative_status': 'degraded', 'error': str(creative_exc)[:1600],
-                              'ranking_preserved': True, 'outbox_uses_existing_winners_until_new_creatives_are_ready': True}
-            print(json.dumps({'warning': 'night_brain_creative_degraded', **creative_stats}, ensure_ascii=False), flush=True)
+        stage = 'mandatory_v10_creatives'
+        mix = creative_mix(final_rows, policy)
+        # Put the selected exploit/explore mix first because the local creative engine
+        # intentionally works on rows[:20].
+        rest = [dict(x) for x in final_rows if x.get('source_record_hash') not in {m.get('source_record_hash') for m in mix}]
+        creative_rows = mix + rest
+        creative_rows, generated = local_ai.enrich_creatives_local(creative_rows)
+        creative_items = creative_rows[:policy['creative_top_n']]
+        persisted = 0
+        for i in range(0, len(creative_items), 40):
+            persisted += int(v32.rank_gateway_final('save_rankings', run_id=run_id, items=creative_items[i:i+40]).get('saved') or 0)
+        if persisted < policy['creative_top_n']:
+            raise RuntimeError(f'v10 creative persistence incomplete: {persisted}/{policy["creative_top_n"]}')
+        stage = 'mandatory_v10_finalize'
+        final_contract = v32.rank_gateway_final(
+            'ranking_complete', run_id=run_id,
+            records_seen=int(stream_stats.get('records_seen') or 0),
+            eligible_candidates=int(stream_stats.get('commission_eligible_records') or 0),
+            ai_ranked=int(agent_stats.get('agent_ranked') or 0), saved_count=saved,
+            metadata={'shortlist': shortlist_stats, 'agent': agent_stats, 'portfolio': portfolio_stats,
+                      'seo': seo_stats, 'orchestrator': ENGINE_VERSION, 'v10_handoff_required': True},
+        )
+        creative_stats = {**generated, 'creative_status': 'completed', 'creative_rankings_persisted': persisted,
+                          'final_contract': final_contract,
+                          'mix': dict(collections.Counter(x.get('_strategy_segment','CORE') for x in creative_items))}
 
         profile = {
             'engine_version': ENGINE_VERSION, 'run_key': run_key,
@@ -588,6 +603,18 @@ def main(feed: str) -> dict[str, Any]:
     except BaseException as exc:
         if isinstance(exc, KeyboardInterrupt):
             raise
+        # Keep a bounded diagnostic artifact even when the mandatory creative
+        # contract fails. The GitHub workflow uploads it with `if: always()`.
+        failure_profile = {
+            'engine_version': ENGINE_VERSION, 'run_key': run_key, 'run_id': run_id,
+            'status': 'failed', 'failed_stage': stage, 'error': str(exc)[:1600],
+            'ranking_preserved': stage in {'mandatory_v10_creatives', 'mandatory_v10_finalize'},
+            'paid_llm_required': False,
+        }
+        try:
+            PROFILE.write_text(json.dumps(failure_profile, ensure_ascii=False, indent=2), encoding='utf-8')
+        except Exception as profile_exc:
+            print(json.dumps({'warning': 'night_brain_failure_profile_write_failed', 'error': str(profile_exc)[:800]}), flush=True)
         try:
             # Observability failure marking is best-effort; never hide the root error.
             import product_ranking_v363_production as old_prod
