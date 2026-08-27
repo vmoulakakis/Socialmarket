@@ -1,0 +1,31 @@
+{
+  "version": "socialmarket-myagenticteam-v1",
+  "mode": "control_plane_zero_credit",
+  "production_executor": "github_actions_supabase_local_first",
+  "roles": [
+    "demand_beacon_analyst",
+    "pain_gap_validator",
+    "forecast_skeptic",
+    "affiliate_decision_orchestrator"
+  ],
+  "handoff_contract": {
+    "max_items": 40,
+    "max_summary_chars_per_item": 280,
+    "required": ["entity_id", "evidence_ids", "provenance_label", "confidence"],
+    "forbidden": ["full_page_text", "full_chat_history", "unverified_volume", "unverified_revenue"]
+  },
+  "cost_policy": {
+    "credit_limit": 0,
+    "schedules_active": false,
+    "paid_remote_enabled": false,
+    "local_max_output_tokens": 360,
+    "max_free_semantic_calls_per_run": 8
+  },
+  "model_routing": [
+    "deterministic_or_local",
+    "github_models_included_quota",
+    "deepseek-v4-flash_or_pro_adaptive_thinking_after_cost_approval",
+    "gpt-5.6-luna_or_sol_last_resort_after_cost_approval"
+  ],
+  "truth_labels": ["OBSERVED", "CALCULATED", "INFERRED", "MODELED", "WITHHELD", "UNAVAILABLE"]
+}
