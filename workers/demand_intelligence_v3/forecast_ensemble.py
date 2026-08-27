@@ -82,8 +82,39 @@ def optional_challengers():
         try:__import__(name);available[name]=True
         except Exception:available[name]=False
     return {'available':available,'strategy':['AutoETS','Theta','AutoARIMA','NHITS gated','change-point PELT','rolling-origin backtest','DoWhy only after causal readiness']}
+
+def directional_scenarios(rows,horizon=14):
+    """Transparent conservative/base/upside paths for the 0-100 demand index.
+
+    This is a decision aid, not a volume or revenue forecast. It stays withheld
+    until the same temporal history gate used by the model lab is satisfied.
+    """
+    gate=history_gate(rows);daily=_daily(rows)
+    if not gate['eligible'] or len(daily)<14:
+        return {'status':'WITHHELD','reasons':gate['reasons'] or ['needs_14_daily_points'],'truth_label':'WITHHELD'}
+    values=[float(x['y']) for x in daily]
+    recent=values[-14:];base_level=statistics.fmean(recent[-7:])
+    prior=statistics.fmean(recent[:7]);raw_daily_trend=(base_level-prior)/7
+    # Cap extrapolation so a short-lived spike cannot dominate the horizon.
+    daily_trend=max(-1.5,min(1.5,raw_daily_trend))
+    baseline=baseline_backtest(rows);winner=baseline.get('winner')
+    mae=float(((baseline.get('models') or {}).get(winner) or {}).get('mae') or 0)
+    dispersion=statistics.pstdev(recent) if len(recent)>1 else 0
+    band=max(3.0,mae,dispersion*.8)
+    clamp_index=lambda x:round(max(0.0,min(100.0,x)),3)
+    base=[clamp_index(base_level+daily_trend*(i+1)) for i in range(horizon)]
+    return {
+        'status':'MODELED_SCENARIOS','horizon_days':horizon,
+        'conservative':[clamp_index(x-band) for x in base],
+        'base':base,
+        'upside':[clamp_index(x+band) for x in base],
+        'uncertainty_band':round(band,3),'baseline_winner':winner,
+        'truth_label':'MODELED demand-index scenarios; not sales, search volume, market size or revenue',
+        'assumptions':{'trend_cap_index_points_per_day':1.5,'history_points':gate['points'],'span_days':gate['span_days']},
+    }
+
 def run_lab(rows):
-    gate=history_gate(rows);result={'version':'temporal_lab_v31','gate':gate,'baseline':baseline_backtest(rows),'rolling_origin':rolling_origin(rows),'change_points':change_points(rows),'statistical_challengers':statsforecast_challengers(rows),'neural_challenger':neural_challenger(rows),'challengers':optional_challengers(),'production_forecast':None,'truth_label':'FORECASTED outputs are never OBSERVED demand'}
+    gate=history_gate(rows);result={'version':'temporal_lab_v31','gate':gate,'baseline':baseline_backtest(rows),'rolling_origin':rolling_origin(rows),'change_points':change_points(rows),'directional_scenarios':directional_scenarios(rows),'statistical_challengers':statsforecast_challengers(rows),'neural_challenger':neural_challenger(rows),'challengers':optional_challengers(),'production_forecast':None,'truth_label':'FORECASTED outputs are never OBSERVED demand'}
     if not gate['eligible']:result['decision']='WITHHOLD_PRODUCTION_FORECAST';result['reason']='Complex models cannot compensate for insufficient temporal history.'
     else:result['decision']='RUN_SHADOW_ENSEMBLE';result['reason']='History gate passed; no model promoted until chronological backtests win.'
     return result
