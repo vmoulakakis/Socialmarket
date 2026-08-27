@@ -5,6 +5,7 @@ bulk-gate, frontier and local-AI resilience hooks with audited production policy
 """
 from __future__ import annotations
 
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -14,6 +15,7 @@ from night_brain_gate_tools import build_frontier_with_business_gates, stage_fee
 
 
 _CORE_BUILD_FRONTIER = night.build_frontier
+AI_ENRICH_LIMIT = max(8, min(40, int(os.getenv('NIGHT_BRAIN_AI_ENRICH_LIMIT', '24'))))
 
 
 def _frontier(db, context, decision_index, policy):
@@ -21,27 +23,31 @@ def _frontier(db, context, decision_index, policy):
 
 
 def _safe_rank_with_agent(items):
-    """Keep local AI additive: transport/model failures fall back per candidate.
+    """Keep local AI additive, bounded and non-gating.
 
-    The core Night Brain already contains a deterministic five-signal fallback in
-    build_rows(). This wrapper makes the runtime match that contract by preventing
-    a transient Ollama/AI-runtime exception (for example HTTP 503) from aborting
-    the authoritative Top-100 ranking.
+    The deterministic five-signal engine ranks the full shortlist. Local AI enriches
+    only the strongest bounded slice; all remaining candidates use the deterministic
+    fallback already implemented in build_rows(). This avoids a free CPU model
+    becoming the throughput bottleneck while preserving AI judgement where it has
+    the highest expected business value.
     """
     outputs = {}
     telemetry = []
+    enrich_items = list(items[:AI_ENRICH_LIMIT])
     try:
         router = night.local_ai._router(max(420, night.local_ai.LOCAL_RANK_OUTPUT_TOKENS))
     except Exception as exc:
         return {}, {
             'agent_candidates': len(items),
+            'agent_enrichment_limit': len(enrich_items),
             'agent_ranked': 0,
-            'agent_errors': len(items),
+            'agent_errors': len(enrich_items),
             'local_model_calls': 0,
             'local_cache_hits': 0,
             'local_model': night.local_ai.LOCAL_MODEL,
             'paid_inference_cost_usd': 0.0,
             'ai_is_gate': False,
+            'deterministic_fallback_candidates': len(items),
             'fallback_reason': f'router_unavailable:{str(exc)[:300]}',
         }
 
@@ -63,7 +69,7 @@ def _safe_rank_with_agent(items):
 
     workers = max(1, min(2, night.local_ai.LOCAL_AI_WORKERS))
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(run_one, item): item for item in items}
+        futures = {pool.submit(run_one, item): item for item in enrich_items}
         for future in as_completed(futures):
             item = futures[future]
             try:
@@ -86,6 +92,7 @@ def _safe_rank_with_agent(items):
     errors = sum(1 for x in telemetry if x.get('status') == 'error')
     return outputs, {
         'agent_candidates': len(items),
+        'agent_enrichment_limit': len(enrich_items),
         'agent_ranked': len(outputs),
         'agent_errors': errors,
         'local_model_calls': calls,
