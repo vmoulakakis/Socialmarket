@@ -43,6 +43,7 @@ jobs:
       LOCAL_OLLAMA_MODEL: qwen3.5:2b
       LOCAL_EMBED_MODEL: qwen3-embedding:0.6b
       LOCAL_MODEL_TIMEOUT_SECONDS: '60'
+      LOCAL_MAX_OUTPUT_TOKENS: '360'
       PAIN_CLUSTER_COSINE: '0.68'
       MARKET_SCOPE_KEY: ${{ inputs.market_scope_key || 'eyewear' }}
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
@@ -115,6 +116,10 @@ jobs:
         run: |
           python workers/agentic_intelligence/vectorize_products_only.py \
             | tee product-vector-bootstrap.json
+
+      - name: Verify model routing and paid-cost fail-closed policy
+        working-directory: workers/agentic_intelligence
+        run: python -m unittest -v test_model_router_policy.py
 
       - name: Run strict evidence-first scoped agentic circuit
         env:
