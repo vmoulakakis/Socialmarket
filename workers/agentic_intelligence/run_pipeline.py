@@ -21,6 +21,7 @@ from gateway import db_call  # noqa: E402
 
 from agent_runtime import FreeAgentRuntime  # noqa: E402
 from model_router import FreeModelRouter  # noqa: E402
+from greek_source_policy import annotate_evidence, beacon_policy  # noqa: E402
 
 UA = "SocialMarketOpportunityResearch/2.0 (+evidence-first; respects robots)"
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://127.0.0.1:8080").rstrip("/")
@@ -197,6 +198,10 @@ def pain_severity(statement: str):
 
 def create_doc(run_id, page, metadata=None):
     clean = page["text"][:20_000]
+    source_metadata = dict(metadata or {})
+    if policy := beacon_policy(page["domain"]):
+        source_metadata.update(policy)
+        source_metadata["role_semantics"] = "Demand beacon only; excluded from competitor classification."
     return post_one("research_documents", {
         "intelligence_run_id": run_id,
         "canonical_url": page["url"],
@@ -209,11 +214,13 @@ def create_doc(run_id, page, metadata=None):
         "credibility_tier": 3,
         "extraction_method": "deterministic_html",
         "status": "parsed",
-        "metadata": metadata or {},
+        "metadata": source_metadata,
     })
 
 
 def create_evidence(run_id, doc, statement, relation="support", evidence_type="voice_of_customer"):
+    doc_metadata = dict((doc or {}).get("metadata") or {})
+    row = annotate_evidence({"source_url": (doc or {}).get("canonical_url"), "source_kind": "pain_candidate", "metadata": {"consumer_text": evidence_type == "voice_of_customer", "source_family": doc_metadata.get("source_family") or "public_web"}})
     return post_one("evidence_items", {
         "intelligence_run_id": run_id,
         "document_id": doc["id"] if doc else None,
@@ -228,7 +235,7 @@ def create_evidence(run_id, doc, statement, relation="support", evidence_type="v
         "source_independence_key": doc.get("source_domain") if doc else None,
         "extraction_mode": "deterministic",
         "quote_hash": h(statement),
-        "metadata": {"untrusted_external_content": True},
+        "metadata": {"untrusted_external_content": True, **row["metadata"]},
     })
 
 
@@ -529,6 +536,11 @@ def main():
                     continue
                 doc = create_doc(run_id, page, {"query": q, "search_rank_source": "searxng"})
                 docs.append(doc)
+                # Large Greek commerce sites are useful market-presence signals,
+                # not pain proof in this generic crawler. The dedicated consumer
+                # collector separately validates extracted first-person reviews.
+                if beacon_policy(page["domain"]):
+                    continue
                 extracted = 0
                 for s in sentences(page["text"]):
                     if PAIN_RE.search(s):
