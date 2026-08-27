@@ -26,6 +26,8 @@ def _row(i: int):
 def test_excludes_lodging_but_not_physical_travel_goods():
     assert excluded_vertical({"product_name": "Ξενοδοχείο Αθήνα 2 νύχτες"})
     assert excluded_vertical({"category": "Accommodation"})
+    assert excluded_vertical({"product_name": "Mountain House Αράχωβα — διανυκτερεύσεις"})
+    assert excluded_vertical({"merchant_name": "Ekdromi.gr", "category": "Travel package"})
     assert not excluded_vertical({"product_name": "Travel adapter USB-C", "category": "Ηλεκτρονικά"})
     assert not excluded_vertical({"product_name": "Βαλίτσα καμπίνας", "category": "Αποσκευές"})
 
