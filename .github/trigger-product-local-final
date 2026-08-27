@@ -10,4 +10,4 @@ bulk_feed_to_llm=false
 paid_inference_required=false
 poster_gate=three_png_real_image_exact_short_qr_60_unique_hooks_captions_tagsets
 creative_fallback=deterministic_facts_only_v10
-triggered_at=2026-08-26T08:55:00+03:00
+triggered_at=2026-08-27T18:58:00+03:00
