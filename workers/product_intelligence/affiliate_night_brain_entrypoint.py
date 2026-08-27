@@ -1,11 +1,12 @@
 """Production entrypoint for Affiliate Night Brain with bounded business gates.
 
 Keeps the core Night Brain orchestration single and stable while replacing only the
-bulk-gate and frontier hooks with the audited v1.1 business policy.
+bulk-gate, frontier and local-AI resilience hooks with audited production policy.
 """
 from __future__ import annotations
 
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import affiliate_night_brain as night
 import product_intelligence_v1 as v1
@@ -19,10 +20,88 @@ def _frontier(db, context, decision_index, policy):
     return build_frontier_with_business_gates(_CORE_BUILD_FRONTIER, db, context, decision_index, policy)
 
 
+def _safe_rank_with_agent(items):
+    """Keep local AI additive: transport/model failures fall back per candidate.
+
+    The core Night Brain already contains a deterministic five-signal fallback in
+    build_rows(). This wrapper makes the runtime match that contract by preventing
+    a transient Ollama/AI-runtime exception (for example HTTP 503) from aborting
+    the authoritative Top-100 ranking.
+    """
+    outputs = {}
+    telemetry = []
+    try:
+        router = night.local_ai._router(max(420, night.local_ai.LOCAL_RANK_OUTPUT_TOKENS))
+    except Exception as exc:
+        return {}, {
+            'agent_candidates': len(items),
+            'agent_ranked': 0,
+            'agent_errors': len(items),
+            'local_model_calls': 0,
+            'local_cache_hits': 0,
+            'local_model': night.local_ai.LOCAL_MODEL,
+            'paid_inference_cost_usd': 0.0,
+            'ai_is_gate': False,
+            'fallback_reason': f'router_unavailable:{str(exc)[:300]}',
+        }
+
+    def run_one(item):
+        h = str((item.get('product') or {}).get('source_record_hash') or (item.get('_raw') or {}).get('source_record_hash') or '')
+        data, stats = night.local_ai._run_task(router, night._agent_task(item))
+        if not data or str(data.get('source_record_hash') or '') != h:
+            return h, None, stats
+        for key in (
+            'product_market_fit_score', 'creative_potential_score', 'value_score',
+            'confidence_score', 'conversion_potential_score', 'opportunity_score',
+            'must_buy_score',
+        ):
+            data[key] = night.clamp(night.num(data.get(key)))
+        seg = str(data.get('strategy_segment') or '').upper()
+        data['strategy_segment'] = seg if seg in ('WINNER', 'CORE', 'OPPORTUNITY', 'MUST_BUY') else (item.get('_affiliate') or {}).get('strategy_segment', 'CORE')
+        data['recommended_channels'] = night.local_ai._normalize_channels(data.get('recommended_channels'))
+        return h, data, stats
+
+    workers = max(1, min(2, night.local_ai.LOCAL_AI_WORKERS))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(run_one, item): item for item in items}
+        for future in as_completed(futures):
+            item = futures[future]
+            try:
+                h, data, stats = future.result()
+                telemetry.append(stats or {'status': 'invalid', 'from_cache': False, 'cost_usd': 0})
+                if data is not None:
+                    outputs[h] = data
+            except Exception as exc:
+                h = str((item.get('product') or {}).get('source_record_hash') or (item.get('_raw') or {}).get('source_record_hash') or '')
+                telemetry.append({
+                    'status': 'error',
+                    'from_cache': False,
+                    'cost_usd': 0,
+                    'source_record_hash': h,
+                    'error': str(exc)[:500],
+                })
+
+    calls = sum(1 for x in telemetry if x.get('status') == 'ok' and not x.get('from_cache'))
+    cache_hits = sum(1 for x in telemetry if x.get('from_cache'))
+    errors = sum(1 for x in telemetry if x.get('status') == 'error')
+    return outputs, {
+        'agent_candidates': len(items),
+        'agent_ranked': len(outputs),
+        'agent_errors': errors,
+        'local_model_calls': calls,
+        'local_cache_hits': cache_hits,
+        'local_model': night.local_ai.LOCAL_MODEL,
+        'paid_inference_cost_usd': round(sum(night.num(x.get('cost_usd')) for x in telemetry), 6),
+        'ai_is_gate': False,
+        'deterministic_fallback_candidates': max(0, len(items) - len(outputs)),
+    }
+
+
 # Production refinements. Runtime configuration still patches scoring/context helpers
-# before execution; these two hooks are intentionally narrow and auditable.
+# before execution; these hooks are intentionally narrow and auditable.
 v1.stage_feed = stage_feed
 night.build_frontier = _frontier
+night.rank_with_agent = _safe_rank_with_agent
 
 
 if __name__ == '__main__':
