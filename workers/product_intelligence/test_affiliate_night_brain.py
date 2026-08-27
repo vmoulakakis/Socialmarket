@@ -1,6 +1,8 @@
 import unittest
+from unittest import mock
 
 import affiliate_night_brain as nb
+import affiliate_night_brain_entrypoint as prod
 
 
 class NightBrainPolicyTests(unittest.TestCase):
@@ -45,6 +47,21 @@ class NightBrainPolicyTests(unittest.TestCase):
         ]
         selected, _ = nb.portfolio_select(rows, {**policy, 'top_n':100})
         self.assertEqual(selected[0]['source_record_hash'], 'better')
+
+    def test_local_ai_503_is_non_gating_and_falls_back(self):
+        items = [
+            {'_raw': {'source_record_hash': 'h1'}},
+            {'_raw': {'source_record_hash': 'h2'}},
+        ]
+        with mock.patch.object(prod.night.local_ai, '_router', return_value=object()), \
+             mock.patch.object(prod.night, '_agent_task', return_value=object()), \
+             mock.patch.object(prod.night.local_ai, '_run_task', side_effect=RuntimeError('HTTP Error 503: Service Unavailable')):
+            outputs, stats = prod._safe_rank_with_agent(items)
+        self.assertEqual(outputs, {})
+        self.assertEqual(stats['agent_errors'], 2)
+        self.assertEqual(stats['deterministic_fallback_candidates'], 2)
+        self.assertFalse(stats['ai_is_gate'])
+        self.assertEqual(stats['paid_inference_cost_usd'], 0.0)
 
 
 if __name__ == '__main__':
