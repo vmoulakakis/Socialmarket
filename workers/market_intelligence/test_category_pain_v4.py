@@ -39,7 +39,9 @@ class CategoryPainV4Tests(unittest.TestCase):
         market=result['market']
         self.assertIsNotNone(market['demand_score'])
         self.assertLess(market['demand_score'],100)
-        self.assertIsNotNone(market['competition_score'])
+        self.assertIsNone(market['competition_score'])
+        self.assertEqual(set(market['demand_beacon_evidence']['domains']),{'bestprice.gr','skroutz.gr','notino.gr'})
+        self.assertNotIn('skroutz.gr',market['competition_evidence']['domains'])
         self.assertEqual(market['evidence_quality']['pain_consumer_rows'],3)
         self.assertEqual(len(market['evidence_quality']['pain_source_families']),3)
         self.assertEqual(market['evidence_quality']['context_rows'],1)
