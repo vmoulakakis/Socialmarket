@@ -148,6 +148,15 @@ jobs:
           assert p.get('bulk_feed_to_llm') is False
           assert p.get('paid_llm_required') is False
           assert float(p.get('paid_inference_cost_usd') or 0) == 0
+          creative=p.get('creative') or {}
+          assert creative.get('creative_status') == 'completed', creative
+          assert int(creative.get('creative_ready') or 0) == 20, creative.get('creative_ready')
+          assert int(creative.get('creative_assets') or 0) == 60, creative.get('creative_assets')
+          assert int(creative.get('creative_rankings_persisted') or 0) == 20, creative.get('creative_rankings_persisted')
+          final_contract=creative.get('final_contract') or {}
+          assert int(final_contract.get('ranked') or 0) >= 100, final_contract
+          assert int(final_contract.get('creatives') or 0) >= 20, final_contract
+          assert int(final_contract.get('content_packs') or 0) >= 20, final_contract
           print({
             'saved_rankings':p.get('saved_rankings'),
             'effective_promotion_commission_floor_eur':p.get('effective_promotion_commission_floor_eur'),

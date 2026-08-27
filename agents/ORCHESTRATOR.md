@@ -45,4 +45,40 @@ Hard gates always execute before expensive model calls. Forecast numbers, price,
 - 2% Product Evidence Confidence
 
 ## Model routing
-DeepSeek V4 Pro is the Product Research + Skeptic/Audit reasoning provider with thinking enabled. RAG constrains the model to supplied evidence IDs; the LLM cannot invent commission, demand, merchant identity, pain IDs or theme IDs. Secrets are injected at runtime and never committed.
+The canonical order is deterministic/local, then GitHub Models included quota,
+then DeepSeek V4, and finally OpenAI as the last resort. DeepSeek V4 Flash runs
+without thinking for routine bounded work, Flash/high for ambiguous audits, and
+V4 Pro/max only for hard skeptic, contradiction, forecast or recovery cases.
+Direct DeepSeek/OpenAI routes remain fail-closed until cost is explicitly
+approved and a database budget reservation succeeds. OpenAI fallback uses the
+cost-sensitive GPT-5.6 Luna for ordinary recovery and GPT-5.6 Sol only for the
+highest-complexity unresolved cases. RAG constrains every model to supplied
+evidence IDs; no model may invent commission, demand, merchant identity, pain
+IDs or theme IDs. Secrets are injected at runtime and never committed.
+
+## MyAgenticTeam control plane
+MyAgenticTeam mirrors the production pipeline as a bounded four-role graph; it
+does not replace deterministic workers or Supabase truth:
+
+1. Demand Beacon Analyst — accepts source IDs and taxonomy only; large Greek
+   commerce sites are `demand_beacon`, never `competitor`.
+2. Pain Gap Validator — accepts extracted first-person evidence IDs; catalogue
+   presence and SERP snippets cannot prove pain.
+3. Forecast Skeptic — accepts daily demand-index observations; returns
+   WITHHELD or conservative/base/upside index scenarios with assumptions.
+4. Affiliate Decision Orchestrator — accepts validated gap/forecast/product IDs
+   and applies commission, merchant, evidence, duplication and publish gates.
+
+Handoffs contain IDs, bounded summaries and confidence—not full pages or chat
+history. The control-plane credit limit is zero and no schedule is active until
+the owner explicitly approves billable execution. Production automation remains
+the tested GitHub/Supabase local-first path.
+
+## Token and cost contract
+- deterministic filters, hashes, arithmetic and forecasts run before any LLM;
+- local Qwen is first and capped at 360 output tokens per bounded call;
+- no more than 8 free semantic calls per scoped run (default workflow: 8);
+- deduplicated evidence packets contain only the minimum fields required;
+- paid remote inference is fail-closed (`ENABLE_PAID_REMOTE=0`);
+- every model call records route, model, token counts when available and cost;
+- insufficient evidence returns WITHHELD and never triggers a larger model loop.

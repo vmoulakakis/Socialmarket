@@ -1,5 +1,7 @@
 from collections import Counter, defaultdict
 
+from greek_source_policy import is_demand_beacon
+
 _CURRENT_RUN_ID = None
 _CURRENT_META = {}
 
@@ -19,7 +21,7 @@ COMMERCIAL_HINTS = {
 
 def _blocked(domain: str) -> bool:
     d=(domain or '').lower().removeprefix('www.')
-    return any(d==x or d.endswith('.'+x) for x in NON_COMPETITOR_DOMAINS)
+    return is_demand_beacon(d) or any(d==x or d.endswith('.'+x) for x in NON_COMPETITOR_DOMAINS)
 
 
 def strict_candidates(core, results, products, agent_runtime, run_id):

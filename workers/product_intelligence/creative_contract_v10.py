@@ -11,8 +11,9 @@ _LINKWISE = re.compile(r"^https://go\.linkwi\.se/", re.I)
 _URL = re.compile(r"https?://\S+", re.I)
 _HOTEL_TERMS = (
     "hotel", "hotels", "resort", "accommodation", "lodging", "hostel",
-    "travel package", "holiday package", "flight", "ferry ticket",
-    "ξενοδοχ", "διαμον", "κατάλυμ", "θερετρ", "τουριστικο πακετ",
+    "travel package", "holiday package", "vacation rental", "overnight stay",
+    "bed and breakfast", "room stay", "flight", "ferry ticket",
+    "ξενοδοχ", "διαμον", "διανυκτερευ", "κατάλυμ", "ενοικιαζομεν", "δωματι", "θερετρ", "τουριστικο πακετ",
     "ταξιδιωτικο πακετ", "πτηση", "ακτοπλοϊκ",
 )
 

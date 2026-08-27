@@ -18,6 +18,7 @@ const ALLOWED_WORKFLOWS=new Set([
   "vmoulakakis/socialscheduler/.github/workflows/ci.yml@refs/heads/main",
   "vmoulakakis/socialscheduler/.github/workflows/ci.yml@refs/heads/feat/socialmarket-outbox-executor",
   "vmoulakakis/socialscheduler/.github/workflows/weekly-optimizer.yml@refs/heads/main",
+  "vmoulakakis/socialscheduler/.github/workflows/postzen-publisher.yml@refs/heads/main",
   "vmoulakakis/socialscheduler/.github/workflows/brightbean-publisher.yml@refs/heads/main",
   "vmoulakakis/socialscheduler/.github/workflows/brightbean-publisher.yml@refs/heads/feat/brightbean-hybrid-publisher"
 ]);
@@ -55,7 +56,7 @@ async function rpc(name:string,params:Record<string,unknown>={}){
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204});
   if(req.method==="GET")return json({
-    ok:true,service:"publishing-outbox",auth:"github-oidc",audience:AUDIENCE,version:4,
+    ok:true,service:"publishing-outbox",auth:"github-oidc",audience:AUDIENCE,version:5,
     contract:{
       archive_after_schedule:true,capacity_per_channel:true,rolling_refill:true,weekly_learning:true,
       platforms:["facebook","instagram","tiktok","linkedin"],
@@ -126,6 +127,20 @@ Deno.serve(async(req:Request)=>{
     if(action==="reconcile"){
       const jobs=await rpc("worker_v2_outbox_reconcile",{p_limit:Math.max(1,Math.min(Number(body?.limit||200),500))});
       return json({ok:true,jobs:jobs||[]});
+    }
+    if(action==="reconcile_provider_candidates"){
+      const provider=String(body?.provider_key||"").toLowerCase();
+      if(!["buffer","postzen","brightbean"].includes(provider))return json({ok:false,error:"invalid_provider"},400);
+      const jobs=await rpc("socialscheduler_provider_reconcile_candidates",{
+        p_provider:provider,p_limit:Math.max(1,Math.min(Number(body?.limit||100),500))
+      });
+      return json({ok:true,provider_key:provider,jobs:jobs||[]});
+    }
+    if(action==="reconcile_provider_delivery"){
+      const provider=String(body?.provider_key||"").toLowerCase();
+      if(!["buffer","postzen","brightbean"].includes(provider))return json({ok:false,error:"invalid_provider"},400);
+      const result=await rpc("worker_v11_delivery_reconcile",{p_payload:{...body,provider_key:provider}});
+      return json({ok:true,result});
     }
     if(action==="import_legacy"){
       if(!Array.isArray(body?.campaigns))return json({ok:false,error:"campaigns_array_required"},400);

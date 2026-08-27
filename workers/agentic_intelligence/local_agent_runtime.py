@@ -23,6 +23,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
         self.ollama_url = os.getenv("LOCAL_OLLAMA_URL", "").rstrip("/")
         self.local_model = os.getenv("LOCAL_OLLAMA_MODEL", "qwen3.5:0.8b")
         self.timeout = float(os.getenv("LOCAL_MODEL_TIMEOUT_SECONDS", "45"))
+        self.max_output_tokens = max(120, min(int(os.getenv("LOCAL_MAX_OUTPUT_TOKENS", "360")), 700))
 
     def _direct_ollama_json(self, instructions: str, payload: Any):
         r = requests.post(
@@ -32,7 +33,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
                 "stream": False,
                 "think": False,
                 "format": "json",
-                "options": {"temperature": 0, "num_predict": 700},
+                "options": {"temperature": 0, "num_predict": self.max_output_tokens},
                 "messages": [
                     {
                         "role": "system",
@@ -83,7 +84,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
                         model=model,
                         model_settings=ModelSettings(
                             temperature=0,
-                            max_tokens=700,
+                            max_tokens=self.max_output_tokens,
                             extra_body={"think": False},
                         ),
                     )
@@ -105,6 +106,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
                         "cost_usd": 0,
                         "runtime": "openai_agents_sdk",
                         "thinking": False,
+                        "max_output_tokens": self.max_output_tokens,
                     }
                 except Exception as exc:
                     sdk_error = str(exc)[:300]
@@ -120,6 +122,7 @@ class LocalFirstAgentRuntime(FreeAgentRuntime):
                         "cost_usd": 0,
                         "runtime": "direct_ollama_fallback",
                         "thinking": False,
+                        "max_output_tokens": self.max_output_tokens,
                         "agents_sdk_error": sdk_error,
                     }
                 except Exception as exc:
