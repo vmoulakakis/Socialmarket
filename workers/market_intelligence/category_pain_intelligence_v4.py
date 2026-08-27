@@ -6,11 +6,8 @@ import json
 import category_pain_intelligence as base
 from authoritative_context_v3 import authoritative_context_rows
 from consumer_evidence_v4 import collect_consumer_evidence, host
+from greek_source_policy import annotate_evidence, cap_beacon_concentration, is_demand_beacon
 
-MAJOR_COMMERCE_DOMAINS=(
-    'skroutz.gr','bestprice.gr','public.gr','plaisio.gr','kotsovolos.gr','e-shop.gr','shopflix.gr',
-    'amazon.de','amazon.com','ikea.gr','jysk.gr','intersport.gr','cosmossport.gr','notino.gr','sephora.gr',
-)
 CHANNEL_BUDGETS={
     'pain_candidate':80,
     'demand':60,
@@ -19,11 +16,6 @@ CHANNEL_BUDGETS={
     'industry_context':8,
     'consumer_discovery':20,
 }
-
-
-def _is_major(domain:str)->bool:
-    return any(domain==x or domain.endswith('.'+x) for x in MAJOR_COMMERCE_DOMAINS)
-
 
 def _dedup_key(e):
     return (e.get('source_kind'),e.get('source_url'),e.get('content_hash') or e.get('title'),e.get('body'))
@@ -64,6 +56,10 @@ def collect_v4(job):
     consumer_raw=collect_consumer_evidence(category,subcategory,aliases,keys,max_rows=100)
     context_raw=authoritative_context_rows(category,subcategory,aliases,keys)
 
+    consumer_raw=[annotate_evidence(e) for e in consumer_raw]
+    market_raw=cap_beacon_concentration(market_raw,per_domain=4)
+    context_raw=[annotate_evidence(e) for e in context_raw]
+
     pain_rows=_budget_channel(consumer_raw,'pain_candidate',CHANNEL_BUDGETS['pain_candidate'])
     discovery_rows=_budget_channel(consumer_raw,'consumer_discovery',CHANNEL_BUDGETS['consumer_discovery'])
     demand_rows=_budget_channel(market_raw,'demand',CHANNEL_BUDGETS['demand'])
@@ -79,7 +75,11 @@ def collect_v4(job):
     demand_domains={host(e.get('source_url','')) for e in demand_rows if host(e.get('source_url',''))}
     pain_domains={host(e.get('source_url','')) for e in pain_rows if host(e.get('source_url',''))}
     pain_families={str((e.get('metadata') or {}).get('source_family') or 'public_web') for e in pain_rows}
-    comp_domains=sorted({d for e in comp_rows if (d:=base.commercial_domain(e))})
+    observed_commerce_domains=sorted({d for e in comp_rows if (d:=base.commercial_domain(e))})
+    demand_beacon_domains=sorted({host(e.get('source_url','')) for e in (demand_rows+comp_rows) if is_demand_beacon(e.get('source_url',''))})
+    # The owner explicitly defines major Greek sites as market-observation
+    # beacons. They must not leak into competitor counts or weakness scoring.
+    comp_domains=sorted(d for d in observed_commerce_domains if not is_demand_beacon(d))
     matched_queries={str((e.get('metadata') or {}).get('query') or '') for e in demand_rows if (e.get('metadata') or {}).get('query')}
 
     # Demand is an evidence-coverage index, never search volume. This prevents the
@@ -87,14 +87,13 @@ def collect_v4(job):
     # SERP snippets were returned.
     query_coverage=(len(matched_queries)/len(set(planned_demand_queries))) if planned_demand_queries else 0.0
     domain_strength=min(1.0,len(demand_domains)/12.0)
-    commerce_domains={d for d in comp_domains}
+    commerce_domains={d for d in observed_commerce_domains}
     for e in demand_rows:
         if d:=base.commercial_domain(e):commerce_domains.add(d)
     commercial_coverage=min(1.0,len(commerce_domains)/10.0)
     demand_score=round(100*(query_coverage*.45+domain_strength*.35+commercial_coverage*.20),2) if demand_rows else None
 
-    major_count=sum(1 for d in comp_domains if _is_major(d))
-    competition_score=min(100,round(10+len(comp_domains)*6+major_count*8,2)) if len(comp_domains)>=3 else None
+    competition_score=min(100,round(10+len(comp_domains)*7,2)) if len(comp_domains)>=3 else None
 
     pain_domain_strength=min(1.0,len(pain_domains)/6.0)
     pain_family_strength=min(1.0,len(pain_families)/3.0)
@@ -105,13 +104,14 @@ def collect_v4(job):
         'demand_score':demand_score,'competition_score':competition_score,'confidence':round(confidence,3),
         'query_aliases':aliases,
         'demand_evidence':[{'source_url':e['source_url'],'title':e['title'],'query':(e.get('metadata') or {}).get('query')} for e in demand_rows[:30]],
-        'competition_evidence':{'domains':comp_domains,'major_domains':[d for d in comp_domains if _is_major(d)],'results':[{'source_url':e['source_url'],'title':e['title']} for e in comp_rows[:36]]},
+        'competition_evidence':{'domains':comp_domains,'results':[{'source_url':e['source_url'],'title':e['title']} for e in comp_rows[:36] if not is_demand_beacon(e.get('source_url',''))]},
+        'demand_beacon_evidence':{'domains':demand_beacon_domains,'results':[{'source_url':e['source_url'],'title':e['title']} for e in (demand_rows+comp_rows) if is_demand_beacon(e.get('source_url',''))][:36]},
         'pain_evidence':[{'source_url':e['source_url'],'title':e['title'],'body':e.get('body'),'source_family':(e.get('metadata') or {}).get('source_family'),'consumer_language_score':(e.get('metadata') or {}).get('consumer_language_score')} for e in pain_rows[:60]],
         'context_evidence':[{'source_kind':e['source_kind'],'source_url':e['source_url'],'title':e['title'],'source_class':(e.get('metadata') or {}).get('source_class'),'authority_weight':(e.get('metadata') or {}).get('authority_weight'),'taxonomy_direct':(e.get('metadata') or {}).get('taxonomy_direct')} for e in context_rows[:16]],
         'evidence_quality':{
             'planned_demand_queries':len(set(planned_demand_queries)),'matched_demand_queries':len(matched_queries),'query_coverage':round(query_coverage,3),
             'demand_domains':len(demand_domains),'pain_consumer_rows':len(pain_rows),'pain_domains':len(pain_domains),'pain_source_families':sorted(pain_families),
-            'competition_domains':len(comp_domains),'major_commerce_domains':major_count,'context_rows':len(context_rows),
+            'competition_domains':len(comp_domains),'demand_beacon_domains':len(demand_beacon_domains),'context_rows':len(context_rows),
             'channel_budget_policy':'independent_v4_budgets_consumer_pain_first',
             'channel_counts':{
                 'pain_candidate_raw':sum(1 for e in consumer_raw if e.get('source_kind')=='pain_candidate'),
@@ -127,7 +127,8 @@ def collect_v4(job):
         },
         'metric_semantics':{
             'demand':'derived evidence-coverage index from relevant Greek purchase-intent query breadth + domain diversity + commercial-source coverage; not search volume, sales or market size',
-            'competition':'derived proxy from distinct relevant commercial domains plus observed major-commerce presence; null when fewer than 3 commercial domains',
+            'competition':'derived proxy from distinct relevant commercial domains after Greek demand beacons are excluded; null when fewer than 3 non-beacon domains',
+            'demand_beacons':'large Greek commerce sites are observed market signals, never competitors; per-domain caps prevent dominance bias',
             'pain':'only extracted public consumer/reviewer/forum statements can enter the skeptic pain audit; SERP snippets are discovery-only',
             'context':'direct ELSTAT/Eurostat/GR.EC.A/marketplace-industry context; context_only and excluded from demand/pain score arithmetic',
         }
