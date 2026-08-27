@@ -23,6 +23,7 @@
     "minimum_points": 90,
     "minimum_span_days": 30,
     "minimum_backtest_windows": 3,
+    "scenario_policy": "conservative/base/upside demand-index paths only after the history gate; never interpret as units, searches, market size or revenue",
     "promotion_rule": "challenger must beat naive baseline out-of-sample and preserve calibrated uncertainty",
     "baselines": ["naive", "drift", "rolling_mean"],
     "challengers": ["NHITS", "NBEATSx", "PatchTST", "TFT", "TimesFM", "Chronos2"],
