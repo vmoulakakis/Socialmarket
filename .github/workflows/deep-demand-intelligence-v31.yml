@@ -50,6 +50,9 @@ jobs:
         run: pip install neuralforecast dowhy
       - name: Compile Demand V3.1
         run: python -m py_compile workers/demand_intelligence_v3/fuzzy_fusion.py workers/demand_intelligence_v3/forecast_ensemble.py workers/demand_intelligence_v3/graph_rag.py workers/demand_intelligence_v3/causal_skeptic.py workers/demand_intelligence_v3/deep_lab.py workers/demand_intelligence_v3/run_autonomous.py
+      - name: Test forecast truth and scenario bounds
+        working-directory: workers/demand_intelligence_v3
+        run: python -m unittest -v test_forecast_ensemble.py
       - name: Preflight model-lab gateway
         run: |
           curl -fsS "$DEMAND_MODEL_LAB_GATEWAY" | tee demand-model-lab-health.json
