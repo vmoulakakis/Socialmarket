@@ -56,9 +56,9 @@ async function rpc(name:string,params:Record<string,unknown>={}){
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204});
   if(req.method==="GET")return json({
-    ok:true,service:"publishing-outbox",auth:"github-oidc",audience:AUDIENCE,version:5,
+    ok:true,service:"publishing-outbox",auth:"github-oidc",audience:AUDIENCE,version:6,
     contract:{
-      archive_after_schedule:true,capacity_per_channel:true,rolling_refill:true,weekly_learning:true,
+      archive_after_schedule:true,capacity_per_channel:true,provider_capacity:true,rolling_refill:true,weekly_learning:true,
       platforms:["facebook","instagram","tiktok","linkedin"],
       instagram_formats:["post","story"],
       executor_supported_video_formats:["instagram_reel","tiktok_video"],
@@ -72,7 +72,7 @@ Deno.serve(async(req:Request)=>{
     const action=String(body?.action||"health");
     if(action==="health"){
       const result=await rpc("worker_v2_outbox_health");
-      return json({ok:true,repository:claims.repository,version:4,...(result as object)});
+      return json({ok:true,repository:claims.repository,version:6,...(result as object)});
     }
     if(action==="peek"){
       const jobs=await rpc("worker_v2_outbox_peek",{p_limit:Math.max(1,Math.min(Number(body?.limit||10),50))});
@@ -96,6 +96,24 @@ Deno.serve(async(req:Request)=>{
         p_lease_minutes:Math.max(5,Math.min(Number(body?.lease_minutes||30),120))
       });
       return json({ok:true,capacity,jobs:jobs||[]});
+    }
+    if(action==="claim_provider_capacity"){
+      const provider=String(body?.provider_key||"").toLowerCase();
+      if(!["buffer","postzen","brightbean"].includes(provider))return json({ok:false,error:"invalid_provider"},400);
+      const raw=body?.capacity&&typeof body.capacity==="object"?body.capacity:{};
+      const capacity={
+        facebook:Math.max(0,Math.min(20,Number(raw.facebook||0))),
+        instagram:Math.max(0,Math.min(20,Number(raw.instagram||0))),
+        tiktok:Math.max(0,Math.min(20,Number(raw.tiktok||0))),
+        linkedin:Math.max(0,Math.min(20,Number(raw.linkedin||0)))
+      };
+      const jobs=await rpc("socialscheduler_claim_provider_capacity",{
+        p_provider_key:provider,
+        p_executor:String(body?.executor||`socialscheduler-${provider}`),
+        p_capacity:capacity,
+        p_lease_minutes:Math.max(5,Math.min(Number(body?.lease_minutes||30),120))
+      });
+      return json({ok:true,provider_key:provider,capacity,jobs:jobs||[]});
     }
     if(action==="claim"){
       const jobs=await rpc("worker_v2_outbox_claim",{
