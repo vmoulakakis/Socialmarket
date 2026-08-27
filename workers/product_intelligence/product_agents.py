@@ -99,9 +99,21 @@ def select_pain_rag(product,clusters,limit=8):
     scored=[]
     pc=fold(product.get('category_raw'))
     for c in clusters:
+        # Quality gate: a cluster cannot act as a pain signal merely because noisy
+        # text was grouped/validated. At least one actual business pain dimension
+        # must have been scored, with basic evidence and confidence.
+        scored_dimensions=[c.get('pain_severity'),c.get('demand_score'),c.get('commercial_intent')]
+        if not any(v is not None and v!='' for v in scored_dimensions):
+            continue
+        if float(c.get('confidence') or 0)<0.55:
+            continue
+        if int(c.get('evidence_count') or 0)<2 or int(c.get('source_diversity') or 0)<1:
+            continue
         rag=' '.join(str(c.get(k) or '') for k in ('canonical_text','category','subcategory'))
         rel=lexical_relevance(text,rag)
-        if pc and (pc in fold(c.get('category')) or fold(c.get('category')) in pc):rel=max(rel,45)
+        if pc and c.get('category') and (pc in fold(c.get('category')) or fold(c.get('category')) in pc):rel=max(rel,45)
+        if rel<=0:
+            continue
         evidence_bonus=min(15,float(c.get('source_diversity') or 0)*3)+min(10,float(c.get('evidence_count') or 0))
         score=rel*.72+clamp(c.get('pain_severity') or 0)*.12+clamp(c.get('demand_score') or 0)*.08+evidence_bonus*.08
         if score>=18:scored.append((score,c))
@@ -129,6 +141,10 @@ def select_theme_rag(product,themes,limit=5):
     scored=[]
     for t in themes:
         rel=lexical_relevance(text,' '.join(str(t.get(k) or '') for k in ('name','semantic_brief')))
+        # Seasonality amplifies a product-theme match; it must never manufacture
+        # relevance for an unrelated product. Zero semantic overlap means no theme.
+        if rel<=0:
+            continue
         season=seasonal_curve(t)
         score=rel*.68+season*.32
         if score>=15:scored.append((score,season,t))
