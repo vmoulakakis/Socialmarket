@@ -8,8 +8,55 @@ import requests
 CATALOG_URL = "https://models.github.ai/catalog/models"
 BASE_URL = "https://models.github.ai/inference"
 API_VERSION = "2026-03-10"
-EXCLUDED_PUBLISHERS = {"openai", "deepseek"}
-PREFERRED_PUBLISHERS = ["mistral ai", "microsoft", "meta", "cohere", "ai21 labs"]
+# Included-quota GitHub Models are always preferred over direct paid APIs.
+# OpenAI stays last inside the free catalog as well as in direct escalation.
+EXCLUDED_PUBLISHERS: set[str] = set()
+PREFERRED_PUBLISHERS = ["mistral ai", "microsoft", "meta", "cohere", "ai21 labs", "deepseek", "openai"]
+
+
+def adaptive_reasoning_policy(
+    task_type: str,
+    *,
+    complexity: float = 0.0,
+    confidence: float = 1.0,
+    contradiction_count: int = 0,
+) -> dict[str, Any]:
+    """Choose DeepSeek V4 tier/thinking without spending or invoking a model."""
+    task = str(task_type or "").lower()
+    score = max(0.0, min(1.0, float(complexity or 0)))
+    if confidence < 0.60:
+        score += 0.18
+    if contradiction_count:
+        score += min(0.25, int(contradiction_count) * 0.08)
+    if any(x in task for x in ("audit", "skeptic", "forecast", "contradiction", "recovery")):
+        score += 0.15
+    score = min(1.0, score)
+    if score < 0.45:
+        return {"model": "deepseek-v4-flash", "thinking": False, "reasoning_effort": "none", "complexity_score": round(score, 3)}
+    if score < 0.78:
+        return {"model": "deepseek-v4-flash", "thinking": True, "reasoning_effort": "high", "complexity_score": round(score, 3)}
+    return {"model": "deepseek-v4-pro", "thinking": True, "reasoning_effort": "max", "complexity_score": round(score, 3)}
+
+
+def routing_plan(task_type: str, *, complexity: float = 0.0, confidence: float = 1.0,
+                 contradiction_count: int = 0, paid_approved: bool = False) -> list[dict[str, Any]]:
+    """Canonical cheapest-valid route. This function never executes a provider."""
+    deepseek = adaptive_reasoning_policy(
+        task_type, complexity=complexity, confidence=confidence,
+        contradiction_count=contradiction_count,
+    )
+    routes = [
+        {"tier": 0, "route": "deterministic_or_local", "cost_class": "zero"},
+        {"tier": 1, "route": "github_models_included_quota", "cost_class": "included", "max_calls": 8},
+    ]
+    if not paid_approved:
+        routes.append({"tier": 2, "route": "paid_escalation", "status": "blocked_pending_cost_approval"})
+        return routes
+    routes.extend([
+        {"tier": 2, "route": "deepseek_official_api", "cost_class": "paid", **deepseek},
+        {"tier": 3, "route": "openai_api_last_resort", "cost_class": "paid", "model": "gpt-5.6-sol" if deepseek["complexity_score"] >= 0.78 else "gpt-5.6-luna", "reasoning_effort": "high" if deepseek["complexity_score"] >= 0.78 else "low"},
+    ])
+    return routes
 
 
 class FreeModelRouter:
@@ -18,10 +65,11 @@ class FreeModelRouter:
     Order:
       0. deterministic/vector/RAG logic in the caller
       1. local open-weight runtime when configured by LocalFirstAgentRuntime
-      2. GitHub Models included quota
-      3. no paid provider is called here
+      2. GitHub Models included quota (non-OpenAI preferred; OpenAI last)
+      3. DeepSeek V4 direct only through explicit paid reservation
+      4. OpenAI direct as final explicitly-approved fallback
 
-    Paid DeepSeek/OpenAI requests require a DB reservation and an explicit
+    Paid DeepSeek/OpenAI requests require a DB reservation and explicit
     ENABLE_PAID_REMOTE=1. Product Intelligence itself uses its OIDC gateway,
     which applies the same DB policy server-side.
     """
