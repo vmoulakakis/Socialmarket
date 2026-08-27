@@ -28,6 +28,7 @@ import ijson
 
 import product_intelligence_v1 as v1
 import product_local_autopilot as local_ai
+from creative_contract_v10 import excluded_vertical
 from product_agents import canonical_key, parse_commission_rule
 from product_safety import build_feed_safety_profile, price_integrity_allows, prune_dynamic_candidate_saturation
 from stream_feed import iter_records, normalize, normalize_domain, valid_url
@@ -172,6 +173,12 @@ def stage_feed(feed: str, context: Mapping[str, Any]):
                 p['image_recovery_required'] = False
 
             p['merchant_name'] = merchant.get('canonical_name') or p.get('program_name') or p.get('target_domain')
+            # Publication exclusions belong at the earliest authoritative boundary.
+            # Filtering here prevents an ineligible vertical from consuming a Top-100
+            # slot or aborting the fail-closed Top-20 creative contract downstream.
+            if excluded_vertical(p):
+                reasons['excluded_hotel_accommodation_travel_package'] += 1
+                continue
             p['merchant_context'] = {k: merchant.get(k) for k in (
                 'merchant_id', 'merchant_program_id', 'canonical_name', 'official_domain', 'solution_whitespace_score',
                 'demand_beacon_score', 'demand_score', 'competition_score', 'trust_score', 'confidence',
@@ -212,6 +219,7 @@ def stage_feed(feed: str, context: Mapping[str, Any]):
         'tracking_policy': 'structural Linkwise destination + merchant-domain match; landing-page verification only on bounded shortlist',
         'image_policy': 'missing image is recoverable on bounded shortlist, not a bulk-scan reject',
         'merchant_block_policy': 'explicit evidenced blocked state only; dominance is diversification metadata',
+        'vertical_exclusion_policy': 'hotels, accommodation and travel packages are removed before ranking and persistence',
         'price_integrity_policy': 'data-integrity invariant; suspicious price scales quarantined; no automatic cents/EUR conversion',
         'gate_policy_version': POLICY_VERSION,
         'safety_profile_path': 'product-feed-safety-profile.json',
