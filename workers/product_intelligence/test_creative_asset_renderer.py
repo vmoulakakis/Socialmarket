@@ -29,6 +29,37 @@ class CreativeAssetRendererTests(unittest.TestCase):
             self.assertEqual(image.size, expected)
             self.assertGreater(len(raw), 10_000)
 
+    def test_visual_contract_json_drives_problem_solver_layout(self):
+        source = Image.new('RGB', (900, 900), (230, 230, 230))
+        variant = {
+            'id': 'square_1x1',
+            'visual_contract': {
+                'layout': 'problem_solver_large_qr_v1',
+                'eyebrow': 'DEALORA AI · SECURITY',
+                'pain_headline': 'Θες να βλέπεις τον χώρο σου όπου κι αν είσαι;',
+                'solution_line': 'Πρακτική λύση για σπίτι, εξοχικό ή μικρό επαγγελματικό χώρο.',
+                'benefits': [
+                    'Live εικόνα από κινητό',
+                    'Καταγραφή & έλεγχος',
+                    'Πιο ήσυχο κεφάλι όταν λείπεις',
+                ],
+                'cta': 'Σκάναρε για λεπτομέρειες',
+                'qr_label': 'ΣΚΑΝΑΡΕ',
+                'qr_size_ratio': 0.24,
+            },
+        }
+        raw = render_variant(
+            source_image=source,
+            variant=variant,
+            product_name='CCTV 8 καμερών',
+            merchant_name='MagicStore',
+            tracking_url='https://example.com/affiliate/exact',
+            effective_price=321.30,
+        )
+        image = Image.open(io.BytesIO(raw))
+        self.assertEqual(image.size, SIZES['square_1x1'])
+        self.assertGreater(len(raw), 20_000)
+
 
 if __name__ == '__main__':
     unittest.main()
