@@ -71,6 +71,86 @@ def _strategy_cfg(cfg):
     return value if isinstance(value, dict) else {}
 
 
+def _dict_cfg(cfg, key):
+    value = cfg.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _bool(value, default=False):
+    if value is None:
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _apply_smart_fast_performance(cfg):
+    """Patch already-imported ranking modules from DB config.
+
+    This keeps the run fast without weakening safety: bulk products still pass
+    deterministic Greek/EU/logistics/pain scoring first, and AI/creative work is
+    reserved for the bounded frontier. Runtime config is the control plane, so we
+    can tune performance without editing workflow secrets or enabling paid AI.
+    """
+    perf = _dict_cfg(cfg, 'smart_fast_performance')
+    if not _bool(perf.get('enabled'), False):
+        cfg['_smart_fast_performance_applied'] = False
+        return cfg
+
+    try:
+        import product_ranking_v3 as v3_mod
+        import product_ranking_v32 as v32_mod
+    except Exception as exc:
+        cfg['_smart_fast_performance_applied'] = False
+        cfg['_smart_fast_performance_error'] = f'import_failed:{str(exc)[:180]}'
+        return cfg
+
+    preselect = max(500, min(12000, int(perf.get('deterministic_preselect') or 2200)))
+    rag_preselect = max(preselect, min(16000, int(perf.get('rag_preselect') or 6000)))
+    ai_max = max(40, min(220, int(perf.get('ai_max_candidates') or 120)))
+    save_limit = max(20, min(150, int(perf.get('save_limit') or 90)))
+    creative_limit = max(8, min(30, int(perf.get('creative_limit') or 16)))
+    ai_workers = max(1, min(3, int(perf.get('ai_workers') or 2)))
+    seo_workers = max(1, min(3, int(perf.get('seo_workers') or 2)))
+    asset_workers = max(1, min(4, int(perf.get('asset_workers') or 3)))
+    seo_limit = max(20, min(save_limit, int(perf.get('seo_limit') or min(60, save_limit))))
+
+    v3_mod.PRESELECT = preselect
+    v3_mod.AI_MAX = ai_max
+    v3_mod.SAVE_LIMIT = save_limit
+    v32_mod.RAG_PRESELECT = rag_preselect
+    v32_mod.AI_WORKERS = ai_workers
+    v32_mod.SEO_WORKERS = seo_workers
+    v32_mod.ASSET_WORKERS = asset_workers
+    v32_mod.SEO_LIMIT = seo_limit
+    v32_mod.CREATIVE_LIMIT = min(creative_limit, save_limit)
+
+    # Dynamic Top-N remains quality-led. Fast mode sets target and ceiling, not a
+    # publishing quota. The final SocialScheduler still chooses by revenue logic.
+    dynamic = _dict_cfg(cfg, 'dynamic_top_n')
+    cfg['_smart_fast_performance_applied'] = True
+    cfg['_smart_fast_performance_effective'] = {
+        'deterministic_preselect': preselect,
+        'rag_preselect': rag_preselect,
+        'ai_max_candidates': ai_max,
+        'save_limit': save_limit,
+        'seo_limit': seo_limit,
+        'creative_limit': v32_mod.CREATIVE_LIMIT,
+        'ai_workers': ai_workers,
+        'seo_workers': seo_workers,
+        'asset_workers': asset_workers,
+        'dynamic_top_n': {
+            'enabled': bool(dynamic.get('enabled')),
+            'min': dynamic.get('min'),
+            'default': dynamic.get('default'),
+            'max': min(int(dynamic.get('max') or save_limit), save_limit),
+            'not_a_publishing_quota': True,
+        },
+        'paid_ai': False,
+    }
+    return cfg
+
+
 def apply_runtime_config(v1, cfg):
     """Patch the V1 worker while preserving production hard safety floors.
 
@@ -90,6 +170,7 @@ def apply_runtime_config(v1, cfg):
       downstream ranking, creatives and SocialScheduler handoff can make
       decisions from a single contract instead of raw commission alone.
     """
+    cfg = _apply_smart_fast_performance(cfg)
     strategy = _strategy_cfg(cfg)
     env_commission_floor = max(10.0, _env_num('PRODUCT_MIN_COMMISSION_EUR', v1.MIN_COMMISSION))
     env_trust_floor = max(0.0, min(100.0, _env_num('PRODUCT_MIN_MERCHANT_TRUST', v1.MIN_MERCHANT_TRUST)))
