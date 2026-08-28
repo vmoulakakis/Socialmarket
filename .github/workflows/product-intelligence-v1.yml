@@ -39,9 +39,12 @@ jobs:
       AI_TASK_RUNTIME_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/ai-task-runtime-gateway
       AI_TASK_RUNTIME_DURABLE: 'true'
       LOCAL_OLLAMA_URL: http://127.0.0.1:11434
-      PRODUCT_AI_ROUTE: local_router
+      PRODUCT_AI_ROUTE: qualified_local_router
       PRODUCT_LOCAL_MODEL: qwen3.5:4b
-      PRODUCT_LOCAL_AI_WORKERS: '2'
+      # GitHub-hosted runner has 2 cores. Two concurrent 4B generations were the
+      # main source of observed timeouts, so inference is intentionally serial.
+      PRODUCT_LOCAL_AI_WORKERS: '1'
+      LOCAL_LLM_RETRIES: '1'
       PRODUCT_LOCAL_MAX_PAIN_CONTEXT: '3'
       PRODUCT_LOCAL_MAX_THEME_CONTEXT: '2'
       PRODUCT_RANK_MIN_FINAL: '100'
@@ -94,20 +97,32 @@ jobs:
           ollama pull "$PRODUCT_LOCAL_MODEL"
           ollama list
 
-      - name: Validate zero-paid local inference
+      - name: Validate zero-paid local inference contract
         run: |
           python - <<'PY'
           import sys
           sys.path.insert(0,'workers/ai_runtime')
           from ollama_executor import OllamaExecutor
           from task_contract import AITask
-          ex=OllamaExecutor(name='night-brain-preflight',tier=2,model='qwen3.5:4b',max_output_tokens=80)
-          task=AITask(task_type='preflight',role='validator',instructions='Return JSON with ok true.',payload={'ok':True},required_keys=('ok',),cacheable=False,max_tier=2)
-          assert ex.available(task), 'local model unavailable'
+
+          ex=OllamaExecutor(name='night-brain-preflight',tier=2,model='qwen3.5:4b',max_output_tokens=120)
+          task=AITask(
+              task_type='shopper_intent_preflight',role='Greek shopping intent classifier',
+              instructions=(
+                  'Classify only the supplied user_query. intent must be one of security, pool, cleaning, style, other. '
+                  'For a user who is going on holiday and wants to monitor the house, return intent security. '
+                  'confidence must be a number from 0 to 1.'
+              ),
+              payload={'user_query':'Φεύγω διακοπές και θέλω να βλέπω το σπίτι'},
+              required_keys=('intent','confidence'),cacheable=False,max_tier=2,
+          )
+          assert ex.available(task), 'qualified local model unavailable'
           data,telemetry=ex.run(task)
-          assert data.get('ok') is True, data
+          assert str(data.get('intent')).lower() == 'security', data
+          assert 0 <= float(data.get('confidence')) <= 1, data
           assert float(telemetry.get('cost_usd') or 0)==0, telemetry
-          print({'local_model':telemetry.get('model'),'route':telemetry.get('route'),'cost_usd':telemetry.get('cost_usd')})
+          assert telemetry.get('structured_output') is True, telemetry
+          print({'contract':'PASS','model':telemetry.get('model'),'route':telemetry.get('route'),'attempt':telemetry.get('attempt_no'),'cost_usd':0})
           PY
 
       - name: Validate live Linkwise feed contract
