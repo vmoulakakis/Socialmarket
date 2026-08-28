@@ -2,24 +2,25 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Mapping
 
-from github_models_executor import GitHubModelsExecutor
 from task_contract import AITask
 
 
 @dataclass
 class OllamaExecutor:
-    """Local-first provider-neutral executor with a zero-paid validated fallback.
+    """Provider-neutral TaskExecutor backed by a qualified local Ollama model.
 
-    Business workflows still submit a single AITask. The executor tries the
-    qualified local Ollama model first. When local inference is unavailable,
-    times out, returns invalid JSON, or omits contract-required keys, it may use
-    GitHub Models included quota when explicitly enabled by the workflow.
-    Paid providers are never invoked here.
+    The runtime is deliberately zero-paid. It enforces a task-contract JSON
+    schema even when the caller did not provide a richer schema, validates all
+    required top-level keys before returning, and retries transient/shape
+    failures locally a bounded number of times. Failure after the bounded retry
+    remains SAFE_HOLD at the router/business layer; it never silently escalates
+    to a paid provider.
     """
 
     name: str
@@ -28,19 +29,12 @@ class OllamaExecutor:
     endpoint: str = ""
     timeout_seconds: float = 90.0
     max_output_tokens: int = 900
-    _fallback: GitHubModelsExecutor | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.endpoint:
             self.endpoint = os.getenv("LOCAL_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
         else:
             self.endpoint = self.endpoint.rstrip("/")
-        if os.getenv("GITHUB_MODELS_FALLBACK", "0").lower() in ("1", "true", "yes", "on"):
-            self._fallback = GitHubModelsExecutor(
-                name="github_models_included",
-                tier=self.tier,
-                max_calls=int(os.getenv("MAX_FREE_MODEL_CALLS", "8")),
-            )
 
     def _request_json(self, path: str, payload: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
         data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -56,7 +50,8 @@ class OllamaExecutor:
             raise RuntimeError("Ollama response was not a JSON object")
         return parsed
 
-    def _local_available(self) -> bool:
+    def available(self, task: AITask) -> bool:
+        del task
         try:
             tags = self._request_json("/api/tags")
         except Exception:
@@ -68,11 +63,6 @@ class OllamaExecutor:
         }
         return self.model in names or any(name.startswith(self.model + ":") for name in names)
 
-    def available(self, task: AITask) -> bool:
-        if self._local_available():
-            return True
-        return bool(self._fallback and self._fallback.available(task))
-
     @staticmethod
     def _required_schema(task: AITask) -> Mapping[str, Any] | None:
         configured = task.metadata.get("response_schema") if isinstance(task.metadata, Mapping) else None
@@ -81,8 +71,9 @@ class OllamaExecutor:
         required = [str(x) for x in task.required_keys]
         if not required:
             return None
-        # A minimal task-contract schema forces all top-level contract keys to be
-        # serialized. Domain validation/type normalization remains outside the LLM.
+        # Empty property schemas are valid JSON Schema and mean "any JSON value".
+        # This forces serialization of every business-required top-level field
+        # without pretending the model validates business truth or domain types.
         return {
             "type": "object",
             "properties": {key: {} for key in required},
@@ -95,21 +86,6 @@ class OllamaExecutor:
         if not isinstance(data, Mapping):
             return list(task.required_keys)
         return [key for key in task.required_keys if key not in data]
-
-    def _fallback_run(self, task: AITask, local_error: Exception) -> tuple[Mapping[str, Any] | None, Mapping[str, Any]]:
-        if not self._fallback or not self._fallback.available(task):
-            raise local_error
-        data, telemetry = self._fallback.run(task)
-        missing = self._missing_required(task, data)
-        if data is None or missing:
-            fallback_error = str(telemetry.get("error") or telemetry.get("status") or "invalid_fallback")
-            if missing:
-                fallback_error += ":missing_required_keys=" + ",".join(missing)
-            raise RuntimeError(f"local route failed ({str(local_error)[:220]}); GitHub Models fallback failed ({fallback_error[:300]})") from local_error
-        info = dict(telemetry)
-        info["fallback_from"] = "local_ollama"
-        info["local_error"] = str(local_error)[:500]
-        return data, info
 
     def run(self, task: AITask) -> tuple[Mapping[str, Any] | None, Mapping[str, Any]]:
         system = (
@@ -134,38 +110,51 @@ class OllamaExecutor:
             ],
         }
 
-        try:
+        retries = max(0, min(2, int(os.getenv("LOCAL_LLM_RETRIES", "1"))))
+        last_error: Exception | None = None
+        for attempt_no in range(1, retries + 2):
             try:
-                response = self._request_json("/api/chat", request_payload)
-            except urllib.error.HTTPError as exc:
-                detail = exc.read().decode("utf-8", errors="replace")[:1000]
-                raise RuntimeError(f"Ollama HTTP {exc.code}: {detail or exc.reason}") from exc
+                try:
+                    response = self._request_json("/api/chat", request_payload)
+                except urllib.error.HTTPError as exc:
+                    detail = exc.read().decode("utf-8", errors="replace")[:1000]
+                    raise RuntimeError(f"Ollama HTTP {exc.code}: {detail or exc.reason}") from exc
 
-            content = str(((response.get("message") or {}).get("content") or "")).strip()
-            if not content:
-                raise RuntimeError("empty_model_content")
-            try:
-                parsed = json.loads(content)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError(f"Ollama returned invalid JSON: {content[:500]}") from exc
-            if not isinstance(parsed, Mapping):
-                raise RuntimeError("Ollama task result must be a JSON object")
-            missing = self._missing_required(task, parsed)
-            if missing:
-                raise RuntimeError("missing_required_keys:" + ",".join(sorted(missing)))
+                content = str(((response.get("message") or {}).get("content") or "")).strip()
+                if not content:
+                    raise RuntimeError("empty_model_content")
+                try:
+                    parsed = json.loads(content)
+                except json.JSONDecodeError as exc:
+                    raise RuntimeError(f"Ollama returned invalid JSON: {content[:500]}") from exc
+                if not isinstance(parsed, Mapping):
+                    raise RuntimeError("Ollama task result must be a JSON object")
+                missing = self._missing_required(task, parsed)
+                if missing:
+                    raise RuntimeError("missing_required_keys:" + ",".join(sorted(missing)))
 
-            return parsed, {
-                "route": "local_ollama",
-                "provider": "ollama",
-                "model": self.model,
-                "cost_usd": 0,
-                "input_chars": len(system) + len(json.dumps(task.payload, ensure_ascii=False)),
-                "output_chars": len(content),
-                "prompt_eval_count": int(response.get("prompt_eval_count") or 0),
-                "eval_count": int(response.get("eval_count") or 0),
-                "total_duration_ns": int(response.get("total_duration") or 0),
-                "thinking": False,
-                "structured_output": structured_output,
-            }
-        except Exception as local_error:
-            return self._fallback_run(task, local_error)
+                return parsed, {
+                    "route": "local_ollama",
+                    "provider": "ollama",
+                    "model": self.model,
+                    "cost_usd": 0,
+                    "input_chars": len(system) + len(json.dumps(task.payload, ensure_ascii=False)),
+                    "output_chars": len(content),
+                    "prompt_eval_count": int(response.get("prompt_eval_count") or 0),
+                    "eval_count": int(response.get("eval_count") or 0),
+                    "total_duration_ns": int(response.get("total_duration") or 0),
+                    "thinking": False,
+                    "structured_output": structured_output,
+                    "attempt_no": attempt_no,
+                    "local_retry_count": attempt_no - 1,
+                }
+            except Exception as exc:
+                last_error = exc
+                if attempt_no <= retries:
+                    time.sleep(min(2.0, 0.5 * attempt_no))
+                    continue
+                break
+
+        raise RuntimeError(
+            f"local model failed after {retries + 1} attempt(s): {str(last_error or 'unknown_error')[:700]}"
+        ) from last_error
