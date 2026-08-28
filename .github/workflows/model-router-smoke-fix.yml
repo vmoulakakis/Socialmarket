@@ -1,0 +1,54 @@
+name: Model Router Smoke Fix
+
+on:
+  push:
+    branches: [fix/model-router-fallback-v2]
+    paths:
+      - 'workers/ai_runtime/github_models_executor.py'
+      - 'workers/ai_runtime/ollama_executor.py'
+      - '.github/workflows/model-router-smoke-fix.yml'
+
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_MODELS_FALLBACK: '1'
+      MAX_FREE_MODEL_CALLS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - name: Test included fallback as a user request
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0,'workers/ai_runtime')
+          from ollama_executor import OllamaExecutor
+          from task_contract import AITask
+
+          task=AITask(
+              task_type='selector_user_smoke',role='strict JSON validator',
+              instructions='Return a JSON object with ok=true and intent="security".',
+              payload={'user_query':'Φεύγω διακοπές και θέλω να βλέπω το σπίτι'},
+              required_keys=('ok','intent'),cacheable=False,max_tier=2,
+          )
+          ex=OllamaExecutor(
+              name='forced-local-failure',tier=2,model='missing-model',
+              endpoint='http://127.0.0.1:9',timeout_seconds=1,max_output_tokens=80,
+          )
+          assert ex.available(task), 'selector has no usable zero-cost route'
+          data,telemetry=ex.run(task)
+          assert data.get('ok') is True, data
+          assert str(data.get('intent')).lower() == 'security', data
+          assert telemetry.get('route') == 'github_models_free', telemetry
+          assert float(telemetry.get('cost_usd') or 0) == 0, telemetry
+          print({'PASS':True,'route':telemetry.get('route'),'model':telemetry.get('model'),'cost_usd':0})
+          PY
