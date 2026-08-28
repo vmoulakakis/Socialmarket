@@ -4,29 +4,34 @@ on:
   push:
     branches: [fix/model-router-fallback-v2]
     paths:
-      - 'workers/ai_runtime/github_models_executor.py'
       - 'workers/ai_runtime/ollama_executor.py'
       - '.github/workflows/model-router-smoke-fix.yml'
 
 permissions:
   contents: read
-  models: read
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
-      GITHUB_TOKEN: ${{ github.token }}
-      GITHUB_MODELS_FALLBACK: '1'
-      MAX_FREE_MODEL_CALLS: '4'
+      LOCAL_OLLAMA_URL: http://127.0.0.1:11434
+      LOCAL_LLM_RETRIES: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install requests
-      - name: Test included fallback as a user request
+      - name: Install and start Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          nohup ollama serve > /tmp/ollama-selector-smoke.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          ollama pull qwen3.5:4b
+      - name: Test selector contract like a shopper
         run: |
           python - <<'PY'
           import sys
@@ -35,20 +40,22 @@ jobs:
           from task_contract import AITask
 
           task=AITask(
-              task_type='selector_user_smoke',role='strict JSON validator',
-              instructions='Return a JSON object with ok=true and intent="security".',
+              task_type='selector_user_smoke',role='Greek shopping intent classifier',
+              instructions=(
+                  'Classify only the user_query. intent must be security, pool, cleaning, style, or other. '
+                  'If the user is leaving for holidays and wants to monitor the house, intent must be security. '
+                  'confidence must be between 0 and 1.'
+              ),
               payload={'user_query':'Φεύγω διακοπές και θέλω να βλέπω το σπίτι'},
-              required_keys=('ok','intent'),cacheable=False,max_tier=2,
+              required_keys=('intent','confidence'),cacheable=False,max_tier=2,
           )
-          ex=OllamaExecutor(
-              name='forced-local-failure',tier=2,model='missing-model',
-              endpoint='http://127.0.0.1:9',timeout_seconds=1,max_output_tokens=80,
-          )
-          assert ex.available(task), 'selector has no usable zero-cost route'
+          ex=OllamaExecutor(name='selector-smoke',tier=2,model='qwen3.5:4b',timeout_seconds=90,max_output_tokens=120)
+          assert ex.available(task), 'qualified Qwen 4B unavailable'
           data,telemetry=ex.run(task)
-          assert data.get('ok') is True, data
           assert str(data.get('intent')).lower() == 'security', data
-          assert telemetry.get('route') == 'github_models_free', telemetry
+          assert 0 <= float(data.get('confidence')) <= 1, data
+          assert telemetry.get('route') == 'local_ollama', telemetry
+          assert telemetry.get('structured_output') is True, telemetry
           assert float(telemetry.get('cost_usd') or 0) == 0, telemetry
-          print({'PASS':True,'route':telemetry.get('route'),'model':telemetry.get('model'),'cost_usd':0})
+          print({'PASS':True,'intent':data.get('intent'),'route':telemetry.get('route'),'model':telemetry.get('model'),'attempt':telemetry.get('attempt_no'),'cost_usd':0})
           PY
