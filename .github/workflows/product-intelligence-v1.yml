@@ -18,7 +18,6 @@ concurrency:
 permissions:
   contents: read
   id-token: write
-  models: read
 
 jobs:
   product-intelligence:
@@ -40,10 +39,12 @@ jobs:
       AI_TASK_RUNTIME_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/ai-task-runtime-gateway
       AI_TASK_RUNTIME_DURABLE: 'true'
       LOCAL_OLLAMA_URL: http://127.0.0.1:11434
-      PRODUCT_AI_ROUTE: local_router_with_included_fallback
+      PRODUCT_AI_ROUTE: qualified_local_router
       PRODUCT_LOCAL_MODEL: qwen3.5:4b
-      # The runner has 2 cores; concurrent 4B generations caused repeated 150s timeouts.
+      # GitHub-hosted runner has 2 cores. Two concurrent 4B generations were the
+      # main source of observed timeouts, so inference is intentionally serial.
       PRODUCT_LOCAL_AI_WORKERS: '1'
+      LOCAL_LLM_RETRIES: '1'
       PRODUCT_LOCAL_MAX_PAIN_CONTEXT: '3'
       PRODUCT_LOCAL_MAX_THEME_CONTEXT: '2'
       PRODUCT_RANK_MIN_FINAL: '100'
@@ -51,10 +52,6 @@ jobs:
       PRODUCT_RANK_CREATIVE_LIMIT: '20'
       PRODUCT_CREATIVE_ASSET_WORKERS: '4'
       PRODUCT_CREATIVE_BRAND_SLUG: lyseis-pou-axizoun
-      # Included-quota fallback only. No DeepSeek/OpenAI paid API is enabled here.
-      GITHUB_TOKEN: ${{ github.token }}
-      GITHUB_MODELS_FALLBACK: '1'
-      MAX_FREE_MODEL_CALLS: '8'
 
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +97,7 @@ jobs:
           ollama pull "$PRODUCT_LOCAL_MODEL"
           ollama list
 
-      - name: Validate zero-paid model selector
+      - name: Validate zero-paid local inference contract
         run: |
           python - <<'PY'
           import sys
@@ -108,31 +105,24 @@ jobs:
           from ollama_executor import OllamaExecutor
           from task_contract import AITask
 
+          ex=OllamaExecutor(name='night-brain-preflight',tier=2,model='qwen3.5:4b',max_output_tokens=120)
           task=AITask(
-              task_type='preflight',role='validator',
-              instructions='Return JSON with ok true.',payload={'ok':True},
-              required_keys=('ok',),cacheable=False,max_tier=2,
+              task_type='shopper_intent_preflight',role='Greek shopping intent classifier',
+              instructions=(
+                  'Classify only the supplied user_query. intent must be one of security, pool, cleaning, style, other. '
+                  'For a user who is going on holiday and wants to monitor the house, return intent security. '
+                  'confidence must be a number from 0 to 1.'
+              ),
+              payload={'user_query':'Φεύγω διακοπές και θέλω να βλέπω το σπίτι'},
+              required_keys=('intent','confidence'),cacheable=False,max_tier=2,
           )
-
-          # 1) Normal user/workflow path: qualified local model.
-          local=OllamaExecutor(name='night-brain-preflight',tier=2,model='qwen3.5:4b',max_output_tokens=80)
-          assert local.available(task), 'qualified local model unavailable'
-          data,telemetry=local.run(task)
-          assert data.get('ok') is True, data
+          assert ex.available(task), 'qualified local model unavailable'
+          data,telemetry=ex.run(task)
+          assert str(data.get('intent')).lower() == 'security', data
+          assert 0 <= float(data.get('confidence')) <= 1, data
           assert float(telemetry.get('cost_usd') or 0)==0, telemetry
-          print({'selector_test':'local','model':telemetry.get('model'),'route':telemetry.get('route'),'cost_usd':telemetry.get('cost_usd')})
-
-          # 2) Forced local failure: must select GitHub Models included quota.
-          fallback=OllamaExecutor(
-              name='selector-fallback-preflight',tier=2,model='model-that-does-not-exist',
-              endpoint='http://127.0.0.1:9',timeout_seconds=1,max_output_tokens=80,
-          )
-          assert fallback.available(task), 'included GitHub Models fallback unavailable'
-          fdata,ftelemetry=fallback.run(task)
-          assert fdata.get('ok') is True, fdata
-          assert ftelemetry.get('route') == 'github_models_free', ftelemetry
-          assert float(ftelemetry.get('cost_usd') or 0)==0, ftelemetry
-          print({'selector_test':'forced_fallback','model':ftelemetry.get('model'),'route':ftelemetry.get('route'),'cost_usd':ftelemetry.get('cost_usd')})
+          assert telemetry.get('structured_output') is True, telemetry
+          print({'contract':'PASS','model':telemetry.get('model'),'route':telemetry.get('route'),'attempt':telemetry.get('attempt_no'),'cost_usd':0})
           PY
 
       - name: Validate live Linkwise feed contract
