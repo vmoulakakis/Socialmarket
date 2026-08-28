@@ -2,6 +2,7 @@ import json
 import os
 import urllib.request
 
+from greek_eu_conversion_audit import audit_candidate, adjusted_preliminary_score, public_audit_summary
 from product_agents import clamp, commission_score, discount_score, optional_score
 
 CONFIG_GATEWAY = os.getenv(
@@ -65,6 +66,11 @@ def _env_num(name, fallback):
         return float(fallback)
 
 
+def _strategy_cfg(cfg):
+    value = cfg.get('greek_eu_conversion_engine')
+    return value if isinstance(value, dict) else {}
+
+
 def apply_runtime_config(v1, cfg):
     """Patch the V1 worker while preserving production hard safety floors.
 
@@ -75,7 +81,16 @@ def apply_runtime_config(v1, cfg):
     Other security invariants are not configurable here: unresolved merchants,
     dominant/blocked merchants, invalid price/currency/tracking/image, and
     non-VALIDATED AI results still cannot be persisted.
+
+    Greek/EU conversion strategy invariants added here:
+    - Greek/EU/no-customs logistics are audited before candidate ordering.
+    - Products with weak logistics or weak Greek problem fit are demoted before
+      Night Brain shortlist selection.
+    - Every AI item carries a deterministic audited_conversion summary so the
+      downstream ranking, creatives and SocialScheduler handoff can make
+      decisions from a single contract instead of raw commission alone.
     """
+    strategy = _strategy_cfg(cfg)
     env_commission_floor = max(10.0, _env_num('PRODUCT_MIN_COMMISSION_EUR', v1.MIN_COMMISSION))
     env_trust_floor = max(0.0, min(100.0, _env_num('PRODUCT_MIN_MERCHANT_TRUST', v1.MIN_MERCHANT_TRUST)))
     cfg_commission = _num(cfg, 'min_expected_commission_eur', env_commission_floor)
@@ -114,15 +129,20 @@ def apply_runtime_config(v1, cfg):
         commission = min(100, max(0, (p['expected_commission_eur'] - v1.MIN_COMMISSION) * 3 + 25))
         m = float(merchant.get('solution_whitespace_score') or 0)
         demand = float(merchant.get('demand_score') or 0)
-        return round(
+        base = round(
             commission * float(prelim.get('commission', 45)) / 100.0
             + m * float(prelim.get('merchant_whitespace', 35)) / 100.0
             + demand * float(prelim.get('demand', 20)) / 100.0,
             3,
         )
+        audit = audit_candidate(p, merchant, strategy)
+        p['audited_conversion'] = public_audit_summary(audit)
+        p['audited_conversion_full'] = audit
+        return adjusted_preliminary_score(base, audit)
 
     def build_ai_item(p, context):
         merchant = p['merchant_context']
+        audit = p.get('audited_conversion_full') or audit_candidate(p, merchant, strategy)
         pains = v1.select_pain_rag(p, context.get('pain_clusters', []), pain_limit)
         pains = [c for c in pains if (
             int(c.get('evidence_count') or 0) >= min_ev
@@ -138,7 +158,7 @@ def apply_runtime_config(v1, cfg):
         )]
         themes = v1.select_theme_rag(p, context.get('themes', []), theme_limit) if theme_limit else []
         return {
-            'product': v1.compact_product_for_ai(p),
+            'product': {**v1.compact_product_for_ai(p), 'audited_conversion': public_audit_summary(audit)},
             'merchant': merchant,
             'pain_rag': [{k: x.get(k) for k in (
                 'id', 'cluster_type', 'canonical_text', 'category', 'subcategory', 'evidence_count',
@@ -149,7 +169,8 @@ def apply_runtime_config(v1, cfg):
                 'id', 'slug', 'name', 'semantic_brief', 'active_from', 'peak_date', 'active_to',
                 'retrieval_score', 'seasonal_curve_score'
             )} for x in themes],
-            '_pains': pains, '_themes': themes, '_raw': p,
+            'audited_conversion': public_audit_summary(audit),
+            '_pains': pains, '_themes': themes, '_raw': p, '_audited_conversion': audit,
         }
 
     def final_opportunity_score(*, pain_gap_fit, merchant_opportunity, greek_demand, competition,
@@ -166,8 +187,8 @@ def apply_runtime_config(v1, cfg):
             'discount_score': discount_score(discount),
             'product_evidence_confidence': optional_score(evidence_confidence),
         }
-        positive=lambda key:(values[key] if values[key] is not None else 0.0)
-        inverse_comp=(100-values['competition_score']) if values['competition_score'] is not None else 0.0
+        positive = lambda key: (values[key] if values[key] is not None else 0.0)
+        inverse_comp = (100 - values['competition_score']) if values['competition_score'] is not None else 0.0
         score = (
             positive('pain_gap_fit_score') * float(weights.get('pain_gap_fit', 25))
             + positive('merchant_opportunity_score') * float(weights.get('merchant_opportunity', 20))
@@ -179,9 +200,9 @@ def apply_runtime_config(v1, cfg):
             + values['discount_score'] * float(weights.get('discount', 3))
             + positive('product_evidence_confidence') * float(weights.get('evidence_confidence', 2))
         ) / 100.0
-        missing=[k for k,v in values.items() if v is None]
-        values['missing_components']=missing
-        values['competition_inverse_bonus_withheld']=values['competition_score'] is None
+        missing = [k for k, v in values.items() if v is None]
+        values['missing_components'] = missing
+        values['competition_inverse_bonus_withheld'] = values['competition_score'] is None
         return round(clamp(score), 2), values
 
     v1.preliminary_score = preliminary_score
