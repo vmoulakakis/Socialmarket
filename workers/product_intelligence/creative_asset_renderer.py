@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import io
-import os
-import textwrap
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -24,6 +22,8 @@ REGULAR_CANDIDATES = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
 ]
+
+ACTIVE_STATUSES = {"approved", "queued", "scheduled", "publishing", "published"}
 
 
 def _font(size: int, bold: bool = False):
@@ -51,9 +51,9 @@ def _download_image(url: str) -> Image.Image:
     return image
 
 
-def _fit_product(image: Image.Image, width: int, height: int) -> Image.Image:
-    canvas = Image.new("RGB", (width, height), (246, 247, 249))
-    padded = ImageOps.contain(image, (int(width * 0.88), int(height * 0.88)), method=Image.Resampling.LANCZOS)
+def _fit_product(image: Image.Image, width: int, height: int, bg=(246, 247, 249)) -> Image.Image:
+    canvas = Image.new("RGB", (width, height), bg)
+    padded = ImageOps.contain(image, (int(width * 0.90), int(height * 0.88)), method=Image.Resampling.LANCZOS)
     x = (width - padded.width) // 2
     y = (height - padded.height) // 2
     canvas.paste(padded, (x, y))
@@ -87,11 +87,103 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int, max_lines:
 
 
 def _qr(tracking_url: str, size: int) -> Image.Image:
-    qr = qrcode.QRCode(version=None, box_size=10, border=2, error_correction=qrcode.constants.ERROR_CORRECT_M)
+    qr = qrcode.QRCode(version=None, box_size=10, border=4, error_correction=qrcode.constants.ERROR_CORRECT_M)
     qr.add_data(tracking_url)
     qr.make(fit=True)
     image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
     return image.resize((size, size), Image.Resampling.NEAREST)
+
+
+def _clip(text: Any, max_chars: int) -> str:
+    value = str(text or "").strip()
+    if len(value) <= max_chars:
+        return value
+    return value[: max_chars - 1].rstrip() + "…"
+
+
+def _as_list(value: Any, limit: int = 3) -> list[str]:
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, tuple):
+        items = list(value)
+    elif value:
+        items = [value]
+    else:
+        items = []
+    cleaned: list[str] = []
+    for item in items:
+        text = str(item or "").strip()
+        if text:
+            cleaned.append(text)
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
+def _contract(variant: dict[str, Any], product_name: str) -> dict[str, Any]:
+    """Return a normalized JSON-driven visual contract.
+
+    The creative gateway may send either direct legacy fields or a nested JSON
+    contract. New SocialMarket creatives should prefer `visual_contract` because
+    it makes image generation deterministic and fully automatic.
+    """
+
+    raw = (
+        variant.get("visual_contract")
+        or variant.get("post_visual_contract")
+        or variant.get("visual")
+        or {}
+    )
+    if not isinstance(raw, dict):
+        raw = {}
+
+    benefits = _as_list(
+        raw.get("benefits")
+        or raw.get("benefit_bullets")
+        or variant.get("benefits")
+        or variant.get("benefit_bullets"),
+        3,
+    )
+    if not benefits:
+        benefits = [
+            "Λύνει συγκεκριμένο καθημερινό πρόβλημα",
+            "Καθαρή επιλογή χωρίς περίπλοκη αναζήτηση",
+            "Δες λεπτομέρειες πριν αγοράσεις",
+        ]
+
+    headline = (
+        raw.get("pain_headline")
+        or raw.get("headline")
+        or variant.get("pain_headline")
+        or variant.get("headline")
+        or product_name
+        or "Λύση για πραγματικό πρόβλημα"
+    )
+    subheadline = (
+        raw.get("solution_line")
+        or raw.get("subheadline")
+        or variant.get("solution_line")
+        or variant.get("subheadline")
+        or "Δες αν ταιριάζει σε αυτό που χρειάζεσαι."
+    )
+
+    return {
+        "layout": raw.get("layout") or "problem_solver_large_qr_v1",
+        "eyebrow": raw.get("eyebrow") or variant.get("eyebrow") or "DEALORA AI · ΕΞΥΠΝΗ ΠΡΟΤΑΣΗ",
+        "pain_headline": _clip(headline, 92),
+        "solution_line": _clip(subheadline, 130),
+        "benefits": [_clip(x, 58) for x in benefits],
+        "cta": _clip(raw.get("cta") or variant.get("cta") or "Σκάναρε & δες λεπτομέρειες", 52),
+        "qr_label": _clip(raw.get("qr_label") or "ΣΚΑΝΑΡΕ ΕΔΩ", 28),
+        "trust_line": _clip(raw.get("trust_line") or "Ελεγμένο affiliate προϊόν · δες λεπτομέρειες πριν αγοράσεις", 92),
+        "footer": _clip(raw.get("footer") or "Διαφημιστικός / affiliate σύνδεσμος", 90),
+        "show_price": bool(raw.get("show_price", True)),
+        "qr_size_ratio": float(raw.get("qr_size_ratio") or 0.24),
+    }
+
+
+def _rounded(draw: ImageDraw.ImageDraw, box, radius=24, fill=(255, 255, 255), outline=None, width=1):
+    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
 
 def render_variant(
@@ -105,65 +197,101 @@ def render_variant(
 ) -> bytes:
     variant_id = str(variant.get("id") or "feed_4x5")
     width, height = SIZES.get(variant_id, SIZES["feed_4x5"])
-    image_zone = int(height * (0.66 if variant_id != "reel_9x16" else 0.69))
-    canvas = _fit_product(source_image, width, image_zone)
-    full = Image.new("RGB", (width, height), (15, 23, 42))
-    full.paste(canvas, (0, 0))
+    contract = _contract(variant, product_name)
+
+    # Problem-solver ad layout. The product image stays real and deterministic;
+    # no synthetic product depiction is created by this renderer.
+    margin = 58 if variant_id != "reel_9x16" else 62
+    product_h = int(height * (0.50 if variant_id != "reel_9x16" else 0.54))
+    panel_y = product_h - 18
+
+    full = Image.new("RGB", (width, height), (10, 15, 28))
+    hero = _fit_product(source_image, width, product_h, bg=(241, 245, 249))
+    full.paste(hero, (0, 0))
     draw = ImageDraw.Draw(full)
 
-    margin = 62
-    panel_y = image_zone
-    draw.rectangle((0, panel_y, width, height), fill=(15, 23, 42))
-    eyebrow_font = _font(26, True)
-    headline_font = _font(58 if variant_id != "reel_9x16" else 64, True)
-    sub_font = _font(30, False)
-    cta_font = _font(29, True)
-    fine_font = _font(20, False)
-
-    eyebrow = (merchant_name or "Λύσεις που Αξίζουν").upper()[:70]
-    draw.text((margin, panel_y + 38), eyebrow, font=eyebrow_font, fill=(165, 180, 252))
-
-    headline = str(variant.get("headline") or product_name or "Πρόταση που αξίζει")
-    lines = _wrap(draw, headline, headline_font, width - margin * 2 - 190, 3)
-    y = panel_y + 88
-    for line in lines:
-        draw.text((margin, y), line, font=headline_font, fill=(255, 255, 255))
-        y += headline_font.size + 8
-
-    subheadline = str(variant.get("subheadline") or "").strip()
-    if subheadline:
-        sub_lines = _wrap(draw, subheadline, sub_font, width - margin * 2 - 190, 2)
-        y += 4
-        for line in sub_lines:
-            draw.text((margin, y), line, font=sub_font, fill=(203, 213, 225))
-            y += sub_font.size + 7
-
-    cta = str(variant.get("cta") or "Δες το προϊόν")[:48]
-    cta_y = min(height - 112, y + 22)
-    cta_bbox = draw.textbbox((0, 0), cta, font=cta_font)
-    cta_w = cta_bbox[2] - cta_bbox[0] + 42
-    cta_h = cta_bbox[3] - cta_bbox[1] + 26
-    draw.rounded_rectangle((margin, cta_y, margin + cta_w, cta_y + cta_h), radius=16, fill=(255, 255, 255))
-    draw.text((margin + 21, cta_y + 11), cta, font=cta_font, fill=(15, 23, 42))
+    # Top dark overlay for brand and price readability.
+    draw.rectangle((0, 0, width, 118), fill=(11, 18, 32))
+    eyebrow_font = _font(25 if variant_id != "reel_9x16" else 28, True)
+    draw.text((margin, 38), contract["eyebrow"], font=eyebrow_font, fill=(191, 219, 254))
 
     price_text = ""
-    try:
-        if effective_price not in (None, ""):
-            price_text = f"€{float(effective_price):.2f}"
-    except Exception:
-        price_text = ""
+    if contract["show_price"]:
+        try:
+            if effective_price not in (None, ""):
+                price_text = f"€{float(effective_price):.2f}"
+        except Exception:
+            price_text = ""
     if price_text:
-        price_font = _font(28, True)
+        price_font = _font(30 if variant_id != "reel_9x16" else 34, True)
         bbox = draw.textbbox((0, 0), price_text, font=price_font)
-        draw.text((width - margin - (bbox[2] - bbox[0]), panel_y + 42), price_text, font=price_font, fill=(255, 255, 255))
+        badge_w = bbox[2] - bbox[0] + 42
+        _rounded(draw, (width - margin - badge_w, 30, width - margin, 82), radius=18, fill=(15, 23, 42))
+        draw.text((width - margin - badge_w + 21, 42), price_text, font=price_font, fill=(255, 255, 255))
 
-    qr_size = 132 if variant_id != "reel_9x16" else 148
+    draw.rectangle((0, panel_y, width, height), fill=(15, 23, 42))
+    card_x0, card_y0 = margin, panel_y + 42
+    card_x1, card_y1 = width - margin, height - margin
+    _rounded(draw, (card_x0, card_y0, card_x1, card_y1), radius=32, fill=(248, 250, 252))
+
+    qr_ratio = min(0.28, max(0.20, contract["qr_size_ratio"]))
+    qr_size = int(width * qr_ratio)
     qr_img = _qr(tracking_url, qr_size)
-    qr_x = width - margin - qr_size
-    qr_y = height - margin - qr_size
+    qr_x = card_x1 - qr_size - 36
+    qr_y = card_y1 - qr_size - 76
+    qr_label_font = _font(23 if variant_id != "reel_9x16" else 26, True)
+    qr_label_bbox = draw.textbbox((0, 0), contract["qr_label"], font=qr_label_font)
+    qr_label_x = qr_x + max(0, (qr_size - (qr_label_bbox[2] - qr_label_bbox[0])) // 2)
+    draw.text((qr_label_x, qr_y - 35), contract["qr_label"], font=qr_label_font, fill=(15, 23, 42))
+    # White QR quiet-zone frame.
+    _rounded(draw, (qr_x - 16, qr_y - 16, qr_x + qr_size + 16, qr_y + qr_size + 16), radius=16, fill=(255, 255, 255), outline=(226, 232, 240))
     full.paste(qr_img, (qr_x, qr_y))
-    draw.text((qr_x, qr_y - 28), "SCAN / LINK", font=fine_font, fill=(203, 213, 225))
-    draw.text((margin, height - 38), "Διαφημιστικός / affiliate σύνδεσμος", font=fine_font, fill=(100, 116, 139))
+
+    text_right_limit = qr_x - 42
+    headline_font = _font(50 if variant_id != "reel_9x16" else 60, True)
+    sub_font = _font(29 if variant_id != "reel_9x16" else 34, False)
+    bullet_font = _font(27 if variant_id != "reel_9x16" else 32, True)
+    trust_font = _font(20 if variant_id != "reel_9x16" else 24, False)
+    cta_font = _font(28 if variant_id != "reel_9x16" else 33, True)
+    footer_font = _font(18 if variant_id != "reel_9x16" else 21, False)
+
+    x = card_x0 + 36
+    y = card_y0 + 34
+    for line in _wrap(draw, contract["pain_headline"], headline_font, text_right_limit - x, 3):
+        draw.text((x, y), line, font=headline_font, fill=(15, 23, 42))
+        y += headline_font.size + 7
+
+    y += 8
+    for line in _wrap(draw, contract["solution_line"], sub_font, text_right_limit - x, 2):
+        draw.text((x, y), line, font=sub_font, fill=(51, 65, 85))
+        y += sub_font.size + 8
+
+    y += 18
+    for benefit in contract["benefits"]:
+        draw.ellipse((x, y + 4, x + 32, y + 36), fill=(22, 163, 74))
+        draw.text((x + 8, y + 2), "✓", font=_font(24, True), fill=(255, 255, 255))
+        for idx, line in enumerate(_wrap(draw, benefit, bullet_font, text_right_limit - x - 52, 2)):
+            draw.text((x + 48, y + idx * (bullet_font.size + 3)), line, font=bullet_font, fill=(15, 23, 42))
+        y += max(44, bullet_font.size + 18)
+
+    cta = contract["cta"]
+    cta_bbox = draw.textbbox((0, 0), cta, font=cta_font)
+    cta_w = min(text_right_limit - x, cta_bbox[2] - cta_bbox[0] + 52)
+    cta_y = min(card_y1 - 112, y + 14)
+    _rounded(draw, (x, cta_y, x + cta_w, cta_y + 62), radius=18, fill=(15, 23, 42))
+    draw.text((x + 26, cta_y + 15), cta, font=cta_font, fill=(255, 255, 255))
+
+    trust_y = min(card_y1 - 52, cta_y + 74)
+    for line in _wrap(draw, contract["trust_line"], trust_font, text_right_limit - x, 2):
+        draw.text((x, trust_y), line, font=trust_font, fill=(71, 85, 105))
+        trust_y += trust_font.size + 5
+
+    footer = contract["footer"]
+    draw.text((card_x0 + 34, card_y1 - 30), footer, font=footer_font, fill=(100, 116, 139))
+    if merchant_name:
+        merchant = _clip(str(merchant_name), 40)
+        bbox = draw.textbbox((0, 0), merchant, font=footer_font)
+        draw.text((card_x1 - 34 - (bbox[2] - bbox[0]), card_y1 - 30), merchant, font=footer_font, fill=(100, 116, 139))
 
     out = io.BytesIO()
     full.save(out, format="PNG", optimize=True)
