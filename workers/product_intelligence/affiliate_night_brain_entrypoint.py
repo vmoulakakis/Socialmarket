@@ -15,11 +15,39 @@ from night_brain_gate_tools import build_frontier_with_business_gates, stage_fee
 
 
 _CORE_BUILD_FRONTIER = night.build_frontier
+_CORE_PERSIST_CREATIVE_CONTENT = night.v32._persist_creative_content
 AI_ENRICH_LIMIT = max(8, min(40, int(os.getenv('NIGHT_BRAIN_AI_ENRICH_LIMIT', '24'))))
 
 
 def _frontier(db, context, decision_index, policy):
     return build_frontier_with_business_gates(_CORE_BUILD_FRONTIER, db, context, decision_index, policy)
+
+
+def _persist_creative_content_with_assets(run_id, item):
+    """Guarantee the canonical-content handoff contains all three durable asset URLs.
+
+    The Night Brain creative path normally renders/uploads assets before persistence.
+    Re-check at the persistence boundary because canonical content has a stricter
+    contract than ranking persistence. If a row lost its asset annotations during a
+    preceding save/normalization step, deterministically render/upload the same pack
+    again to the same run/hash/variant storage paths before calling persist_content.
+    """
+    pack = item.get('creative_pack') or {}
+    variants = pack.get('variants') if isinstance(pack, dict) else []
+    complete = (
+        isinstance(variants, list)
+        and len(variants) == 3
+        and all(str((variant or {}).get('asset_url') or '').startswith('https://') for variant in variants)
+    )
+    if not complete:
+        night.v32._render_upload_one(item)
+        pack = item.get('creative_pack') or {}
+        variants = pack.get('variants') if isinstance(pack, dict) else []
+    if not isinstance(variants, list) or len(variants) != 3 or any(
+        not str((variant or {}).get('asset_url') or '').startswith('https://') for variant in variants
+    ):
+        raise RuntimeError(f'creative asset persistence preflight failed for {item.get("source_record_hash")}')
+    return _CORE_PERSIST_CREATIVE_CONTENT(run_id, item)
 
 
 def _safe_rank_with_agent(items):
@@ -109,6 +137,7 @@ def _safe_rank_with_agent(items):
 v1.stage_feed = stage_feed
 night.build_frontier = _frontier
 night.rank_with_agent = _safe_rank_with_agent
+night.v32._persist_creative_content = _persist_creative_content_with_assets
 
 
 if __name__ == '__main__':
