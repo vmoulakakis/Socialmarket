@@ -50,8 +50,11 @@ class OllamaExecutorTests(unittest.TestCase):
         self.assertEqual(telemetry["cost_usd"], 0)
         self.assertEqual(telemetry["route"], "local_ollama")
         self.assertFalse(telemetry["thinking"])
-        self.assertFalse(telemetry["structured_output"])
-        self.assertEqual(executor.requests[-1][1]["format"], "json")
+        # Even tasks without a bespoke schema receive a strict required-keys schema,
+        # so production telemetry must report structured output as enabled.
+        self.assertTrue(telemetry["structured_output"])
+        self.assertIsInstance(executor.requests[-1][1]["format"], dict)
+        self.assertEqual(executor.requests[-1][1]["format"]["required"], ["verdict"])
 
     def test_task_response_schema_is_forwarded_as_ollama_format(self):
         schema = {
