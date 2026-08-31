@@ -151,37 +151,8 @@ jobs:
         id: night_brain
         run: python workers/product_intelligence/affiliate_night_brain_entrypoint.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Verify authoritative Top 100 contract
-        run: |
-          python - <<'PY'
-          import json
-          with open('product-ranking-v3-profile.json',encoding='utf-8') as f: p=json.load(f)
-          assert p.get('engine_version') == 'affiliate_night_brain_v1', p.get('engine_version')
-          assert int(p.get('saved_rankings') or 0) >= 100, p.get('saved_rankings')
-          assert float(p.get('owner_min_expected_commission_eur') or 0) >= 10, p.get('owner_min_expected_commission_eur')
-          assert float(p.get('effective_promotion_commission_floor_eur') or 10) >= 10, p.get('effective_promotion_commission_floor_eur')
-          assert p.get('bulk_feed_to_llm') is False
-          assert p.get('paid_llm_required') is False
-          assert float(p.get('paid_inference_cost_usd') or 0) == 0
-          creative=p.get('creative') or {}
-          assert creative.get('creative_status') == 'completed', creative
-          assert int(creative.get('creative_ready') or 0) == 20, creative.get('creative_ready')
-          assert int(creative.get('creative_assets') or 0) == 60, creative.get('creative_assets')
-          assert int(creative.get('creative_rankings_persisted') or 0) == 20, creative.get('creative_rankings_persisted')
-          final_contract=creative.get('final_contract') or {}
-          assert int(final_contract.get('ranked') or 0) >= 100, final_contract
-          assert int(final_contract.get('creatives') or 0) >= 20, final_contract
-          assert int(final_contract.get('content_packs') or 0) >= 20, final_contract
-          print({
-            'saved_rankings':p.get('saved_rankings'),
-            'effective_promotion_commission_floor_eur':p.get('effective_promotion_commission_floor_eur'),
-            'shortlist_images_recovered':p.get('shortlist_images_recovered'),
-            'renewal_pct':p.get('renewal_pct'),
-            'portfolio_counts':p.get('portfolio_counts'),
-            'creative_status':(p.get('creative') or {}).get('creative_status'),
-            'paid_inference_cost_usd':p.get('paid_inference_cost_usd')
-          })
-          PY
+      - name: Reconcile + verify authoritative Top 100 contract
+        run: python workers/product_intelligence/reconcile_night_brain_profile.py
 
       - name: Upload Night Brain decision profile
         uses: actions/upload-artifact@v4
