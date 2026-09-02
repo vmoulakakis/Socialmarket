@@ -11,7 +11,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import affiliate_night_brain as night
 import product_intelligence_v1 as v1
-from night_brain_gate_tools import build_frontier_with_business_gates, stage_feed
+from night_brain_gate_tools import build_frontier_with_business_gates
+from night_brain_single_parse_stage import stage_feed
 
 
 _CORE_BUILD_FRONTIER = night.build_frontier
