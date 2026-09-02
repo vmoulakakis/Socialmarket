@@ -29,6 +29,9 @@ jobs:
       LINKWISE_DEEPLINK_FIELD: tracking_url
       LINKWISE_OPTIONAL_FIELDS: thumb_url
       PRODUCT_REUSE_STAGE_DB: 'false'
+      # Parse the multi-GB Linkwise JSON once, then finish price-integrity validation
+      # from the local SQLite materialization. Set false for immediate legacy rollback.
+      PRODUCT_SINGLE_PARSE_STAGE: 'true'
       PRODUCT_MIN_COMMISSION_EUR: '10'
       PRODUCT_MIN_MERCHANT_TRUST: '30'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
@@ -163,6 +166,7 @@ jobs:
           if-no-files-found: warn
           path: |
             product-ranking-v3-profile.json
+            product-feed-safety-profile.json
             /tmp/ollama-product-ranking.log
 
       - name: Remove raw feed and local staging from runner
