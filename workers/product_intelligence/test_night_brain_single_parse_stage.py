@@ -64,7 +64,13 @@ class NightBrainSingleParseStageTests(unittest.TestCase):
         # These fail independent hard gates and must never reach the final candidate set.
         rows.append(self._row('low-commission', price=20))
         rows.append(self._row('out-of-stock', in_stock=False))
-        rows.append(self._row('wrong-domain', tracking_url=self._tracking('wrong-domain', 'other.gr')))
+        # program_name resolves the merchant even though the decoded tracking target is
+        # deliberately wrong, exercising the tracking-domain mismatch gate itself.
+        rows.append(self._row(
+            'wrong-domain',
+            program_name='Example Store',
+            tracking_url=self._tracking('wrong-domain', 'other.gr'),
+        ))
         path.write_text(json.dumps(rows, ensure_ascii=False), encoding='utf-8')
 
     @staticmethod
