@@ -306,7 +306,51 @@ def render_pack(row: dict[str, Any]) -> list[dict[str, Any]]:
     variants = list(pack.get("variants") or [])
     if len(variants) != 3:
         raise ValueError("creative pack must have exactly 3 variants")
-    source = _download_image(str(row.get("image_url") or ""))
+    # Feed image URLs can expire or return an HTML anti-bot page by the time the
+    # nightly creative job runs. Try the other feed-provided images first, then
+    # recover an authoritative image from the already validated merchant landing.
+    attrs = row.get("product_attributes") or {}
+    candidates = [row.get("image_url"), *(attrs.get("extra_images") or [])]
+    source = None
+    failures: list[str] = []
+    attempted: set[str] = set()
+    for candidate in candidates:
+        url = str(candidate or "").strip()
+        if not url or url in attempted:
+            continue
+        attempted.add(url)
+        try:
+            source = _download_image(url)
+            row["image_url"] = url
+            break
+        except Exception as exc:
+            failures.append(f"{url[:180]}: {str(exc)[:180]}")
+
+    if source is None:
+        # Lazy import avoids coupling the deterministic renderer to the ranking
+        # pipeline at module import time.
+        from night_brain_gate_tools import recover_image
+
+        recovered_url, recovery = recover_image({
+            "extra_images": [],
+            "target_url": attrs.get("target_url"),
+            "tracking_validation": {
+                "status": "validated_structural"
+                if attrs.get("target_url") and attrs.get("target_domain")
+                else "invalid"
+            },
+        })
+        if recovered_url and recovered_url not in attempted:
+            try:
+                source = _download_image(recovered_url)
+                row["image_url"] = recovered_url
+                row["creative_image_recovery"] = recovery
+            except Exception as exc:
+                failures.append(f"{recovered_url[:180]}: {str(exc)[:180]}")
+
+    if source is None:
+        detail = "; ".join(failures[-4:]) or "no candidate image URLs"
+        raise ValueError(f"no downloadable product image after feed/landing fallbacks: {detail}")
     results = []
     for variant in variants:
         variant_id = str(variant.get("id") or "").strip()
