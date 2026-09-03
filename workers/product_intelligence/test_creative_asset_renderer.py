@@ -1,12 +1,58 @@
 import io
 import unittest
+from unittest.mock import patch
 
 from PIL import Image
 
-from creative_asset_renderer import SIZES, render_variant
+from creative_asset_renderer import SIZES, render_pack, render_variant
 
 
 class CreativeAssetRendererTests(unittest.TestCase):
+    @staticmethod
+    def _pack_row():
+        return {
+            'affiliate_short_url': 'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/socialscheduler-go/r-test',
+            'image_url': 'https://cdn.example/expired.jpg',
+            'product_name': 'Test Product',
+            'merchant_name': 'Test Merchant',
+            'effective_price': 19.90,
+            'product_attributes': {
+                'extra_images': ['https://cdn.example/working.jpg'],
+                'target_url': 'https://shop.example/product',
+                'target_domain': 'shop.example',
+            },
+            'creative_pack': {'variants': [{'id': x} for x in SIZES]},
+        }
+
+    def test_render_pack_falls_back_to_feed_extra_image(self):
+        row = self._pack_row()
+        image = Image.new('RGB', (800, 800), (240, 240, 240))
+        with (
+            patch('creative_asset_renderer._download_image', side_effect=[ValueError('text/html'), image]) as download,
+            patch('creative_asset_renderer.render_variant', return_value=b'png'),
+        ):
+            rendered = render_pack(row)
+        self.assertEqual(len(rendered), 3)
+        self.assertEqual(download.call_count, 2)
+        self.assertEqual(row['image_url'], 'https://cdn.example/working.jpg')
+
+    def test_render_pack_recovers_from_validated_landing(self):
+        row = self._pack_row()
+        row['product_attributes']['extra_images'] = []
+        image = Image.new('RGB', (800, 800), (240, 240, 240))
+        with (
+            patch('creative_asset_renderer._download_image', side_effect=[ValueError('text/html'), image]),
+            patch('night_brain_gate_tools.recover_image', return_value=(
+                'https://shop.example/recovered.jpg',
+                {'status': 'recovered', 'source': 'merchant_landing_meta'},
+            )),
+            patch('creative_asset_renderer.render_variant', return_value=b'png'),
+        ):
+            rendered = render_pack(row)
+        self.assertEqual(len(rendered), 3)
+        self.assertEqual(row['image_url'], 'https://shop.example/recovered.jpg')
+        self.assertEqual(row['creative_image_recovery']['status'], 'recovered')
+
     def test_all_three_variants_render_as_png_at_exact_dimensions(self):
         source = Image.new('RGB', (800, 800), (240, 240, 240))
         for variant_id, expected in SIZES.items():
