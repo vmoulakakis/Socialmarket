@@ -14,4 +14,4 @@ seasonal_rag=requires_product_theme_lexical_relevance
 ranking_weights=conversion30_demandgap35_freshness20_quality10_pain10
 poster_gate=three_png_real_image_exact_short_qr_60_unique_hooks_captions_tagsets
 creative_fallback=deterministic_facts_only_v10
-triggered_at=2026-08-28-problem-first-v1
+triggered_at=2026-09-03-resilient-creative-image-fallback-v1
