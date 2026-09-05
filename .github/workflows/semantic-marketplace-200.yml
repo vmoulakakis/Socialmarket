@@ -1,0 +1,91 @@
+name: AFFINITY Semantic Marketplace 200
+
+on:
+  schedule:
+    # 02:10 UTC = 05:10 Athens during summer time. Full feed + deep evidence run.
+    - cron: '10 2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/trigger-marketplace-200'
+
+concurrency:
+  group: affinity-semantic-marketplace-200
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  discover-audit-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MARKETPLACE200_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway
+      ALIEXPRESS_AFFILIATE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway
+      PRODUCT_SOURCE_FEED: linkwise-products.json
+      MARKETPLACE200_PROFILE_PATH: semantic-marketplace-200-profile.json
+      MARKETPLACE200_LINKWISE_AI_PER_CLUSTER: '18'
+      MARKETPLACE200_ALI_RESEARCH_PER_CLUSTER: '20'
+      MARKETPLACE200_AI_BATCH: '6'
+      MARKETPLACE200_DAILY_HANDOFF: '10'
+      LINKWISE_SHARD_WORKERS: '6'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bounded runtime dependencies
+        run: pip install --disable-pip-version-check requests ijson
+
+      - name: Verify agent and affiliate gateways
+        run: |
+          python - <<'PY'
+          import json,urllib.request
+          urls=[
+            'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway',
+            'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway',
+          ]
+          for url in urls:
+            with urllib.request.urlopen(url,timeout=30) as r:data=json.loads(r.read().decode())
+            print(url,data)
+            assert data.get('ok') is True
+          PY
+
+      - name: Discover audit and persist Marketplace 200
+        run: python workers/product_intelligence/semantic_marketplace_200.py
+
+      - name: Verify immutable portfolio invariants
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('semantic-marketplace-200-profile.json').read_text())
+          assert p.get('status')=='completed',p
+          counts=p.get('selected_counts') or {}
+          assert int(counts.get('linkwise') or 0)<=100,p
+          assert int(counts.get('aliexpress') or 0)<=100,p
+          assert int(counts.get('total') or 0)<=200,p
+          assert int((p.get('caps') or {}).get('merchant_max') or 0)<=3,p
+          assert int((p.get('caps') or {}).get('seller_max') or 0)<=3,p
+          policy=p.get('hard_policy') or {}
+          assert policy.get('commission_gt_eur')==30,p
+          assert policy.get('max_products_per_merchant')==3,p
+          assert policy.get('product_quality_min')==75,p
+          assert policy.get('affinity_min')==76,p
+          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'handoff':(p.get('handoff') or {}).get('products_handed_off')})
+          PY
+
+      - name: Upload auditable production profile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-marketplace-200-${{ github.run_number }}
+          path: semantic-marketplace-200-profile.json
+          if-no-files-found: error
+          retention-days: 30
