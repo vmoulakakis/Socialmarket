@@ -3,7 +3,7 @@ import { affinityProducts, bySlug } from '../data';
 import { affiliateRecords } from '../records';
 import ConversionPage from '../ConversionPage';
 
-const BASE = 'https://socialmarket-theta.vercel.app';
+const BASE = 'https://eu-solution-foundry.vercel.app';
 
 export function generateStaticParams() {
   return affinityProducts.map((p) => ({ slug: p.slug }));
