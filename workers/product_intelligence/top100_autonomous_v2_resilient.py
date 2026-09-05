@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Resilient launcher for the Greece Top100 V2 pipeline.
 
-The business policy remains owned by top100_autonomous_v2.py. This launcher only
-hardens the AI-rank transport: it keeps the normal 10-product batch for speed,
-reduces repeated context size, recursively retries smaller batches when the model
-returns malformed/truncated JSON, and skips only an irrecoverable single candidate
-instead of aborting the entire daily run.
+The business policy remains owned by top100_autonomous_v2.py. This launcher hardens
+AI-rank transport and enforces lifecycle exclusion: once a product has entered the
+SocialScheduler/provider pipeline it cannot be selected again by a later daily run.
 """
 from __future__ import annotations
 
+import json
+import os
 import time
+import urllib.request
 from typing import Any
 
 import top100_autonomous_v2 as core
@@ -18,6 +19,27 @@ _BASE_GATEWAY = core.gateway
 _MAX_RANK_BATCH = 10
 _MARKET_CONTEXT_LIMIT = 30
 _FEEDBACK_LIMIT = 20
+STATE_ENDPOINT = os.getenv(
+    'TOP100_PUBLICATION_STATE_URL',
+    'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/top100-publication-state',
+)
+
+
+def _pipeline_exclusions() -> set[str]:
+    req = urllib.request.Request(
+        STATE_ENDPOINT,
+        data=b'{}',
+        headers={
+            'Authorization': 'Bearer ' + core.oidc_token(),
+            'Content-Type': 'application/json',
+        },
+        method='POST',
+    )
+    with urllib.request.urlopen(req, timeout=60) as response:
+        payload = json.loads(response.read().decode())
+    if not payload.get('ok'):
+        raise RuntimeError(f'publication state unavailable: {payload}')
+    return {str(x) for x in (payload.get('pipeline_source_hashes') or []) if str(x).strip()}
 
 
 def _rank_chunk(items: list[dict[str, Any]], markets: list[dict[str, Any]], feedback: list[dict[str, Any]], depth: int = 0) -> list[dict[str, Any]]:
@@ -49,6 +71,14 @@ def _rank_chunk(items: list[dict[str, Any]], markets: list[dict[str, Any]], feed
 
 
 def resilient_gateway(action: str, **payload: Any) -> dict[str, Any]:
+    if action == 'candidate_pool':
+        result = _BASE_GATEWAY(action, **payload)
+        excluded = _pipeline_exclusions()
+        before = list(result.get('items') or [])
+        result['items'] = [x for x in before if str(x.get('source_record_hash') or '') not in excluded]
+        result['pipeline_excluded'] = len(before) - len(result['items'])
+        return result
+
     if action != 'rank':
         return _BASE_GATEWAY(action, **payload)
 
