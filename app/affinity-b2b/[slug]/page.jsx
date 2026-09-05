@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { affinityProducts, bySlug } from '../data';
+import { affiliateRecords } from '../records';
 import ConversionPage from '../ConversionPage';
 
 export function generateStaticParams() {
@@ -23,13 +23,7 @@ export default async function ProductPage({ params }) {
   const { slug } = await params;
   const product = bySlug[slug];
   if (!product) notFound();
-
-  const { data: record } = await supabase
-    .from('Product')
-    .select('aliexpressId,title,salePrice,salePriceCurrency,commissionRate,promotionLink,detailUrl,shopName,mainImage,updatedAt')
-    .eq('aliexpressId', product.aliexpressId)
-    .maybeSingle();
-
-  if (!record) notFound();
+  const record = affiliateRecords[product.aliexpressId];
+  if (!record?.promotionLink) notFound();
   return <ConversionPage product={product} record={record} />;
 }
