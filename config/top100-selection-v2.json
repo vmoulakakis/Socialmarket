@@ -1,0 +1,46 @@
+{
+  "version": "top100-v2",
+  "market": "GR",
+  "active_limit": 100,
+  "max_categories": 5,
+  "commission_floor_eur": 20,
+  "daily_reoptimize": true,
+  "published_items_excluded": true,
+  "landing_policy": {
+    "enabled": true,
+    "engine": "AFFINITY",
+    "require_greece_scarcity": true,
+    "require_fresh_evidence": true,
+    "require_affiliate_link_validation": true,
+    "separate_public_deployment": true,
+    "new_project_required": false
+  },
+  "ranking_dimensions": [
+    "demand_now",
+    "demand_momentum_7d",
+    "demand_momentum_30d",
+    "demand_momentum_90d",
+    "forecast_demand",
+    "greece_scarcity",
+    "commission_value",
+    "conversion_ease",
+    "organic_potential",
+    "ads_viability",
+    "pain_severity",
+    "competitive_intensity",
+    "landed_cost_attractiveness",
+    "seller_logistics_risk",
+    "evidence_freshness",
+    "scheduler_feedback"
+  ],
+  "lifecycle_states": [
+    "candidate",
+    "eligible",
+    "selected_top100",
+    "approved_for_social",
+    "claimed_by_scheduler",
+    "published",
+    "retired",
+    "blocked"
+  ]
+}
