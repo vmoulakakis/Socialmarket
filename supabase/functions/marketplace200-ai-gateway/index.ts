@@ -21,14 +21,22 @@ async function auth(req:Request){
 async function structured(system:string,payload:unknown,maxTokens:number){
   if(!DEEPSEEK_KEY)throw new Error('deepseek_not_configured')
   const run=async(retry=false)=>{
-    const body={model:DEEPSEEK_MODEL,temperature:0.04,max_tokens:retry?Math.min(maxTokens+400,3600):maxTokens,response_format:{type:'json_object'},messages:[
-      {role:'system',content:system},
-      {role:'user',content:`Return one COMPLETE compact JSON object only. Use short strings and finish every array/object. ${retry?'Previous JSON was incomplete; compress further. ':''}Input:\n${JSON.stringify(payload)}`}
-    ]}
+    const body={
+      model:DEEPSEEK_MODEL,
+      thinking:{type:'disabled'},
+      reasoning_effort:'low',
+      temperature:0.04,
+      max_tokens:retry?Math.min(maxTokens+400,3600):maxTokens,
+      response_format:{type:'json_object'},
+      messages:[
+        {role:'system',content:system},
+        {role:'user',content:`Return one COMPLETE compact JSON object only. Use short strings and finish every array/object. ${retry?'Previous JSON was incomplete; compress further. ':''}Input:\n${JSON.stringify(payload)}`}
+      ]
+    }
     const r=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${DEEPSEEK_KEY}`},body:JSON.stringify(body)})
     const raw=await r.text();if(!r.ok)throw new Error(`deepseek_${r.status}:${raw.slice(0,500)}`)
     const j=JSON.parse(raw),choice=j?.choices?.[0]||{},content=String(choice?.message?.content||'')
-    if(!content.trim())throw new Error('deepseek_empty')
+    if(!content.trim())throw new Error(`deepseek_empty:${String(choice?.finish_reason||'unknown')}`)
     if(String(choice.finish_reason||'')==='length')throw new Error('deepseek_truncated')
     return JSON.parse(content)
   }
@@ -43,7 +51,7 @@ const RESEARCH_SYSTEM=`You are AFFINITY Product Research Agent for Greece. Deter
 const SKEPTIC_SYSTEM=`You are AFFINITY Skeptic / Product Quality QA. Try to reject each candidate using only supplied evidence plus Research output. Check unsupported claims, weak identity/quality evidence, hidden Greek exact/OEM/functional equivalents, merchant/seller weakness, fake novelty, variants, logistics uncertainty, unsafe/regulatory risk, weak pain fit and contradictions. Return JSON {items:[...]}. For every source_record_hash return: source_record_hash, verdict validated|needs_review|rejected, corrected_greek_availability ABSENT|VERY_RARE|AVAILABLE|FUNCTIONAL_EQUIVALENT_EXISTS|UNKNOWN, product_quality_score 0-100, contradiction_score 0-100, reasons[] <=4 concise Greek strings, blockers[] <=4, required_rechecks[] <=4. Use validated only when evidence-backed.`
 
 Deno.serve(async req=>{
-  if(req.method==='GET')return json({ok:true,service:'marketplace200-ai-gateway',version:'1.1-split-planner',model:DEEPSEEK_MODEL,architecture:'bounded-single-call-microagents'})
+  if(req.method==='GET')return json({ok:true,service:'marketplace200-ai-gateway',version:'1.2-strict-json',model:DEEPSEEK_MODEL,architecture:'bounded-microagents-thinking-disabled'})
   if(req.method!=='POST')return json({ok:false,error:'method_not_allowed'},405)
   try{
     await auth(req)
