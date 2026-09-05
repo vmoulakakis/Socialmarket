@@ -1,0 +1,35 @@
+import { notFound } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import { affinityProducts, bySlug } from '../data';
+import ConversionPage from '../ConversionPage';
+
+export function generateStaticParams() {
+  return affinityProducts.map((p) => ({ slug: p.slug }));
+}
+
+export async function generateMetadata({ params }) {
+  const { slug } = await params;
+  const p = bySlug[slug];
+  if (!p) return {};
+  return {
+    title: `${p.shortName} | AFFINITY B2B`,
+    description: p.subheadline,
+    robots: { index: true, follow: true },
+    openGraph: { title: p.shortName, description: p.subheadline, type: 'website' },
+  };
+}
+
+export default async function ProductPage({ params }) {
+  const { slug } = await params;
+  const product = bySlug[slug];
+  if (!product) notFound();
+
+  const { data: record } = await supabase
+    .from('Product')
+    .select('aliexpressId,title,salePrice,salePriceCurrency,commissionRate,promotionLink,detailUrl,shopName,mainImage,updatedAt')
+    .eq('aliexpressId', product.aliexpressId)
+    .maybeSingle();
+
+  if (!record) notFound();
+  return <ConversionPage product={product} record={record} />;
+}
