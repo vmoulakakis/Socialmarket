@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 const ADMIN_EMAIL = 'vmoulakakis@gmail.com';
@@ -12,6 +13,8 @@ function timeoutResult(ms, value) {
 }
 
 export default function AuthGate({ children }) {
+  const pathname = usePathname();
+  const publicRoute = pathname === '/marketplace' || pathname?.startsWith('/marketplace/');
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
@@ -19,6 +22,11 @@ export default function AuthGate({ children }) {
   const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
+    if (publicRoute) {
+      setLoading(false);
+      return undefined;
+    }
+
     let mounted = true;
     const hardStop = setTimeout(() => {
       if (!mounted) return;
@@ -28,7 +36,6 @@ export default function AuthGate({ children }) {
 
     const acceptSession = async (nextSession) => {
       if (!mounted) return;
-
       if (!nextSession) {
         setSession(null);
         setLoading(false);
@@ -38,10 +45,7 @@ export default function AuthGate({ children }) {
       const email = String(nextSession.user?.email || '').toLowerCase();
       if (email !== ADMIN_EMAIL) {
         try {
-          await Promise.race([
-            supabase.auth.signOut({ scope: 'local' }),
-            timeoutResult(3000, null),
-          ]);
+          await Promise.race([supabase.auth.signOut({ scope: 'local' }), timeoutResult(3000, null)]);
         } catch {}
         if (mounted) {
           setSession(null);
@@ -77,32 +81,28 @@ export default function AuthGate({ children }) {
       clearTimeout(hardStop);
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [publicRoute]);
 
   async function signIn(event) {
     event.preventDefault();
     if (!password || signingIn) return;
     setSigningIn(true);
     setMessage('');
-
     try {
       const result = await Promise.race([
         supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password }),
         timeoutResult(SIGNIN_TIMEOUT_MS, { timeout: true }),
       ]);
-
       if (result?.timeout) {
         setMessage('Η απάντηση σύνδεσης καθυστέρησε. Αν το login ολοκληρώθηκε, πάτησε “Retry session”.');
         setSigningIn(false);
         return;
       }
-
       if (result?.error) {
         setMessage(result.error.message === 'Invalid login credentials' ? 'Λάθος password.' : result.error.message);
         setSigningIn(false);
         return;
       }
-
       setPassword('');
       setSigningIn(false);
     } catch (error) {
@@ -119,6 +119,8 @@ export default function AuthGate({ children }) {
       setPassword('');
     }
   }
+
+  if (publicRoute) return children;
 
   if (loading) {
     return <div className="auth-card"><div className="eyebrow">Private Admin</div><h2>Έλεγχος πρόσβασης…</h2></div>;
