@@ -2,7 +2,6 @@ name: AFFINITY Semantic Marketplace 200
 
 on:
   schedule:
-    # 02:10 UTC = 05:10 Athens during summer time. Full feed + deep evidence run.
     - cron: '10 2 * * *'
   workflow_dispatch:
   push:
@@ -24,6 +23,7 @@ jobs:
     timeout-minutes: 120
     env:
       MARKETPLACE200_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway
+      MARKETPLACE200_AI_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway
       ALIEXPRESS_AFFILIATE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway
       PRODUCT_SOURCE_FEED: linkwise-products.json
       MARKETPLACE200_PROFILE_PATH: semantic-marketplace-200-profile.json
@@ -43,20 +43,24 @@ jobs:
       - name: Install bounded runtime dependencies
         run: pip install --disable-pip-version-check requests ijson
 
-      - name: Verify agent and affiliate gateways
+      - name: Verify production gateways
         run: |
           python - <<'PY'
           import json,urllib.request
-          agent='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway'
-          ali='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway'
-          with urllib.request.urlopen(agent,timeout=30) as r:a=json.loads(r.read().decode())
-          with urllib.request.urlopen(ali,timeout=30) as r:b=json.loads(r.read().decode())
-          print('Marketplace agent:',a)
-          print('AliExpress API:',{'ok':b.get('ok'),'configured':b.get('configured'),'tracking_configured':b.get('tracking_configured')})
-          assert a.get('ok') is True
-          assert b.get('ok') is True
-          if not b.get('configured') or not b.get('tracking_configured'):
-              print('ALIEXPRESS_API_BLOCKED: Linkwise may complete; no cached AliExpress fallback will be used.')
+          urls={
+            'data':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway',
+            'ai':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway',
+            'ali':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway',
+          }
+          out={}
+          for key,url in urls.items():
+              with urllib.request.urlopen(url,timeout=30) as r:out[key]=json.loads(r.read().decode())
+          print({'data':out['data'].get('ok'),'ai':out['ai'].get('ok'),'ali':out['ali']})
+          assert out['data'].get('ok') is True
+          assert out['ai'].get('ok') is True
+          assert out['ali'].get('ok') is True
+          assert out['ali'].get('configured') is True
+          assert out['ali'].get('tracking_configured') is True
           PY
 
       - name: Discover audit and persist Marketplace 200
@@ -80,7 +84,11 @@ jobs:
           assert policy.get('max_products_per_merchant')==3,p
           assert policy.get('product_quality_min')==75,p
           assert policy.get('affinity_min')==76,p
-          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'handoff':(p.get('handoff') or {}).get('products_handed_off'),'ali_api':(p.get('stages') or {}).get('aliexpress_api')})
+          ali=(p.get('stages') or {}).get('aliexpress_api') or {}
+          assert ali.get('api_blocked') is not True,p
+          assert ali.get('configured') is True,p
+          assert ali.get('tracking_configured') is True,p
+          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'handoff':(p.get('handoff') or {}).get('products_handed_off'),'ali_api':ali})
           PY
 
       - name: Upload auditable production profile
