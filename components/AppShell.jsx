@@ -10,7 +10,7 @@ const groups=[
   {href:'/demand',label:'Demand',code:'DE'},
   {href:'/merchants',label:'Merchants',code:'ME'},
   {href:'/products',label:'Products',code:'PR'},
-  {href:'/forecast-products',label:'Marketplace 200',code:'200'},
+  {href:'/forecast-products',label:'Social Curation',code:'SC'},
   {href:'/scheduler',label:'Outbox',code:'OB'},
  ]},
  {label:'Analysis',items:[
@@ -55,7 +55,7 @@ export default function AppShell({children}){
   <div className="smMain">
    <header className="smContextBar">
     <div className="smBreadcrumb"><span>SocialMarket</span><i>/</i><b>{context}</b><i>/</i><em>Greece</em></div>
-    <div className="smContextMeta"><a href="/marketplace" target="_blank" rel="noreferrer">Public Marketplace ↗</a><span className="smStatusChip"><i/>LIVE</span><span>Semantic Marketplace 200</span></div>
+    <div className="smContextMeta"><a href="/marketplace" target="_blank" rel="noreferrer">Public SocialMarket ↗</a><span className="smStatusChip"><i/>LIVE</span><span>Social Curation Engine</span></div>
    </header>
    <div className="smContent">{children}</div>
   </div>
