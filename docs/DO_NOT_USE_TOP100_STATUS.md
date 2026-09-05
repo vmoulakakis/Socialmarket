@@ -1,0 +1,1 @@
+Do not treat this marker as runtime health; use workflow/provider truth.
