@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Production launcher for AFFINITY Semantic Marketplace 200.
+"""Production launcher for AFFINITY Semantic SocialMarket.
 
-DB/context/persistence stays in marketplace200-agent-gateway. AI planning,
-research and skeptic reasoning uses bounded micro-agent calls. AliExpress uses
-its proven travelai server-side credential runtime through a compatibility
-proxy. Missing tracking or weak evidence fails closed.
+Evidence-grounded opportunity planning is deterministic and bounded. AI is used
+where it adds value: product research, skeptic QA and creative interpretation.
+AliExpress uses the proven travelai server-side credential runtime through a
+compatibility proxy. Missing tracking or weak evidence fails closed.
 """
 from __future__ import annotations
-import json,os,urllib.error,urllib.request
+import json,os,re,unicodedata,urllib.error,urllib.request
 from typing import Any
 import semantic_marketplace_200 as core
 
 _BASE_GATEWAY=core.gateway
 _ORIGINAL_DISCOVER=core.discover_aliexpress
 AI_GATEWAY=os.getenv('MARKETPLACE200_AI_GATEWAY','https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway')
+
 
 def _ai(action:str,payload:dict[str,Any])->dict[str,Any]:
     body=json.dumps({'action':action,'payload':payload},ensure_ascii=False,default=str).encode()
@@ -25,36 +26,95 @@ def _ai(action:str,payload:dict[str,Any])->dict[str,Any]:
     if not data.get('ok'):raise RuntimeError(f'marketplace ai {action} failed: {data}')
     return data
 
+
 def _clamp(v:Any)->float:
     try:return max(0.0,min(100.0,float(v or 0)))
     except:return 0.0
 
-def _collect_clusters(action:str,key:str,base:dict[str,Any])->list[dict[str,Any]]:
-    out=[];seen=set()
-    for batch in range(2):
-        payload={**base,'batch_index':batch+1,'excluded_cluster_keys':sorted(seen)}
-        plan=_ai(action,payload).get('plan') or {}
-        for c in list(plan.get(key) or []):
-            ck=str(c.get('cluster_key') or '').strip()
-            if not ck or ck in seen:continue
-            seen.add(ck);out.append(c)
-            if len(out)>=10:break
-    if len(out)!=10:raise RuntimeError(f'{key}_must_have_10_unique_clusters_got_{len(out)}')
+
+def _confidence100(v:Any)->float:
+    try:
+        x=float(v or 0);return _clamp(x*100 if x<=1 else x)
+    except:return 0.0
+
+
+def _slug(v:Any)->str:
+    raw=unicodedata.normalize('NFKD',str(v or '')).encode('ascii','ignore').decode().lower()
+    return re.sub(r'[^a-z0-9]+','-',raw).strip('-')[:48] or 'need'
+
+
+def _semantic_value(p:dict[str,Any])->float:
+    return round(_clamp(p.get('commercial_intent'))*.34+_clamp(p.get('pain_severity'))*.27+_clamp(p.get('demand_score'))*.24+_clamp(p.get('audit_score'))*.09+_confidence100(p.get('confidence'))*.06,3)
+
+
+def _market_map(markets:list[dict[str,Any]])->dict[str,dict[str,Any]]:
+    out={}
+    for m in markets:
+        for key in (_slug(m.get('subcategory_name')),_slug(m.get('category_name'))):
+            if key and (key not in out or _clamp(m.get('confidence'))>_clamp(out[key].get('confidence'))):out[key]=m
     return out
+
+
+def _cluster_from_pain(p:dict[str,Any],portfolio:str,rank:int,markets:dict[str,dict[str,Any]])->dict[str,Any]:
+    category=str(p.get('category') or 'Everyday life').strip();sub=str(p.get('subcategory') or category).strip();pain=str(p.get('canonical_text') or '').strip()
+    market=markets.get(_slug(sub)) or markets.get(_slug(category)) or {}
+    market_gap=_clamp(market.get('pain_gap_score'))
+    competition=_clamp(p.get('competition_score'))
+    whitespace=market_gap if market_gap>0 else _clamp(_clamp(p.get('pain_severity'))*.62+max(0,100-competition)*.38)
+    demand=_clamp(p.get('demand_score'));intent=_clamp(p.get('commercial_intent'));conf=max(_confidence100(p.get('confidence')),_confidence100(market.get('confidence')))
+    ident=str(p.get('id') or rank)
+    prefix='lw' if portfolio=='linkwise' else 'ax'
+    key=f"{prefix}-{rank:02d}-{_slug(sub)}-{_slug(ident)[-8:]}"[:80]
+    job=f"Να λύσω πιο πρακτικά: {pain}"[:260]
+    gap=f"Το συγκεκριμένο pain έχει τεκμηριωμένο ενδιαφέρον και χρειάζεται λύση με σαφές use-case fit, όχι generic επιλογή."[:300]
+    return {
+        'cluster_key':key,'niche':category,'subniche':sub,'job_to_be_done':job,'pain_statement':pain[:420],'gap_statement':gap,
+        'demand_score':round(demand,2),'whitespace_score':round(whitespace,2),'commercial_intent_score':round(intent,2),'confidence':round(conf,2),
+        'evidence_ids':[ident],'rationale':'Evidence-grounded AFFINITY opportunity selected from validated pain, intent and market signals.',
+        'search_queries':[pain[:90],f'{sub} solution'.strip()[:90],f'{category} problem solver'.strip()[:90]],
+    }
+
+
+def _deterministic_plan(ctx:dict[str,Any])->dict[str,Any]:
+    pains=[p for p in list(ctx.get('pains') or []) if str(p.get('canonical_text') or '').strip()]
+    pains=sorted(pains,key=_semantic_value,reverse=True)
+    if len(pains)<20:raise RuntimeError(f'validated_pain_pool_too_small:{len(pains)}')
+    markets=_market_map(list(ctx.get('markets') or []))
+    merchant_terms={_slug(x.get('primary_category')) for x in list(ctx.get('programs') or [])}|{_slug(x.get('primary_subcategory')) for x in list(ctx.get('programs') or [])}
+    matched=[p for p in pains if _slug(p.get('category')) in merchant_terms or _slug(p.get('subcategory')) in merchant_terms]
+    link_source=(matched+pains) if matched else pains
+    link=[];used=set()
+    for p in link_source:
+        pid=str(p.get('id') or '')
+        if pid in used:continue
+        used.add(pid);link.append(_cluster_from_pain(p,'linkwise',len(link)+1,markets))
+        if len(link)==10:break
+    ali=[]
+    for p in pains:
+        pid=str(p.get('id') or '')
+        if pid in used:continue
+        used.add(pid);ali.append(_cluster_from_pain(p,'aliexpress',len(ali)+1,markets))
+        if len(ali)==10:break
+    if len(ali)<10:
+        for p in pains:
+            if len(ali)==10:break
+            pid=str(p.get('id') or '')
+            if any(pid in c.get('evidence_ids',[]) for c in ali):continue
+            ali.append(_cluster_from_pain(p,'aliexpress',len(ali)+1,markets))
+    if len(link)!=10 or len(ali)!=10:raise RuntimeError(f'deterministic_plan_incomplete:{len(link)}+{len(ali)}')
+    return {'linkwise_clusters':link,'aliexpress_clusters':ali,'planner':'deterministic_evidence_affinity_v1'}
+
 
 def _split_gateway(action:str,**payload:Any)->dict[str,Any]:
     if action=='plan':
         ctx=_BASE_GATEWAY('context')
-        pains=list(ctx.get('pains') or [])[:48];markets=list(ctx.get('markets') or [])[:28];feedback=list(ctx.get('feedback') or [])[:20]
-        merchants=[{'merchant_id':x.get('merchant_id'),'merchant':x.get('canonical_name'),'category':x.get('primary_category'),'subcategory':x.get('primary_subcategory'),'rank':x.get('global_rank'),'trust':x.get('trust_score'),'confidence':x.get('research_confidence')} for x in list(ctx.get('programs') or [])[:50]]
-        common={'market':'GR','pain_clusters':pains,'market_context':markets,'feedback':feedback,'policy':ctx.get('config') or {}}
-        link=_collect_clusters('plan_linkwise','linkwise_clusters',{**common,'eligible_merchants':merchants})
-        ali=_collect_clusters('plan_aliexpress','aliexpress_clusters',common)
-        return {'ok':True,'plan':{'linkwise_clusters':link,'aliexpress_clusters':ali}}
+        plan=_deterministic_plan(ctx)
+        print(json.dumps({'phase':'opportunity_plan','planner':plan['planner'],'validated_pains':len(ctx.get('pains') or []),'markets':len(ctx.get('markets') or []),'eligible_programs':len(ctx.get('programs') or [])}),flush=True)
+        return {'ok':True,'plan':plan}
     if action=='evaluate':
         items=list(payload.get('items') or [])
         if not items:return {'ok':True,'items':[]}
-        if len(items)>6:raise RuntimeError('evaluate_batch_must_be_1_to_6')
+        if len(items)>2:raise RuntimeError('evaluate_batch_must_be_1_to_2')
         research=_ai('research',{'market':'GR','items':items}).get('research') or {};research_items=list(research.get('items') or [])
         skeptic=_ai('skeptic',{'market':'GR','items':items,'research':research_items}).get('skeptic') or {}
         rm={str(x.get('source_record_hash')):x for x in research_items};sm={str(x.get('source_record_hash')):x for x in list(skeptic.get('items') or [])};merged=[]
@@ -69,10 +129,12 @@ def _split_gateway(action:str,**payload:Any)->dict[str,Any]:
 
 core.gateway=_split_gateway
 
+
 def _health()->dict[str,Any]:
     try:
         with urllib.request.urlopen(core.ALI_GATEWAY,timeout=30) as response:return json.loads(response.read().decode())
     except Exception as exc:return {'ok':False,'configured':False,'tracking_configured':False,'error':str(exc)[:400]}
+
 
 def _find_tracking_url(value:Any)->str:
     if isinstance(value,str):return value.replace('http://','https://',1) if value.startswith(('https://s.click.aliexpress.com/','http://s.click.aliexpress.com/')) else ''
@@ -88,6 +150,7 @@ def _find_tracking_url(value:Any)->str:
             url=_find_tracking_url(child)
             if url:return url
     return ''
+
 
 def discover_aliexpress_safe(clusters,excluded):
     health=_health()
