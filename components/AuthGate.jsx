@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 const ADMIN_EMAIL = 'vmoulakakis@gmail.com';
 
 export default function AuthGate({ children }) {
+  const pathname = usePathname();
+  const isPublicRoute = pathname?.startsWith('/affinity-b2b') || pathname?.startsWith('/affinity/');
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
@@ -13,6 +16,11 @@ export default function AuthGate({ children }) {
   const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
+    if (isPublicRoute) {
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
 
     const acceptSession = async (nextSession) => {
@@ -48,7 +56,7 @@ export default function AuthGate({ children }) {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [isPublicRoute]);
 
   async function signIn(event) {
     event.preventDefault();
@@ -76,6 +84,8 @@ export default function AuthGate({ children }) {
     setSession(null);
     setPassword('');
   }
+
+  if (isPublicRoute) return children;
 
   if (loading) {
     return <div className="auth-card"><div className="eyebrow">Private Admin</div><h2>Έλεγχος πρόσβασης…</h2></div>;
