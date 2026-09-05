@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { affinityProducts } from './data';
 import { affiliateRecords as productRecords } from './records';
 
-const BASE='https://socialmarket-theta.vercel.app';
+const BASE='https://eu-solution-foundry.vercel.app';
 export const metadata = {
   metadataBase:new URL(BASE),
   title:'B2B Εξοπλισμός για Ελλάδα | Κόστος, ROI & Smart Buying',
@@ -15,7 +15,7 @@ export const metadata = {
 export default function AffinityHub(){
   return <main style={{minHeight:'100vh',background:'#06101b',color:'#f5f8fc',fontFamily:'Inter,system-ui,sans-serif',padding:'70px 24px'}}>
     <div style={{maxWidth:1180,margin:'0 auto'}}>
-      <div style={{fontSize:12,letterSpacing:'.22em',fontWeight:900,color:'#ff8a32'}}>AFFINITY • SMART B2B BUYING</div>
+      <div style={{fontSize:12,letterSpacing:'.22em',fontWeight:900,color:'#ff8a32'}}>EU SOLUTION FOUNDRY • SMART B2B BUYING</div>
       <h1 style={{fontSize:'clamp(46px,7vw,82px)',lineHeight:.95,letterSpacing:'-.055em',margin:'18px 0'}}>Αγοράζεις σαν έμπορος. Μετράς κόστος. Προστατεύεις το κέρδος.</h1>
       <p style={{maxWidth:820,fontSize:19,lineHeight:1.65,color:'#9db0c4'}}>Πέντε επαγγελματικές λύσεις με διαφορετικό pain gap. Η λογική είναι κοινή: σύγκρινε landed cost, τεχνικό fit, seller risk, warranty και πραγματικό εμπορικό όφελος πριν αγοράσεις.</p>
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginTop:30}}>{['Κόστος αγοράς','Κόστος λειτουργίας','Περιθώριο κέρδους'].map((x,i)=><div key={x} style={{padding:18,border:'1px solid #ffffff12',borderRadius:16,background:'#ffffff06'}}><small style={{color:'#71859a'}}>0{i+1}</small><strong style={{display:'block',fontSize:18,marginTop:6}}>{x}</strong></div>)}</div>
