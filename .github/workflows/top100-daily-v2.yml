@@ -1,0 +1,109 @@
+name: SocialMarket Top100 Daily V2
+
+on:
+  schedule:
+    - cron: "35 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: socialmarket-top100-daily-v2
+  cancel-in-progress: false
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MARKET: GR
+      TOP100_LIMIT: "100"
+      MAX_CATEGORIES: "5"
+      COMMISSION_FLOOR_EUR: "20"
+      TOP100_SOURCE_URL: ${{ secrets.TOP100_SOURCE_URL }}
+      TOP100_SOURCE_TOKEN: ${{ secrets.TOP100_SOURCE_TOKEN }}
+      TOP100_RESULT_WEBHOOK_URL: ${{ secrets.TOP100_RESULT_WEBHOOK_URL }}
+      TOP100_RESULT_WEBHOOK_TOKEN: ${{ secrets.TOP100_RESULT_WEBHOOK_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch fresh candidate evidence feed
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          if [ -n "${TOP100_SOURCE_URL:-}" ]; then
+            auth=()
+            if [ -n "${TOP100_SOURCE_TOKEN:-}" ]; then
+              auth=(-H "Authorization: Bearer ${TOP100_SOURCE_TOKEN}")
+            fi
+            curl -fsSL "${auth[@]}" "$TOP100_SOURCE_URL" -o artifacts/top100-candidates.json
+          elif [ -f data/top100-candidates.json ]; then
+            cp data/top100-candidates.json artifacts/top100-candidates.json
+          else
+            echo '{"products":[]}' > artifacts/top100-candidates.json
+          fi
+
+      - name: Optimize Greece Top-100
+        run: |
+          python scripts/top100_selection_v2.py \
+            --input artifacts/top100-candidates.json \
+            --output artifacts/top100-active.json
+
+      - name: Enforce invariants
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('artifacts/top100-active.json').read_text())
+          selected=data.get('selected',[])
+          cats=data.get('selected_categories',[])
+          assert len(selected) <= 100, 'Top100 overflow'
+          assert len(cats) <= 5, 'Category cap violated'
+          for p in selected:
+              assert float(p.get('commission_eur',0)) > 20, 'Commission floor violated'
+              assert float(p.get('greece_scarcity',0)) >= 0.6, 'Greece scarcity gate violated'
+              assert str(p.get('lifecycle_state','')).lower() == 'selected_top100'
+          print({'selected':len(selected),'categories':cats})
+          PY
+
+      - name: Publish optimized selection to runtime webhook
+        if: env.TOP100_RESULT_WEBHOOK_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=()
+          if [ -n "${TOP100_RESULT_WEBHOOK_TOKEN:-}" ]; then
+            auth=(-H "Authorization: Bearer ${TOP100_RESULT_WEBHOOK_TOKEN}")
+          fi
+          curl -fsSL -X POST "${auth[@]}" \
+            -H 'Content-Type: application/json' \
+            --data-binary @artifacts/top100-active.json \
+            "$TOP100_RESULT_WEBHOOK_URL"
+
+      - name: Persist public-safe selection snapshot
+        shell: bash
+        run: |
+          mkdir -p data
+          cp artifacts/top100-active.json data/top100-active.json
+          if git diff --quiet -- data/top100-active.json; then
+            exit 0
+          fi
+          git config user.name "SocialMarket Top100 Agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/top100-active.json
+          git commit -m "Refresh SocialMarket Top100 selection"
+          git push
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: socialmarket-top100-v2-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 30
