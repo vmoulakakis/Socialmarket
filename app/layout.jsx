@@ -6,7 +6,8 @@ import AppShell from '@/components/AppShell';
 
 export const metadata = {
   title: 'SocialMarket AI',
-  description: 'Greek Market & Affiliate Business Intelligence'
+  description: 'Private SocialMarket administration dashboard',
+  robots: { index: false, follow: false, noarchive: true, nosnippet: true },
 };
 
 export default function RootLayout({ children }) {
