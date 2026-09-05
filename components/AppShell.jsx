@@ -32,11 +32,15 @@ function activePath(pathname,href){
 
 export default function AppShell({children}){
  const pathname=usePathname();
+ const isPublicRoute=pathname?.startsWith('/affinity-b2b')||pathname?.startsWith('/affinity/');
  const [collapsed,setCollapsed]=useState(false);
  const context=useMemo(()=>{
   const item=groups.flatMap(g=>g.items).find(x=>activePath(pathname,x.href));
   return item?.label||'AI Process';
  },[pathname]);
+
+ if(isPublicRoute)return children;
+
  return <div className={`smShell ${collapsed?'smShellCollapsed':''}`}>
   <aside className="smSidebar" aria-label="Primary navigation">
    <div className="smBrandRow">
