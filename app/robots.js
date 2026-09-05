@@ -1,5 +1,1 @@
-export default function robots() {
-  return {
-    rules: [{ userAgent: '*', disallow: '/' }],
-  };
-}
+import{SITE}from'../lib/affinity';export default function robots(){return{rules:[{userAgent:'*',allow:'/',disallow:'/go/'}],sitemap:`${SITE}/sitemap.xml`,host:SITE}}

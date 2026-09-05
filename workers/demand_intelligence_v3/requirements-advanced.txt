@@ -1,7 +1,0 @@
-numpy>=2.0
-pandas>=2.2
-statsforecast>=2.0
-ruptures>=1.1.10
-rapidfuzz>=3.9
-networkx>=3.3
-# Optional challengers are installed best-effort in the workflow and remain gated by history/readiness.

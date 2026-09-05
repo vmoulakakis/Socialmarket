@@ -1,23 +1,3 @@
 import './globals.css';
-import './semantic.css';
-import './design-v2.css';
-import AuthGate from '@/components/AuthGate';
-import AppShell from '@/components/AppShell';
-
-export const metadata = {
-  title: 'SocialMarket AI',
-  description: 'Private SocialMarket administration dashboard',
-  robots: { index: false, follow: false, noarchive: true, nosnippet: true },
-};
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="el">
-      <body>
-        <AuthGate>
-          <AppShell>{children}</AppShell>
-        </AuthGate>
-      </body>
-    </html>
-  );
-}
+export const metadata={metadataBase:new URL('https://affinity-b2b-greece.vercel.app'),title:{default:'AFFINITY B2B Greece | AI Sourcing για επιχειρήσεις',template:'%s | AFFINITY B2B Greece'},description:'AI B2B sourcing για επαγγελματίες στην Ελλάδα: pain-gap discovery, διεθνείς λύσεις, Greek-market checks και total-cost thinking.',robots:{index:true,follow:true,googleBot:{index:true,follow:true,'max-image-preview':'large','max-snippet':-1}},openGraph:{type:'website',locale:'el_GR',siteName:'AFFINITY B2B Greece'}};
+export default function Layout({children}){return <html lang="el"><body>{children}</body></html>}

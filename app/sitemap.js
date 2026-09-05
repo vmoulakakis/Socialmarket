@@ -1,3 +1,1 @@
-export default function sitemap() {
-  return [];
-}
+import{inventory,SITE}from'../lib/affinity';export default async function sitemap(){const items=(await inventory(42)).filter(x=>x.verification?.status!=='AI_SCREENING');return[{url:SITE,lastModified:new Date(),changeFrequency:'daily',priority:1},...items.map(x=>({url:`${SITE}/products/${x.aliexpressId}`,lastModified:new Date(x.verification?.checked||x.updatedAt||Date.now()),changeFrequency:'weekly',priority:.8}))]}
