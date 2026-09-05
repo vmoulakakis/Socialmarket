@@ -1,0 +1,1 @@
+User policy lock: Top-100 is a rolling active set of at most 5 product categories; only >€20 expected commission and rare/unavailable-in-Greece opportunities qualify; provider-confirmed published items must exit the active list and be replaced daily; high-conviction viral opportunities may trigger a separate public AFFINITY deployment.
