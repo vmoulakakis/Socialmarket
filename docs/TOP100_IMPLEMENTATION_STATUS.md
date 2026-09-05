@@ -1,0 +1,1 @@
+Implementation status started 2026-09-05: policy, config, optimizer, daily workflow, tests, initial snapshots. Remaining live wiring depends on existing SocialMarket candidate/evidence sources and SocialScheduler reconciliation endpoints.
