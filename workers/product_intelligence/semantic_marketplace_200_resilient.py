@@ -7,19 +7,13 @@ its proven travelai server-side credential runtime through a compatibility
 proxy. Missing tracking or weak evidence fails closed.
 """
 from __future__ import annotations
-
-import json
-import os
-import urllib.error
-import urllib.request
+import json,os,urllib.error,urllib.request
 from typing import Any
-
 import semantic_marketplace_200 as core
 
 _BASE_GATEWAY=core.gateway
 _ORIGINAL_DISCOVER=core.discover_aliexpress
 AI_GATEWAY=os.getenv('MARKETPLACE200_AI_GATEWAY','https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway')
-
 
 def _ai(action:str,payload:dict[str,Any])->dict[str,Any]:
     body=json.dumps({'action':action,'payload':payload},ensure_ascii=False,default=str).encode()
@@ -31,56 +25,54 @@ def _ai(action:str,payload:dict[str,Any])->dict[str,Any]:
     if not data.get('ok'):raise RuntimeError(f'marketplace ai {action} failed: {data}')
     return data
 
-
 def _clamp(v:Any)->float:
     try:return max(0.0,min(100.0,float(v or 0)))
     except:return 0.0
 
+def _collect_clusters(action:str,key:str,base:dict[str,Any])->list[dict[str,Any]]:
+    out=[];seen=set()
+    for batch in range(2):
+        payload={**base,'batch_index':batch+1,'excluded_cluster_keys':sorted(seen)}
+        plan=_ai(action,payload).get('plan') or {}
+        for c in list(plan.get(key) or []):
+            ck=str(c.get('cluster_key') or '').strip()
+            if not ck or ck in seen:continue
+            seen.add(ck);out.append(c)
+            if len(out)>=10:break
+    if len(out)!=10:raise RuntimeError(f'{key}_must_have_10_unique_clusters_got_{len(out)}')
+    return out
 
 def _split_gateway(action:str,**payload:Any)->dict[str,Any]:
     if action=='plan':
         ctx=_BASE_GATEWAY('context')
-        pains=list(ctx.get('pains') or [])[:48]
-        markets=list(ctx.get('markets') or [])[:28]
-        feedback=list(ctx.get('feedback') or [])[:20]
-        merchants=[
-            {'merchant_id':x.get('merchant_id'),'merchant':x.get('canonical_name'),'category':x.get('primary_category'),'subcategory':x.get('primary_subcategory'),'rank':x.get('global_rank'),'trust':x.get('trust_score'),'confidence':x.get('research_confidence')}
-            for x in list(ctx.get('programs') or [])[:50]
-        ]
-        link_payload={'market':'GR','pain_clusters':pains,'market_context':markets,'eligible_merchants':merchants,'feedback':feedback,'policy':ctx.get('config') or {}}
-        ali_payload={'market':'GR','pain_clusters':pains,'market_context':markets,'feedback':feedback,'policy':ctx.get('config') or {}}
-        link=_ai('plan_linkwise',link_payload).get('plan') or {}
-        ali=_ai('plan_aliexpress',ali_payload).get('plan') or {}
-        return {'ok':True,'plan':{'linkwise_clusters':list(link.get('linkwise_clusters') or []),'aliexpress_clusters':list(ali.get('aliexpress_clusters') or [])}}
+        pains=list(ctx.get('pains') or [])[:48];markets=list(ctx.get('markets') or [])[:28];feedback=list(ctx.get('feedback') or [])[:20]
+        merchants=[{'merchant_id':x.get('merchant_id'),'merchant':x.get('canonical_name'),'category':x.get('primary_category'),'subcategory':x.get('primary_subcategory'),'rank':x.get('global_rank'),'trust':x.get('trust_score'),'confidence':x.get('research_confidence')} for x in list(ctx.get('programs') or [])[:50]]
+        common={'market':'GR','pain_clusters':pains,'market_context':markets,'feedback':feedback,'policy':ctx.get('config') or {}}
+        link=_collect_clusters('plan_linkwise','linkwise_clusters',{**common,'eligible_merchants':merchants})
+        ali=_collect_clusters('plan_aliexpress','aliexpress_clusters',common)
+        return {'ok':True,'plan':{'linkwise_clusters':link,'aliexpress_clusters':ali}}
     if action=='evaluate':
         items=list(payload.get('items') or [])
         if not items:return {'ok':True,'items':[]}
-        if len(items)>8:raise RuntimeError('evaluate_batch_must_be_1_to_8')
-        research=_ai('research',{'market':'GR','items':items}).get('research') or {}
-        research_items=list(research.get('items') or [])
+        if len(items)>6:raise RuntimeError('evaluate_batch_must_be_1_to_6')
+        research=_ai('research',{'market':'GR','items':items}).get('research') or {};research_items=list(research.get('items') or [])
         skeptic=_ai('skeptic',{'market':'GR','items':items,'research':research_items}).get('skeptic') or {}
-        rm={str(x.get('source_record_hash')):x for x in research_items}
-        sm={str(x.get('source_record_hash')):x for x in list(skeptic.get('items') or [])}
-        merged=[]
+        rm={str(x.get('source_record_hash')):x for x in research_items};sm={str(x.get('source_record_hash')):x for x in list(skeptic.get('items') or [])};merged=[]
         for raw in items:
             key=str(raw.get('source_record_hash'));r=rm.get(key,{}) or {};s=sm.get(key,{}) or {}
             availability=str(s.get('corrected_greek_availability') or r.get('greek_availability_assessment') or raw.get('greek_availability') or 'UNKNOWN')
-            quality=min(_clamp(r.get('product_quality_score')),_clamp(s.get('product_quality_score')))
-            verdict=str(s.get('verdict') or 'needs_review')
+            quality=min(_clamp(r.get('product_quality_score')),_clamp(s.get('product_quality_score')));verdict=str(s.get('verdict') or 'needs_review')
             selected=verdict=='validated' and quality>=75 and _clamp(r.get('affinity_score'))>=76 and (raw.get('portfolio')!='aliexpress' or availability in ('ABSENT','VERY_RARE'))
             merged.append({**raw,**r,'greek_availability':availability,'product_quality_score':quality,'skeptic_verdict':verdict,'quality_decision':'SELECTED' if selected else ('REJECTED' if verdict=='rejected' else 'HOLD'),'skeptic_reasons':list(s.get('reasons') or []),'skeptic_blockers':list(s.get('blockers') or []),'required_rechecks':list(s.get('required_rechecks') or []),'contradiction_score':_clamp(s.get('contradiction_score'))})
         return {'ok':True,'items':merged}
     return _BASE_GATEWAY(action,**payload)
 
-
 core.gateway=_split_gateway
-
 
 def _health()->dict[str,Any]:
     try:
         with urllib.request.urlopen(core.ALI_GATEWAY,timeout=30) as response:return json.loads(response.read().decode())
     except Exception as exc:return {'ok':False,'configured':False,'tracking_configured':False,'error':str(exc)[:400]}
-
 
 def _find_tracking_url(value:Any)->str:
     if isinstance(value,str):return value.replace('http://','https://',1) if value.startswith(('https://s.click.aliexpress.com/','http://s.click.aliexpress.com/')) else ''
@@ -97,14 +89,12 @@ def _find_tracking_url(value:Any)->str:
             if url:return url
     return ''
 
-
 def discover_aliexpress_safe(clusters,excluded):
     health=_health()
     if not health.get('configured') or not health.get('tracking_configured'):
         print(json.dumps({'warning':'aliexpress_api_blocked','configured':bool(health.get('configured')),'tracking_configured':bool(health.get('tracking_configured')),'policy':'no_cache_fallback'}),flush=True)
         return ({str(c.get('cluster_key')):[] for c in clusters},{'api_blocked':True,'configured':bool(health.get('configured')),'tracking_configured':bool(health.get('tracking_configured')),'commission_gt30_unique':0,'ai_shortlist':0,'greek_research':{},'policy':'authenticated_api_required_no_cached_substitute'})
-    buckets,stats=_ORIGINAL_DISCOVER(clusters,excluded)
-    generated=0;dropped=0
+    buckets,stats=_ORIGINAL_DISCOVER(clusters,excluded);generated=0;dropped=0
     for key,rows in list(buckets.items()):
         valid=[]
         for row in rows:
@@ -114,14 +104,10 @@ def discover_aliexpress_safe(clusters,excluded):
                     if row['tracking_url']:generated+=1
                 except Exception as exc:row.setdefault('evidence_summary',{})['tracking_generation_error']=str(exc)[:400]
             if not _find_tracking_url(row.get('tracking_url')):dropped+=1;continue
-            row['tracking_url']=_find_tracking_url(row.get('tracking_url'))
-            row.setdefault('evidence_summary',{})['affiliate_tracking_verified_source']='AliExpress Affiliate API promotion link'
-            row.setdefault('evidence_summary',{})['credential_runtime']='travelai server-side secrets via compatibility gateway'
-            valid.append(row)
+            row['tracking_url']=_find_tracking_url(row.get('tracking_url'));row.setdefault('evidence_summary',{})['affiliate_tracking_verified_source']='AliExpress Affiliate API promotion link';row.setdefault('evidence_summary',{})['credential_runtime']='travelai server-side secrets via compatibility gateway';valid.append(row)
         buckets[key]=valid
     stats.update({'api_blocked':False,'configured':True,'tracking_configured':True,'tracking_links_generated':generated,'missing_tracking_dropped':dropped,'ai_shortlist':sum(len(v) for v in buckets.values()),'credential_runtime':'travelai server-side'})
     return buckets,stats
-
 
 core.discover_aliexpress=discover_aliexpress_safe
 if __name__=='__main__':raise SystemExit(core.main())
