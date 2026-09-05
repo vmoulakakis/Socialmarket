@@ -23,7 +23,16 @@ export default async function ProductPage({ params }) {
   const { slug } = await params;
   const product = bySlug[slug];
   if (!product) notFound();
-  const record = affiliateRecords[product.aliexpressId];
-  if (!record?.promotionLink) notFound();
+  const source = affiliateRecords[product.aliexpressId];
+  if (!source?.promotionLink) notFound();
+  const record = {
+    aliexpressId: source.aliexpressId,
+    salePrice: source.salePrice,
+    salePriceCurrency: source.salePriceCurrency,
+    shopName: source.shopName,
+    mainImage: source.mainImage,
+    updatedAt: source.updatedAt,
+    promotionLink: source.promotionLink,
+  };
   return <ConversionPage product={product} record={record} />;
 }
