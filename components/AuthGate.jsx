@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 const ADMIN_EMAIL = 'vmoulakakis@gmail.com';
+const SESSION_TIMEOUT_MS = 6000;
+const SIGNIN_TIMEOUT_MS = 12000;
+
+function timeoutResult(ms, value) {
+  return new Promise((resolve) => setTimeout(() => resolve(value), ms));
+}
 
 export default function AuthGate({ children }) {
   const [session, setSession] = useState(null);
@@ -14,6 +20,11 @@ export default function AuthGate({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    const hardStop = setTimeout(() => {
+      if (!mounted) return;
+      setLoading(false);
+      setMessage((old) => old || 'Ο έλεγχος session καθυστέρησε. Μπορείς να συνδεθείς ξανά.');
+    }, SESSION_TIMEOUT_MS);
 
     const acceptSession = async (nextSession) => {
       if (!mounted) return;
@@ -26,7 +37,12 @@ export default function AuthGate({ children }) {
 
       const email = String(nextSession.user?.email || '').toLowerCase();
       if (email !== ADMIN_EMAIL) {
-        await supabase.auth.signOut({ scope: 'local' });
+        try {
+          await Promise.race([
+            supabase.auth.signOut({ scope: 'local' }),
+            timeoutResult(3000, null),
+          ]);
+        } catch {}
         if (mounted) {
           setSession(null);
           setMessage('Δεν επιτρέπεται πρόσβαση σε αυτόν τον λογαριασμό.');
@@ -36,45 +52,72 @@ export default function AuthGate({ children }) {
       }
 
       setSession(nextSession);
+      setMessage('');
       setLoading(false);
     };
 
-    supabase.auth.getSession().then(({ data }) => acceptSession(data.session ?? null));
+    Promise.race([
+      supabase.auth.getSession(),
+      timeoutResult(SESSION_TIMEOUT_MS, { timeout: true }),
+    ]).then((result) => {
+      if (!mounted || result?.timeout) return;
+      void acceptSession(result?.data?.session ?? null);
+    }).catch((error) => {
+      if (!mounted) return;
+      setMessage(error?.message || 'Αποτυχία ελέγχου session.');
+      setLoading(false);
+    });
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       void acceptSession(nextSession ?? null);
     });
 
     return () => {
       mounted = false;
+      clearTimeout(hardStop);
       listener.subscription.unsubscribe();
     };
   }, []);
 
   async function signIn(event) {
     event.preventDefault();
-    if (!password) return;
+    if (!password || signingIn) return;
     setSigningIn(true);
     setMessage('');
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: ADMIN_EMAIL,
-      password,
-    });
+    try {
+      const result = await Promise.race([
+        supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password }),
+        timeoutResult(SIGNIN_TIMEOUT_MS, { timeout: true }),
+      ]);
 
-    if (error) {
-      setMessage(error.message === 'Invalid login credentials' ? 'Λάθος password.' : error.message);
+      if (result?.timeout) {
+        setMessage('Η απάντηση σύνδεσης καθυστέρησε. Αν το login ολοκληρώθηκε, πάτησε “Retry session”.');
+        setSigningIn(false);
+        return;
+      }
+
+      if (result?.error) {
+        setMessage(result.error.message === 'Invalid login credentials' ? 'Λάθος password.' : result.error.message);
+        setSigningIn(false);
+        return;
+      }
+
+      setPassword('');
       setSigningIn(false);
-      return;
+    } catch (error) {
+      setMessage(error?.message || 'Αποτυχία σύνδεσης.');
+      setSigningIn(false);
     }
-
-    setPassword('');
-    setSigningIn(false);
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
-    setSession(null);
-    setPassword('');
+    try {
+      await Promise.race([supabase.auth.signOut(), timeoutResult(5000, null)]);
+    } finally {
+      setSession(null);
+      setPassword('');
+    }
   }
 
   if (loading) {
@@ -91,6 +134,7 @@ export default function AuthGate({ children }) {
           <input className="search" type="email" value={ADMIN_EMAIL} readOnly autoComplete="username" aria-label="Admin email" />
           <input className="search" type="password" value={password} onChange={(event)=>setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" required autoFocus />
           <button className="button" type="submit" disabled={signingIn}>{signingIn ? 'Signing in…' : 'Sign in'}</button>
+          <button className="link-button" type="button" onClick={()=>window.location.reload()}>Retry session</button>
         </form>
         {message && <p className="muted">{message}</p>}
       </div>
