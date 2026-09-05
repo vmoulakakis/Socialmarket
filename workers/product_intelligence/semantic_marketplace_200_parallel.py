@@ -15,6 +15,10 @@ import semantic_marketplace_200_resilient as resilient
 
 core = resilient.core
 MAX_WORKERS = max(2, min(8, int(os.getenv('MARKETPLACE200_AI_WORKERS', '6'))))
+# The base worker intentionally has conservative minimums. The production
+# accelerator can lower only shortlist depth; all commercial/quality gates stay unchanged.
+core.LINKWISE_PER_CLUSTER_AI = max(4, min(12, int(os.getenv('MARKETPLACE200_LINKWISE_AI_PER_CLUSTER', '8'))))
+core.ALI_PER_CLUSTER_RESEARCH = max(4, min(12, int(os.getenv('MARKETPLACE200_ALI_RESEARCH_PER_CLUSTER', '8'))))
 
 
 def evaluate_buckets_parallel(buckets):
@@ -24,7 +28,14 @@ def evaluate_buckets_parallel(buckets):
     for key, items in buckets.items():
         for start in range(0, len(items), core.AI_BATCH):
             jobs.append((key, start, items[start:start + core.AI_BATCH]))
-    print(json.dumps({'phase': 'qa_parallel_start', 'batches': len(jobs), 'workers': MAX_WORKERS, 'batch_size': core.AI_BATCH}), flush=True)
+    print(json.dumps({
+        'phase': 'qa_parallel_start',
+        'batches': len(jobs),
+        'workers': MAX_WORKERS,
+        'batch_size': core.AI_BATCH,
+        'linkwise_shortlist_per_cluster': core.LINKWISE_PER_CLUSTER_AI,
+        'ali_research_per_cluster': core.ALI_PER_CLUSTER_RESEARCH,
+    }), flush=True)
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(core.evaluate_resilient, batch): (key, start) for key, start, batch in jobs}
         completed = 0
