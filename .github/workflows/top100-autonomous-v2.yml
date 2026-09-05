@@ -47,7 +47,7 @@ jobs:
           PY
 
       - name: Run autonomous Top-100 selector
-        run: python workers/product_intelligence/top100_autonomous_v2.py
+        run: python workers/product_intelligence/top100_autonomous_v2_resilient.py
 
       - name: Verify hard policy invariants
         run: |
