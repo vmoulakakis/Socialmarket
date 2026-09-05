@@ -1,0 +1,82 @@
+{
+  "version": "2026.09",
+  "brand": {
+    "name": "SocialMarket",
+    "positioning": "social gap-filler marketplace",
+    "public_promise": "Find what fixes it",
+    "public_language_rules": [
+      "start from the pain, never from supplier/network language",
+      "never expose portfolio size or internal sourcing quotas",
+      "never expose commission, merchant rank or internal scoring",
+      "never call the experience an affiliate catalogue",
+      "describe external commercial links only through a short transparency disclosure",
+      "never fabricate reviews, scarcity, countdowns, shipping speed, warranty or discounts"
+    ]
+  },
+  "design": {
+    "inspiration_principles": [
+      "PagePilot: product-page modularity, brand matching, AI-image/creative mindset, sticky conversion controls",
+      "Vitals AI Page Builder: editable structured content, theme consistency, product-context generation",
+      "PageFly: build-test-optimize CRO mindset and full-funnel composition"
+    ],
+    "visual_language": {
+      "base": "editorial DTC social-commerce",
+      "palette": ["#111318", "#F4EFE6", "#DDFF55", "#FF6B47", "#806CFF"],
+      "typography": "oversized high-contrast grotesk with compact utility labels",
+      "imagery": "product-first, cinematic crops, clean lifestyle context, no fake product redesign",
+      "motion": "subtle marquee, hover lift, image zoom; respect prefers-reduced-motion"
+    }
+  },
+  "case_solver_funnel": [
+    "hook",
+    "pain",
+    "gap",
+    "solution",
+    "visual use-case story",
+    "truthful why-now",
+    "evidence translation",
+    "best-for",
+    "before-you-buy checks",
+    "objection handling",
+    "case notes",
+    "CTA",
+    "QR",
+    "share",
+    "related fixes"
+  ],
+  "creative_pack": {
+    "required_formats": [
+      {"id": "feed_4x5", "ratio": "4:5", "use": ["Instagram", "Facebook"]},
+      {"id": "story_9x16", "ratio": "9:16", "use": ["Instagram Stories", "TikTok", "Reels cover"]},
+      {"id": "square_1x1", "ratio": "1:1", "use": ["Facebook", "Instagram", "share cards"]}
+    ],
+    "copy_fields": [
+      "hook",
+      "pain_angle",
+      "gap_angle",
+      "solution_angle",
+      "audience",
+      "objections",
+      "urgency_angle",
+      "cta",
+      "caption_short",
+      "caption_long",
+      "hashtags"
+    ],
+    "visual_fields": [
+      "hero_direction",
+      "lifestyle_direction",
+      "detail_direction",
+      "lighting",
+      "composition",
+      "product_fidelity_rules",
+      "qr_placement"
+    ],
+    "qr_rule": "payload must equal the exact validated tracking URL",
+    "urgency_rule": "use only time-sensitive facts that can be verified; otherwise phrase urgency as a request to check current price/availability"
+  },
+  "socialscheduler": {
+    "states": ["discovered", "enriched", "creative_ready", "scheduled", "published", "cooldown", "archived"],
+    "rule": "only creative packs that pass skeptic/evidence checks may be scheduled"
+  }
+}
