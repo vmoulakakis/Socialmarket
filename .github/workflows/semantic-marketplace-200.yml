@@ -24,6 +24,7 @@ jobs:
     env:
       MARKETPLACE200_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway
       MARKETPLACE200_AI_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway
+      MARKETPLACE_SOCIAL_FUNNEL_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace-social-funnel-gateway
       ALIEXPRESS_AFFILIATE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway
       PRODUCT_SOURCE_FEED: linkwise-products.json
       MARKETPLACE200_PROFILE_PATH: semantic-marketplace-200-profile.json
@@ -50,14 +51,16 @@ jobs:
           urls={
             'data':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway',
             'ai':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway',
+            'social':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace-social-funnel-gateway',
             'ali':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway',
           }
           out={}
           for key,url in urls.items():
               with urllib.request.urlopen(url,timeout=30) as r:out[key]=json.loads(r.read().decode())
-          print({'data':out['data'].get('ok'),'ai':out['ai'].get('ok'),'ali':out['ali']})
+          print({'data':out['data'].get('ok'),'ai':out['ai'].get('ok'),'social':out['social'].get('ok'),'ali':out['ali']})
           assert out['data'].get('ok') is True
           assert out['ai'].get('ok') is True
+          assert out['social'].get('ok') is True
           assert out['ali'].get('ok') is True
           assert out['ali'].get('configured') is True
           assert out['ali'].get('tracking_configured') is True
