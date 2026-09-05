@@ -1,17 +1,13 @@
-name: Autonomous Greece Top100 V2
+name: Legacy Greece Top100 V2 — manual only
 
+# RETIRED FROM PRODUCTION SCHEDULING.
+# Canonical production discovery is .github/workflows/semantic-marketplace-200.yml.
+# This workflow remains manual-only for historical diagnostics and rollback research.
 on:
-  schedule:
-    # 03:35 UTC = 06:35 Athens during summer time, after overnight intelligence refreshes.
-    - cron: '35 3 * * *'
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/trigger-top100-v2'
 
 concurrency:
-  group: socialmarket-autonomous-top100-v2
+  group: socialmarket-legacy-top100-v2
   cancel-in-progress: false
 
 permissions:
@@ -27,47 +23,14 @@ jobs:
       TOP100_POOL_LIMIT: '350'
       TOP100_SCARCITY_PROBE_LIMIT: '300'
       TOP100_SCARCITY_WORKERS: '8'
-      TOP100_DAILY_HANDOFF_LIMIT: '5'
+      TOP100_DAILY_HANDOFF_LIMIT: '0'
       TOP100_PROFILE_PATH: top100-autonomous-v2-profile.json
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Gateway health
+      - name: Historical diagnostic only
         run: |
-          python - <<'PY'
-          import json, urllib.request
-          url='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/top100-agent-gateway'
-          with urllib.request.urlopen(url,timeout=30) as r: data=json.loads(r.read().decode())
-          print(data)
-          assert data.get('ok') is True
-          PY
-
-      - name: Run autonomous Top-100 selector
-        run: python workers/product_intelligence/top100_autonomous_v2_resilient.py
-
-      - name: Verify hard policy invariants
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          p=json.loads(Path('top100-autonomous-v2-profile.json').read_text())
-          assert p.get('status')=='completed', p
-          assert len(p.get('selected_categories') or []) <= 5, p
-          assert int(p.get('selected_count') or 0) > 0, p
-          assert p.get('policy',{}).get('commission_floor_eur') == 20, p
-          assert p.get('policy',{}).get('scarcity_fail_closed') is True, p
-          print({'run_id':p.get('run_id'),'selected':p.get('selected_count'),'categories':p.get('selected_categories'),'handoff':p.get('handoff',{}).get('products_handed_off'),'landing_candidates':len(p.get('landing_candidates') or []),'underfilled':p.get('underfilled')})
-          PY
-
-      - name: Upload auditable decision profile
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: autonomous-greece-top100-v2-${{ github.run_number }}
-          path: top100-autonomous-v2-profile.json
-          if-no-files-found: error
-          retention-days: 30
+          echo 'Legacy Top100 V2 has been retired from production scheduling.'
+          echo 'Use AFFINITY Semantic Marketplace 200 for current product discovery.'
