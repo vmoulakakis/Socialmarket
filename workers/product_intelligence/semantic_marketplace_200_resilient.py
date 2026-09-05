@@ -2,7 +2,8 @@
 """Production launcher for AFFINITY Semantic SocialMarket.
 
 Evidence-grounded opportunity planning is deterministic and bounded. AI is used
-where it adds value: product research, skeptic QA and creative interpretation.
+where it adds value: product research and skeptic QA. The public/social handoff
+uses branded case-solver landing pages plus dynamic HD social creatives.
 AliExpress uses the proven travelai server-side credential runtime through a
 compatibility proxy. Missing tracking or weak evidence fails closed.
 """
@@ -14,17 +15,20 @@ import semantic_marketplace_200 as core
 _BASE_GATEWAY=core.gateway
 _ORIGINAL_DISCOVER=core.discover_aliexpress
 AI_GATEWAY=os.getenv('MARKETPLACE200_AI_GATEWAY','https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway')
+SOCIAL_FUNNEL_GATEWAY=os.getenv('MARKETPLACE_SOCIAL_FUNNEL_GATEWAY','https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace-social-funnel-gateway')
 
 
-def _ai(action:str,payload:dict[str,Any])->dict[str,Any]:
-    body=json.dumps({'action':action,'payload':payload},ensure_ascii=False,default=str).encode()
-    req=urllib.request.Request(AI_GATEWAY,data=body,headers={'Authorization':'Bearer '+core.oidc_token(),'Content-Type':'application/json'},method='POST')
+def _post_oidc(url:str,body:dict[str,Any],label:str,timeout:int=300)->dict[str,Any]:
+    req=urllib.request.Request(url,data=json.dumps(body,ensure_ascii=False,default=str).encode(),headers={'Authorization':'Bearer '+core.oidc_token(),'Content-Type':'application/json'},method='POST')
     try:
-        with urllib.request.urlopen(req,timeout=300) as response:data=json.loads(response.read().decode())
+        with urllib.request.urlopen(req,timeout=timeout) as response:data=json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
-        raw=exc.read().decode(errors='replace');raise RuntimeError(f'marketplace ai {action} {exc.code}: {raw[:1000]}') from exc
-    if not data.get('ok'):raise RuntimeError(f'marketplace ai {action} failed: {data}')
+        raw=exc.read().decode(errors='replace');raise RuntimeError(f'{label} {exc.code}: {raw[:1000]}') from exc
+    if not data.get('ok'):raise RuntimeError(f'{label} failed: {data}')
     return data
+
+
+def _ai(action:str,payload:dict[str,Any])->dict[str,Any]:return _post_oidc(AI_GATEWAY,{'action':action,'payload':payload},f'marketplace ai {action}')
 
 
 def _clamp(v:Any)->float:
@@ -58,32 +62,20 @@ def _market_map(markets:list[dict[str,Any]])->dict[str,dict[str,Any]]:
 def _cluster_from_pain(p:dict[str,Any],portfolio:str,rank:int,markets:dict[str,dict[str,Any]])->dict[str,Any]:
     category=str(p.get('category') or 'Everyday life').strip();sub=str(p.get('subcategory') or category).strip();pain=str(p.get('canonical_text') or '').strip()
     market=markets.get(_slug(sub)) or markets.get(_slug(category)) or {}
-    market_gap=_clamp(market.get('pain_gap_score'))
-    competition=_clamp(p.get('competition_score'))
+    market_gap=_clamp(market.get('pain_gap_score'));competition=_clamp(p.get('competition_score'))
     whitespace=market_gap if market_gap>0 else _clamp(_clamp(p.get('pain_severity'))*.62+max(0,100-competition)*.38)
     demand=_clamp(p.get('demand_score'));intent=_clamp(p.get('commercial_intent'));conf=max(_confidence100(p.get('confidence')),_confidence100(market.get('confidence')))
-    ident=str(p.get('id') or rank)
-    prefix='lw' if portfolio=='linkwise' else 'ax'
-    key=f"{prefix}-{rank:02d}-{_slug(sub)}-{_slug(ident)[-8:]}"[:80]
-    job=f"Να λύσω πιο πρακτικά: {pain}"[:260]
-    gap=f"Το συγκεκριμένο pain έχει τεκμηριωμένο ενδιαφέρον και χρειάζεται λύση με σαφές use-case fit, όχι generic επιλογή."[:300]
-    return {
-        'cluster_key':key,'niche':category,'subniche':sub,'job_to_be_done':job,'pain_statement':pain[:420],'gap_statement':gap,
-        'demand_score':round(demand,2),'whitespace_score':round(whitespace,2),'commercial_intent_score':round(intent,2),'confidence':round(conf,2),
-        'evidence_ids':[ident],'rationale':'Evidence-grounded AFFINITY opportunity selected from validated pain, intent and market signals.',
-        'search_queries':[pain[:90],f'{sub} solution'.strip()[:90],f'{category} problem solver'.strip()[:90]],
-    }
+    ident=str(p.get('id') or rank);prefix='lw' if portfolio=='linkwise' else 'ax';key=f"{prefix}-{rank:02d}-{_slug(sub)}-{_slug(ident)[-8:]}"[:80]
+    return {'cluster_key':key,'niche':category,'subniche':sub,'job_to_be_done':f"Να λύσω πιο πρακτικά: {pain}"[:260],'pain_statement':pain[:420],'gap_statement':'Το pain χρειάζεται λύση με σαφές use-case fit, όχι generic επιλογή.','demand_score':round(demand,2),'whitespace_score':round(whitespace,2),'commercial_intent_score':round(intent,2),'confidence':round(conf,2),'evidence_ids':[ident],'rationale':'Evidence-grounded AFFINITY opportunity from validated pain, intent and market signals.','search_queries':[pain[:90],f'{sub} solution'.strip()[:90],f'{category} problem solver'.strip()[:90]]}
 
 
 def _deterministic_plan(ctx:dict[str,Any])->dict[str,Any]:
     pains=[p for p in list(ctx.get('pains') or []) if str(p.get('canonical_text') or '').strip()]
     pains=sorted(pains,key=_semantic_value,reverse=True)
     if len(pains)<20:raise RuntimeError(f'validated_pain_pool_too_small:{len(pains)}')
-    markets=_market_map(list(ctx.get('markets') or []))
-    merchant_terms={_slug(x.get('primary_category')) for x in list(ctx.get('programs') or [])}|{_slug(x.get('primary_subcategory')) for x in list(ctx.get('programs') or [])}
+    markets=_market_map(list(ctx.get('markets') or []));merchant_terms={_slug(x.get('primary_category')) for x in list(ctx.get('programs') or [])}|{_slug(x.get('primary_subcategory')) for x in list(ctx.get('programs') or [])}
     matched=[p for p in pains if _slug(p.get('category')) in merchant_terms or _slug(p.get('subcategory')) in merchant_terms]
-    link_source=(matched+pains) if matched else pains
-    link=[];used=set()
+    link_source=(matched+pains) if matched else pains;link=[];used=set()
     for p in link_source:
         pid=str(p.get('id') or '')
         if pid in used:continue
@@ -107,8 +99,7 @@ def _deterministic_plan(ctx:dict[str,Any])->dict[str,Any]:
 
 def _split_gateway(action:str,**payload:Any)->dict[str,Any]:
     if action=='plan':
-        ctx=_BASE_GATEWAY('context')
-        plan=_deterministic_plan(ctx)
+        ctx=_BASE_GATEWAY('context');plan=_deterministic_plan(ctx)
         print(json.dumps({'phase':'opportunity_plan','planner':plan['planner'],'validated_pains':len(ctx.get('pains') or []),'markets':len(ctx.get('markets') or []),'eligible_programs':len(ctx.get('programs') or [])}),flush=True)
         return {'ok':True,'plan':plan}
     if action=='evaluate':
@@ -123,8 +114,11 @@ def _split_gateway(action:str,**payload:Any)->dict[str,Any]:
             availability=str(s.get('corrected_greek_availability') or r.get('greek_availability_assessment') or raw.get('greek_availability') or 'UNKNOWN')
             quality=min(_clamp(r.get('product_quality_score')),_clamp(s.get('product_quality_score')));verdict=str(s.get('verdict') or 'needs_review')
             selected=verdict=='validated' and quality>=75 and _clamp(r.get('affinity_score'))>=76 and (raw.get('portfolio')!='aliexpress' or availability in ('ABSENT','VERY_RARE'))
-            merged.append({**raw,**r,'greek_availability':availability,'product_quality_score':quality,'skeptic_verdict':verdict,'quality_decision':'SELECTED' if selected else ('REJECTED' if verdict=='rejected' else 'HOLD'),'skeptic_reasons':list(s.get('reasons') or []),'skeptic_blockers':list(s.get('blockers') or []),'required_rechecks':list(s.get('required_rechecks') or []),'contradiction_score':_clamp(s.get('contradiction_score'))})
+            cluster=raw.get('cluster') or {}
+            merged.append({**raw,**r,'job_to_be_done':r.get('job_to_be_done') or cluster.get('job_to_be_done') or raw.get('job_to_be_done'),'pain_statement':r.get('pain_statement') or cluster.get('pain_statement') or raw.get('pain_statement'),'gap_statement':r.get('gap_statement') or cluster.get('gap_statement') or raw.get('gap_statement'),'audience':r.get('audience') or cluster.get('job_to_be_done') or '','hook':r.get('hook') or r.get('solution_statement') or raw.get('product_name'),'caption':r.get('caption') or r.get('solution_statement') or raw.get('product_name'),'hashtags':r.get('hashtags') or [],'greek_availability':availability,'product_quality_score':quality,'skeptic_verdict':verdict,'quality_decision':'SELECTED' if selected else ('REJECTED' if verdict=='rejected' else 'HOLD'),'skeptic_reasons':list(s.get('reasons') or []),'skeptic_blockers':list(s.get('blockers') or []),'required_rechecks':list(s.get('required_rechecks') or []),'contradiction_score':_clamp(s.get('contradiction_score'))})
         return {'ok':True,'items':merged}
+    if action=='handoff':
+        return _post_oidc(SOCIAL_FUNNEL_GATEWAY,{'action':'handoff','run_id':payload.get('run_id'),'limit':payload.get('limit',10)},'marketplace social funnel')
     return _BASE_GATEWAY(action,**payload)
 
 core.gateway=_split_gateway
