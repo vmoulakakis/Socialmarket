@@ -47,18 +47,20 @@ jobs:
         run: |
           python - <<'PY'
           import json,urllib.request
-          urls=[
-            'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway',
-            'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway',
-          ]
-          for url in urls:
-            with urllib.request.urlopen(url,timeout=30) as r:data=json.loads(r.read().decode())
-            print(url,data)
-            assert data.get('ok') is True
+          agent='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway'
+          ali='https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway'
+          with urllib.request.urlopen(agent,timeout=30) as r:a=json.loads(r.read().decode())
+          with urllib.request.urlopen(ali,timeout=30) as r:b=json.loads(r.read().decode())
+          print('Marketplace agent:',a)
+          print('AliExpress API:',{'ok':b.get('ok'),'configured':b.get('configured'),'tracking_configured':b.get('tracking_configured')})
+          assert a.get('ok') is True
+          assert b.get('ok') is True
+          if not b.get('configured') or not b.get('tracking_configured'):
+              print('ALIEXPRESS_API_BLOCKED: Linkwise may complete; no cached AliExpress fallback will be used.')
           PY
 
       - name: Discover audit and persist Marketplace 200
-        run: python workers/product_intelligence/semantic_marketplace_200.py
+        run: python workers/product_intelligence/semantic_marketplace_200_resilient.py
 
       - name: Verify immutable portfolio invariants
         run: |
@@ -78,7 +80,7 @@ jobs:
           assert policy.get('max_products_per_merchant')==3,p
           assert policy.get('product_quality_min')==75,p
           assert policy.get('affinity_min')==76,p
-          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'handoff':(p.get('handoff') or {}).get('products_handed_off')})
+          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'handoff':(p.get('handoff') or {}).get('products_handed_off'),'ali_api':(p.get('stages') or {}).get('aliexpress_api')})
           PY
 
       - name: Upload auditable production profile
