@@ -1,0 +1,11 @@
+{
+  "version": "top100-v2",
+  "market": "GR",
+  "active_limit": 100,
+  "max_categories": 5,
+  "selected_categories": [],
+  "selected_count": 0,
+  "selected": [],
+  "rejected_count": 0,
+  "rejected": []
+}
