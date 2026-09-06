@@ -1,5 +1,8 @@
 # Growth Orchestrator Skill
 
+Version: 2.0
+Updated: 2026-09-07
+
 ## Mission
 Operate a single autonomous GrowthOps control loop for all user-owned public websites, with SocialMarket AI Admin as the only control/status interface, Supabase as the source of truth, Vercel/GitHub/connected ChatGPT-site builders as execution adapters, and evidence-based optimization as the governing principle.
 
@@ -7,7 +10,18 @@ Operate a single autonomous GrowthOps control loop for all user-owned public web
 Include all ACTIVE public sites registered in the Supabase site master registry, including Vercel, GitHub+Vercel and connected ChatGPT-created sites. Exclude internal/test/duplicate/archived properties and exclude SocialMarket AI and SocialScheduler as optimization targets; they are control/publishing infrastructure.
 
 ## Canonical architecture
-PUBLIC SITES -> WEB ANALYTICS -> SUPABASE <- CONVERSION CSV <- SOCIALMARKET DEMAND BRAIN -> GROWTH ORCHESTRATOR -> SPECIALIST AGENTS -> DEPLOYMENT ADAPTERS -> PRODUCTION -> VERIFY -> SUPABASE LEARNING -> SOCIALMARKET AI ADMIN.
+PUBLIC SITES -> WEB ANALYTICS -> SUPABASE <- CONVERSION CSV <- SOCIALMARKET DEMAND BRAIN -> GROWTH ORCHESTRATOR -> SPECIALIST AGENTS -> AFFINITY / CREATIVE PRODUCTION -> AFFINITY PAGE ENGINE / COMPONENT REGISTRY / PAGE DNA -> DEPLOYMENT ADAPTERS -> PRODUCTION -> VERIFY -> SUPABASE LEARNING -> SOCIALMARKET AI ADMIN.
+
+## Canonical creative/page dependencies
+For any new or materially rebuilt commercial page, landing page, microsite, mini-site, comparison experience, lead magnet or campaign page, the orchestrator must route creation through:
+
+- `skills/AFFINITY_SKILL.md` — commercial truth, funnel authority, claims/evidence, affiliate tracking and Greece/EU economics.
+- `skills/AFFINITY_PAGE_ENGINE.md` — source ingestion, angle selection, message matching, archetype selection, Page DNA, controlled generation and remix/variant workflow.
+- `agents/skills/affinity-creative-production/SKILL.md` — implementation/art-direction/copy/media/QA execution.
+- `agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md` — reusable component grammar.
+- `agents/skills/affinity-creative-production/PAGE_DNA.schema.json` — machine-readable page specification.
+
+This routing is mandatory for new/material page creation. CRO micro-edits to an existing page may remain narrowly scoped when a complete page rebuild would be disproportionate, but material structure/hero/offer/message changes must still respect the current AFFINITY angle, evidence, component and measurement rules.
 
 ## Required inputs
 ### Automatic web analytics per site and page
@@ -67,14 +81,33 @@ Prevent conflicting concurrent work on one site by site-level execution locks. S
 - Analytics Agent: telemetry ingestion, attribution, anomalies, data quality and conversion imports.
 - Greek Demand Intelligence Agent: binds site/page intent to canonical SocialMarket demand intelligence and returns demand, whitespace, saturation, confidence, contradictions and next-evidence state without changing canonical truth.
 - SEO Black Belt Agent: ranking opportunity, technical SEO, schema, crawl/indexation, search intent, internal linking and content gaps, conditioned on Greek demand/competition evidence when the site targets Greece.
-- CRO Agent: CTA, affiliate CTR, conversion funnel, UX, trust, copy, page structure and experiments.
+- CRO Agent: CTA, affiliate CTR, conversion funnel, UX, trust, copy, page structure and experiments. For material page changes it produces the measurable hypothesis but delegates generation/implementation through AFFINITY Creative Production/Page Engine rather than free-form redesign.
 - Content Agent: buyer-intent, comparison, problem/solution and pain-gap content grounded in validated demand/pain/competition evidence.
+- AFFINITY Creative Production Agent: converts an approved commercial/content hypothesis into context brief, angle matrix, message-match definition, archetype, Page DNA, component plan, copy/media/design-token plan, implementation, controlled variants and page QA under `skills/AFFINITY_PAGE_ENGINE.md` and `agents/skills/affinity-creative-production/SKILL.md`.
 - Research Agent: incremental evidence collection only where the SocialMarket demand brain identifies uncertainty or missing evidence; do not duplicate validated research.
 - Performance Agent: Core Web Vitals, mobile UX, page weight, rendering and runtime performance.
 - Link & Affiliate Agent: affiliate tracking URL integrity, outbound CTR and broken/expired destination monitoring.
 - Deployment Agent: GitHub/Vercel/connected site-builder preview, production deployment, canonical production-state enforcement.
 - QA/Rollback Agent: post-deployment technical and business validation; rollback on regression.
 - Data Freshness Agent: CSV coverage/freshness checks and user email requests when new conversion data is needed.
+
+## Material page-change routing
+Treat the following as material and route through AFFINITY Creative Production/Page Engine:
+- new landing page or microsite
+- new lead magnet/campaign page
+- new product page architecture
+- material hero/value proposition change
+- material offer/angle/audience change
+- section architecture or page-length redesign
+- new comparison/high-ticket/ROI/quiz/configurator experience
+- substantial brand/art-direction redesign
+- ad-to-landing message-match variant.
+
+The required creation sequence is:
+
+`SOURCE INGEST -> CONTEXT BRIEF -> ANGLE MATRIX -> MESSAGE MATCH -> ARCHETYPE -> PAGE DNA -> COMPONENT PLAN -> COPY -> MEDIA -> DESIGN TOKENS -> ASSEMBLY -> RESPONSIVE QA -> CONVERSION LAYER -> LOCALIZATION -> VARIANTS -> PUBLISH -> MEASURE`
+
+Every major section should map to a component in `COMPONENT_REGISTRY.md` or a justified custom component. Do not permit an unconstrained “generate a beautiful landing page” implementation path for material commercial work.
 
 ## Decision model
 Do not optimize every site every day. Rank opportunities using evidence and sufficient sample size.
@@ -116,15 +149,20 @@ Greek demand / pain intent -> Search intent -> Landing page -> Engagement -> CTA
 
 SEO must not maximize low-intent traffic at the expense of commercial outcomes. CRO must not overfit pages with insufficient traffic. Demand intelligence must not be used as a substitute for observed site conversion data.
 
+When traffic originates from a specific ad, email, social post or campaign, treat message match as part of the funnel: source hook/problem/promise/offer must continue coherently into the landing hero and first proof sequence. Materially different angles should generally receive controlled page variants rather than one diluted generic page.
+
 ## Experiment and learning policy
 Every material change must record:
 - hypothesis
 - target site/page
 - canonical market/taxonomy mapping if applicable
 - demand/competition/pain context snapshot
+- selected angle and message-match state when applicable
+- Page DNA / component IDs for material page work when supported
 - baseline window
 - target metric
 - implementation reference/commit/deployment
+- parent/variant relationship when applicable
 - measurement window
 - before metric
 - after metric
@@ -137,9 +175,11 @@ Outcomes:
 - ITERATE: promising but insufficient evidence.
 - ROLLBACK: technical or business regression.
 
-Persist reusable winning/losing patterns in optimization_knowledge by site type, market state, demand state, competition state, change type, metric lift and confidence so future actions learn from the user's own portfolio.
+Persist reusable winning/losing patterns in optimization_knowledge by site type, market state, demand state, competition state, change type, angle, page archetype, component IDs, metric lift and confidence so future actions learn from the user's own portfolio.
 
 Never write experiment lift back into canonical demand/competition truth. Site-performance learning and market-intelligence truth remain separate but linkable.
+
+Do not call a PagePilot/Magnetic-derived component or any AFFINITY component universally “high converting” based on one result; learn conditional fit by product × offer × audience × traffic × archetype × component sequence.
 
 ## Deployment policy
 For GitHub/Vercel sites use:
@@ -153,7 +193,8 @@ Production gates include as applicable:
 - affiliate links valid
 - schema/metadata valid
 - no material Core Web Vitals regression
-- no unsupported market, demand, price, savings or legal claims introduced by generated copy.
+- no unsupported market, demand, price, savings or legal claims introduced by generated copy
+- for material page work: Page Engine QA target >=85/100 with no hard failure in claim integrity, tracking/destination, mobile usability or product-media accuracy.
 
 Maintain one canonical active production version per site. Keep rollback references. Do not delete historical deployments merely to make the dashboard look clean.
 
@@ -177,6 +218,7 @@ AUTO + MEASURE:
 EXPERIMENT:
 - larger CRO/layout changes with explicit baseline/measurement and rollback.
 - demand-led landing/content variants where the underlying market thesis is already validated.
+- Page Engine angle/message-match/component-order variants with explicit parent page and hypothesis.
 
 USER APPROVAL REQUIRED:
 - domain ownership/changes
@@ -218,16 +260,19 @@ The daily orchestrator must:
 8. Rank opportunities by Growth Priority Score using both site-performance evidence and market-intelligence context.
 9. Acquire site-level lock before assigning execution.
 10. Run the minimum specialist agents needed for each high-value opportunity.
-11. Execute only safe/reversible actions that meet autonomy policy and evidence thresholds.
-12. Deploy through the correct adapter and run quality gates.
-13. Roll back regressions automatically when permitted.
-14. Update SocialMarket AI Admin status, metrics, market context, action history and learning records.
-15. Release locks and persist the daily portfolio summary.
+11. For any material page/campaign creation or rebuild, route through AFFINITY Creative Production/Page Engine and require selected angle, message match when applicable, archetype, Page DNA/component plan and measurable hypothesis before implementation.
+12. Execute only safe/reversible actions that meet autonomy policy and evidence thresholds.
+13. Deploy through the correct adapter and run quality gates.
+14. Roll back regressions automatically when permitted.
+15. Update SocialMarket AI Admin status, metrics, market context, action history and learning records.
+16. Release locks and persist the daily portfolio summary.
 
 ## MyAgenticTeam integration
 Use MyAgenticTeam as a coordination/execution adapter for delegated implementation work. The Growth Orchestrator remains the source of prioritization and governance; MyAgenticTeam may execute delegated specialist-agent work but must not create a parallel source of truth, independent schedules, conflicting site actions or a second demand model. Sync task status and outcomes back to Supabase and SocialMarket AI Admin.
 
 When a task depends on market intelligence, hand MyAgenticTeam only canonical IDs, bounded evidence summaries, confidence, hypothesis and acceptance criteria—not raw full-page research dumps or invented metrics.
+
+When a delegated task is material page construction, also hand MyAgenticTeam the approved AFFINITY context brief/angle/archetype/Page DNA/component plan or instruct it to generate them through the canonical Page Engine before code changes. MyAgenticTeam must not bypass the Page Engine with a free-form redesign.
 
 If MyAgenticTeam execution is unavailable, continue the same canonical workflow through existing adapters. Never claim MyAgenticTeam work was executed without verification.
 
@@ -240,4 +285,6 @@ If MyAgenticTeam execution is unavailable, continue the same canonical workflow 
 - No duplicate demand model inside GrowthOps.
 - Evidence before optimization; measurement after every material change.
 - Preserve working production and rollback capability.
+- Material page/campaign creation must use the canonical AFFINITY Page Engine and Component Registry; do not generate free-form page structure when the governed workflow applies.
+- PagePilot/Magnetic techniques are abstract production patterns only; never copy proprietary vendor code or exact protected designs.
 - Never invent analytics, conversions, rankings, demand, competition, search volume, CPC, commissions, deployment success or experiment lift.
