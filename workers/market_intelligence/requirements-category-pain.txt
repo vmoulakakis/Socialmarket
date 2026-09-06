@@ -1,0 +1,4 @@
+# Semantic Category Pain direct runtime dependencies pinned 2026-09-06.
+requests==2.34.2
+trafilatura==2.2.0
+yt-dlp==2026.7.4
