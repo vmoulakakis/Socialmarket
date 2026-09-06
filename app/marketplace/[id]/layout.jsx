@@ -3,7 +3,7 @@ import {APPROVED_PUBLISHABLE_KEY,APPROVED_SUPABASE_URL} from '@/lib/supabase-con
 const BASE='https://socialmarket-theta.vercel.app';
 
 async function getItem(id){
-  const url=`${APPROVED_SUPABASE_URL}/rest/v1/socialmarket_marketplace200_public_v?id=eq.${encodeURIComponent(id)}&select=id,product_name,solution_statement,pain_statement,gap_statement,job_to_be_done,niche,subniche,image_url,semantic_tags`;
+  const url=`${APPROVED_SUPABASE_URL}/rest/v1/socialmarket_marketplace200_public_v?id=eq.${encodeURIComponent(id)}&select=id,product_name,solution_statement,pain_statement,gap_statement,job_to_be_done,niche,subniche,image_url,semantic_tags,sale_price_eur`;
   const r=await fetch(url,{headers:{apikey:APPROVED_PUBLISHABLE_KEY,Authorization:`Bearer ${APPROVED_PUBLISHABLE_KEY}`},next:{revalidate:300}});
   if(!r.ok)return null;
   const rows=await r.json();
@@ -14,8 +14,8 @@ export async function generateMetadata({params}){
   const {id}=await params;
   const cleanId=decodeURIComponent(String(id||''));
   const item=await getItem(cleanId);
-  if(!item)return {title:'SocialMarket — Case Solver',robots:{index:false,follow:true}};
-  const title=`${item.product_name} — SocialMarket`;
+  if(!item)return {title:'AFFINITY — Product Case',robots:{index:false,follow:true}};
+  const title=`${item.product_name} — AFFINITY`;
   const description=String(item.solution_statement||item.pain_statement||'Δες το pain, το gap και γιατί αυτή η λύση αξίζει να εξεταστεί.').slice(0,190);
   const canonical=`${BASE}/marketplace/${encodeURIComponent(cleanId)}`;
   const socialImage=`${BASE}/api/marketplace/creative/${encodeURIComponent(cleanId)}?format=square`;
@@ -25,7 +25,7 @@ export async function generateMetadata({params}){
     keywords:[item.niche,item.subniche,...(Array.isArray(item.semantic_tags)?item.semantic_tags:[])].filter(Boolean).slice(0,10),
     alternates:{canonical},
     robots:{index:true,follow:true},
-    openGraph:{title,description,type:'article',locale:'el_GR',url:canonical,siteName:'SocialMarket',images:[{url:socialImage,width:1080,height:1080,alt:`${item.product_name} — SocialMarket case solver`}]},
+    openGraph:{title,description,type:'article',locale:'el_GR',url:canonical,siteName:'AFFINITY',images:[{url:socialImage,width:1080,height:1080,alt:`${item.product_name} — AFFINITY solution`}]},
     twitter:{card:'summary_large_image',title,description,images:[socialImage]},
   };
 }
@@ -37,22 +37,25 @@ export default async function CaseLayout({children,params}){
   if(!item)return children;
   const canonical=`${BASE}/marketplace/${encodeURIComponent(cleanId)}`;
   const description=String(item.solution_statement||item.pain_statement||'').slice(0,500);
+  const product={
+    '@type':'Product',
+    name:item.product_name,
+    image:item.image_url||undefined,
+    description,
+    category:[item.niche,item.subniche].filter(Boolean).join(' / ')||undefined,
+    keywords:(Array.isArray(item.semantic_tags)?item.semantic_tags:[]).join(', ')||undefined,
+    brand:{'@type':'Brand',name:'AFFINITY'},
+    offers:Number(item.sale_price_eur)>0?{'@type':'Offer',priceCurrency:'EUR',price:Number(item.sale_price_eur),url:canonical,availability:'https://schema.org/OnlineOnly'}:undefined,
+  };
   const schema={
     '@context':'https://schema.org',
     '@type':'WebPage',
-    name:`${item.product_name} — SocialMarket`,
+    name:`${item.product_name} — AFFINITY`,
     description,
     url:canonical,
     inLanguage:'el-GR',
-    isPartOf:{'@type':'WebSite',name:'SocialMarket',url:`${BASE}/marketplace`},
-    about:{
-      '@type':'Product',
-      name:item.product_name,
-      image:item.image_url||undefined,
-      description,
-      category:[item.niche,item.subniche].filter(Boolean).join(' / ')||undefined,
-      keywords:(Array.isArray(item.semantic_tags)?item.semantic_tags:[]).join(', ')||undefined,
-    },
+    isPartOf:{'@type':'WebSite',name:'AFFINITY',url:`${BASE}/marketplace`},
+    about:product,
     mainEntity:{
       '@type':'HowTo',
       name:item.job_to_be_done||`Πώς βοηθά το ${item.product_name}`,
