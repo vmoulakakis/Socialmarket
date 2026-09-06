@@ -65,6 +65,8 @@ const mandatoryPipeline = [
   'design_tokens',
   'assembly',
   'responsive_qa',
+  'conversion_layer',
+  'localization',
   'variants',
   'publish',
   'measure',
@@ -75,6 +77,9 @@ if (config) {
   for (const stage of mandatoryPipeline) {
     if (!config.pipeline?.includes(stage)) errors.push(`Pipeline missing stage: ${stage}`);
   }
+  if (!config.brand_store_dna?.required_fields?.includes('brand_voice')) errors.push('Brand/Store DNA contract missing brand_voice');
+  if (!config.layout_dna?.persistent) errors.push('Layout DNA must be persistent/versionable');
+  if (config.component_scoring?.minimum_recommended_score !== 70) errors.push('Component score threshold must remain 70');
   if (config.qa_score?.minimum !== 85) errors.push('QA minimum must remain 85');
   if (config.performance?.field_good_targets?.lcp_ms_max !== 2500) errors.push('LCP target must be 2500ms');
   if (config.performance?.field_good_targets?.inp_ms_max !== 200) errors.push('INP target must be 200ms');
@@ -123,14 +128,15 @@ if (fixture) {
 const contractChecks = [
   [affinity, 'AFFINITY_PAGE_ENGINE.md', 'AFFINITY core Page Engine dependency'],
   [affinity, 'PAGE_DNA.schema.json', 'AFFINITY core Page DNA dependency'],
-  [engine, 'Brand/Store DNA', 'Page Engine brand/store DNA concept'],
   [engine, 'COMPONENT_REGISTRY.md', 'Page Engine component registry dependency'],
-  [creative, 'PROMPT_CONTRACTS.md', 'Creative prompt contract dependency'],
-  [creative, 'QA_GATES.md', 'Creative QA dependency'],
+  [creative, 'PAGE_DNA.schema.json', 'Creative Page DNA dependency'],
   [prompts, 'DECISION-BARRIER AGENT', 'Decision barrier prompt stage'],
+  [prompts, 'BRAND / STORE DNA AGENT', 'Brand/Store DNA prompt stage'],
   [prompts, 'LAYOUT DNA AGENT', 'Layout DNA prompt stage'],
+  [prompts, 'COMPONENT PLANNER / SCORER', 'Component scorer prompt stage'],
   [qa, 'WCAG 2.2 AA', 'Accessibility QA contract'],
   [qa, 'LCP ≤ 2.5 s', 'LCP QA contract'],
+  [qa, 'Variant-isolation gate', 'Experiment isolation QA contract'],
   [orchestrator, 'AFFINITY Creative Production Agent', 'Orchestrator page agent routing'],
   [orchestrator, 'Page DNA', 'Orchestrator Page DNA routing'],
   [growthOps, 'AFFINITY Page Engine', 'GrowthOps Page Engine canonical dependency']
