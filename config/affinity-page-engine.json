@@ -1,0 +1,316 @@
+{
+  "version": "2.0",
+  "status": "canonical",
+  "pipeline": [
+    "source_ingest",
+    "context_brief",
+    "brand_store_dna",
+    "decision_barriers",
+    "angle_matrix",
+    "message_match",
+    "archetype",
+    "layout_dna",
+    "page_dna",
+    "component_plan",
+    "copy",
+    "media",
+    "design_tokens",
+    "assembly",
+    "responsive_qa",
+    "conversion_layer",
+    "localization",
+    "variants",
+    "publish",
+    "measure",
+    "learn"
+  ],
+  "component_scoring": {
+    "weights": {
+      "objective_fit": 18,
+      "awareness_fit": 12,
+      "decision_barrier_fit": 18,
+      "evidence_readiness": 14,
+      "media_readiness": 8,
+      "mobile_fit": 10,
+      "performance_cost": 8,
+      "brand_fit": 6,
+      "traffic_fit": 6
+    },
+    "minimum_recommended_score": 70,
+    "hard_rejects": [
+      "requires_missing_evidence",
+      "requires_fake_proof",
+      "requires_false_urgency",
+      "product_media_misrepresentation",
+      "checkout_component_on_non_checkout_affiliate_page"
+    ]
+  },
+  "decision_barriers": {
+    "relevance": ["hero", "audience_context", "use_case"],
+    "problem_recognition": ["pain", "cost_of_inaction"],
+    "solution_understanding": ["mechanism", "how_it_works", "demo"],
+    "differentiation": ["feature_highlights", "comparison", "competition_differences"],
+    "economic_justification": ["price_gap", "roi", "savings", "total_solution_cost"],
+    "credibility": ["spec_proof", "reviews", "evidence", "merchant_trust"],
+    "risk": ["warranty", "returns", "delivery", "guarantee", "limitations"],
+    "compatibility": ["compatibility_matrix", "variants", "size_guide", "installation"],
+    "action_friction": ["primary_cta", "sticky_cta", "lead_capture", "checkout"],
+    "post_purchase_uncertainty": ["support", "service", "whats_included", "setup"]
+  },
+  "page_length_policy": {
+    "rule": "include only sections that resolve a material decision barrier or deliver promised content value",
+    "default_max_primary_sections": 12,
+    "impulse": {"target_primary_sections": [5, 8]},
+    "considered": {"target_primary_sections": [7, 11]},
+    "high_ticket_considered": {"target_primary_sections": [9, 14]},
+    "professional_procurement": {"target_primary_sections": [9, 15]},
+    "lead_generation": {"target_primary_sections": [4, 9]},
+    "exceptions": "longer pages require explicit barrier/content rationale; repetition does not justify length"
+  },
+  "archetypes": {
+    "direct_product_landing": {
+      "best_for": ["clear_value", "medium_high_intent"],
+      "required_roles": ["hero", "benefits", "proof", "trust", "cta"]
+    },
+    "pain_gap_solution": {
+      "best_for": ["problem_aware", "education_needed"],
+      "required_roles": ["hero", "pain", "gap", "mechanism", "proof", "trust", "cta"]
+    },
+    "benefit_led_dtc": {
+      "best_for": ["consumer_product", "visual", "impulse_or_considered"],
+      "required_roles": ["hero", "benefits", "visual_proof", "social_proof", "cta"]
+    },
+    "demonstration_led": {
+      "best_for": ["novel_mechanism", "visual_demo"],
+      "required_roles": ["hero", "demo", "how_it_works", "proof", "faq", "cta"]
+    },
+    "comparison_led": {
+      "best_for": ["competitive_category", "alternative_choice"],
+      "required_roles": ["hero", "comparison", "honest_limitations", "trust", "cta"]
+    },
+    "high_ticket_trust": {
+      "best_for": ["high_price", "considered_purchase"],
+      "required_roles": ["hero", "mechanism", "spec_proof", "economics", "comparison", "warranty", "delivery", "limitations", "faq", "cta"]
+    },
+    "savings_roi": {
+      "best_for": ["quantifiable_value"],
+      "required_roles": ["hero", "economic_context", "calculator_or_model", "assumptions", "proof", "trust", "cta"]
+    },
+    "message_matched_landing": {
+      "best_for": ["paid_campaign", "email_campaign", "social_campaign"],
+      "required_roles": ["message_matched_hero", "promise_proof", "offer", "cta"]
+    },
+    "checklist": {
+      "best_for": ["quick_win", "lead_magnet"],
+      "required_roles": ["message_matched_hero", "value_preview", "checklist", "next_action"]
+    },
+    "playbook": {
+      "best_for": ["sequential_process", "lead_magnet"],
+      "required_roles": ["hero", "context", "steps", "examples", "mistakes", "next_action"]
+    },
+    "mini_guide": {
+      "best_for": ["education", "lead_magnet"],
+      "required_roles": ["hero", "summary", "chapters", "action_summary", "next_action"]
+    },
+    "resource_list": {
+      "best_for": ["curation", "lead_magnet"],
+      "required_roles": ["hero", "categories", "resource_cards", "next_action"]
+    },
+    "personalized_sales_follow_up": {
+      "best_for": ["account_based_sales", "prospect_follow_up"],
+      "required_roles": ["prospect_context", "insight", "problem_opportunity", "proof", "low_friction_cta"]
+    },
+    "link_in_bio": {
+      "best_for": ["social_profile_traffic"],
+      "required_roles": ["identity", "primary_offer", "link_groups", "contact_or_newsletter"]
+    }
+  },
+  "brand_store_dna": {
+    "required_fields": [
+      "brand_voice",
+      "visual_personality",
+      "primary_colors",
+      "typography_character",
+      "logo_usage",
+      "image_style",
+      "icon_style",
+      "radius_rule",
+      "surface_rule",
+      "cta_rule",
+      "motion_rule",
+      "content_density",
+      "locale_rules"
+    ],
+    "inheritance": "new pages inherit existing validated brand/store DNA unless the experiment explicitly tests art direction"
+  },
+  "layout_dna": {
+    "persistent": true,
+    "supports": ["create", "duplicate", "rename", "set_default", "version", "retire"],
+    "must_define": [
+      "archetype",
+      "default_section_order",
+      "required_roles",
+      "optional_roles",
+      "design_token_profile",
+      "mobile_overrides",
+      "conversion_action_model"
+    ]
+  },
+  "media": {
+    "source_priority": [
+      "user_supplied",
+      "manufacturer_or_merchant_verified",
+      "licensed_or_owned",
+      "reference_conditioned_generation",
+      "contextual_generation"
+    ],
+    "asset_manifest_required": true,
+    "forbid_generated_documentary_proof": true,
+    "exact_fidelity_required_for": [
+      "controls",
+      "ports",
+      "included_accessories",
+      "dimensions",
+      "safety_configuration",
+      "packaging_claims",
+      "before_after_results"
+    ]
+  },
+  "localization": {
+    "mode": "native_rewrite",
+    "preserve": ["claim_meaning", "brand_voice", "message_hierarchy", "offer_truth", "component_role"],
+    "adapt": ["idiom", "currency_framing", "delivery_context", "warranty_context", "comparison_context", "copy_length"]
+  },
+  "responsive_qa": {
+    "viewports": [360, 390, 768, 1024, 1440, 1920],
+    "checks": [
+      "no_horizontal_overflow",
+      "no_clipped_copy",
+      "no_hidden_focus",
+      "cta_visible_and_usable",
+      "table_has_mobile_strategy",
+      "sticky_elements_do_not_cover_content",
+      "tap_targets_accessible",
+      "media_crop_preserves_subject",
+      "headline_wrap_is_intentional"
+    ]
+  },
+  "accessibility": {
+    "target": "WCAG_2_2_AA",
+    "minimum_pointer_target_css_px": 24,
+    "keyboard_focus_must_remain_visible": true,
+    "drag_actions_require_non_drag_alternative": true
+  },
+  "performance": {
+    "field_good_targets": {
+      "lcp_ms_max": 2500,
+      "inp_ms_max": 200,
+      "cls_max": 0.1,
+      "percentile": 75
+    },
+    "implementation_rules": [
+      "no_oversized_hero_video_by_default",
+      "optimize_above_fold_media",
+      "reserve_media_dimensions",
+      "lazy_load_noncritical_media",
+      "minimize_blocking_javascript",
+      "avoid_dependency_for_single_trivial_component"
+    ]
+  },
+  "qa_score": {
+    "minimum": 85,
+    "weights": {
+      "message_match": 12,
+      "evidence_integrity": 12,
+      "offer_clarity": 10,
+      "hero_comprehension": 10,
+      "decision_path": 10,
+      "trust": 10,
+      "visual_hierarchy": 8,
+      "mobile_ux": 8,
+      "performance": 6,
+      "cta_clarity": 6,
+      "seo_metadata": 4,
+      "analytics": 4
+    },
+    "hard_failures": [
+      "unsupported_claim",
+      "fake_proof",
+      "fake_urgency",
+      "tracking_unverified",
+      "destination_invalid",
+      "mobile_broken",
+      "critical_accessibility_failure",
+      "critical_performance_failure",
+      "product_media_misrepresentation",
+      "merchant_or_offer_mismatch"
+    ]
+  },
+  "experimentation": {
+    "priority": [
+      "product_offer",
+      "audience_use_case",
+      "angle_message_match",
+      "hero_proposition",
+      "economic_framing",
+      "proof_type_order",
+      "cta",
+      "component_sequence",
+      "media_treatment",
+      "styling_detail"
+    ],
+    "controlled_variants_required": true,
+    "one_primary_hypothesis_per_variant": true,
+    "parent_variant_relationship_required": true,
+    "seo_duplicate_control_required": true
+  },
+  "learning": {
+    "primary_metric": "RPV",
+    "conditional_dimensions": [
+      "product",
+      "offer",
+      "audience",
+      "traffic_source",
+      "awareness_stage",
+      "angle",
+      "archetype",
+      "component_sequence",
+      "device",
+      "locale"
+    ],
+    "never_generalize_from_single_page": true
+  },
+  "vendor_provenance": {
+    "pagepilot": {
+      "patterns": [
+        "source_url_ingestion",
+        "angle_selection",
+        "reusable_layouts",
+        "modular_sections_blocks",
+        "drag_reorder",
+        "inline_editing",
+        "brand_matching",
+        "desktop_mobile_controls",
+        "ai_product_images",
+        "structured_product_description",
+        "ad_copy_creative",
+        "cart_drawer_upsells",
+        "native_localization",
+        "shopify_publish"
+      ]
+    },
+    "magnetic": {
+      "patterns": [
+        "audience_problem_offer_quick_win",
+        "document_context",
+        "analyze_outline_copy_images_layout",
+        "message_matched_variants",
+        "lead_magnet_formats",
+        "personalized_follow_up",
+        "reusable_remixable_assets",
+        "host_share_export"
+      ]
+    },
+    "policy": "use public techniques as abstract patterns; never copy proprietary code, private templates or exact protected designs"
+  }
+}
