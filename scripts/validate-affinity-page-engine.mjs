@@ -4,6 +4,7 @@ const requiredFiles = [
   'skills/AFFINITY_SKILL.md',
   'skills/AFFINITY_PAGE_ENGINE.md',
   'config/affinity-page-engine.json',
+  'agents/skills/affinity-creative-production/README.md',
   'agents/skills/affinity-creative-production/SKILL.md',
   'agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md',
   'agents/skills/affinity-creative-production/PAGE_DNA.schema.json',
@@ -42,6 +43,7 @@ const fixture = parseJson('data/affinity-page-engine-example.json');
 
 const affinity = read('skills/AFFINITY_SKILL.md');
 const engine = read('skills/AFFINITY_PAGE_ENGINE.md');
+const index = read('agents/skills/affinity-creative-production/README.md');
 const creative = read('agents/skills/affinity-creative-production/SKILL.md');
 const registry = read('agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md');
 const prompts = read('agents/skills/affinity-creative-production/PROMPT_CONTRACTS.md');
@@ -129,6 +131,8 @@ const contractChecks = [
   [affinity, 'AFFINITY_PAGE_ENGINE.md', 'AFFINITY core Page Engine dependency'],
   [affinity, 'PAGE_DNA.schema.json', 'AFFINITY core Page DNA dependency'],
   [engine, 'COMPONENT_REGISTRY.md', 'Page Engine component registry dependency'],
+  [index, 'Authority / precedence', 'Canonical stack precedence'],
+  [index, '201 unique component', 'Validated component-count declaration'],
   [creative, 'PAGE_DNA.schema.json', 'Creative Page DNA dependency'],
   [prompts, 'DECISION-BARRIER AGENT', 'Decision barrier prompt stage'],
   [prompts, 'BRAND / STORE DNA AGENT', 'Brand/Store DNA prompt stage'],
