@@ -142,7 +142,7 @@ const contractChecks = [
   [engine, 'COMPONENT_REGISTRY.md', 'Page Engine component registry dependency'],
   [siteEngine, 'SITE_DNA.schema.json', 'Site Engine Site DNA dependency'],
   [siteEngine, 'User journeys before sitemap', 'Site Engine journey-first architecture'],
-  [siteEngine, 'Page DNA per route', 'Site Engine route Page DNA model'],
+  [siteEngine, 'PAGE DNA PER ROUTE', 'Site Engine route Page DNA model'],
   [index, 'Authority / precedence', 'Canonical stack precedence'],
   [index, '201 unique component', 'Validated component-count declaration'],
   [index, 'Site DNA sits above Page DNA', 'Site/Page hierarchy'],
