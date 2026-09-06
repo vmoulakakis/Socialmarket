@@ -12,7 +12,7 @@
 9. evidence_audit
 10. materialize validated pain evidence / vectors
 
-The merchant pipeline is the intelligence backbone and is not rewritten by Product Intelligence.
+The merchant pipeline is the intelligence backbone and is not rewritten by Product Intelligence or GrowthOps.
 
 ## Product Intelligence V1 — additive consumer of merchant truth
 1. stream the raw product feed; never wholesale-import it
@@ -29,6 +29,40 @@ The merchant pipeline is the intelligence backbone and is not rewritten by Produ
 12. materialize validated product-solution semantic objects for embedding/RAG
 13. only validated/high-ranking products can enter content/creative generation
 14. approved content ends at `publish.outbox`; SocialScheduler owns execution after that boundary
+
+## GrowthOps — downstream consumer of canonical demand truth
+GrowthOps optimizes existing public sites; it must consume, never duplicate or overwrite, the canonical market intelligence produced by this orchestrator.
+
+Canonical GrowthOps skill:
+`agents/skills/growth-orchestrator/SKILL.md`
+
+Before SEO/content/affiliate-expansion prioritization for a Greek-market page/site, GrowthOps should bind the page intent to canonical category/subcategory/product/pain identifiers and retrieve the current market context from the existing demand stack:
+- Demand Intelligence V3
+- Greece Market Intelligence
+- Competition Gap
+- Demand Beacon / Solution Whitespace
+- validated pain-gap evidence
+- seasonal/theme state
+- forecast readiness/state
+- contradiction/falsification evidence.
+
+Site analytics and conversion data remain separate first-party performance evidence. They may influence execution priority but must never be written back as canonical demand or competition scores.
+
+Recommended joint reasoning sequence:
+1. identify canonical page/site commercial intent
+2. retrieve canonical Greek demand + competition + pain/whitespace context
+3. combine with observed site traffic/conversion/SEO evidence
+4. choose acquisition vs CRO vs wait/research routing
+5. execute through GrowthOps/MyAgenticTeam
+6. measure site outcome
+7. persist site-learning separately from canonical market truth.
+
+Key routing examples:
+- high Greek demand + validated whitespace + low organic visibility → SEO/content acquisition
+- high Greek demand + meaningful traffic + weak CTA/affiliate conversion → CRO
+- high saturation/authority barrier → avoid generic head-term expansion; seek validated pain-specific differentiation
+- weak/uncertain demand → collect evidence or wait rather than fabricate opportunity
+- strong market opportunity + weak merchant economics → preserve market insight but withhold affiliate promotion.
 
 ## Hard gates
 Hard gates always execute before expensive model calls. Forecast numbers, price, discount and commission arithmetic come from deterministic tooling, never from the LLM. The orchestrator must stop on insufficient evidence rather than manufacture confidence.
@@ -69,10 +103,10 @@ does not replace deterministic workers or Supabase truth:
 4. Affiliate Decision Orchestrator — accepts validated gap/forecast/product IDs
    and applies commission, merchant, evidence, duplication and publish gates.
 
+For GrowthOps tasks, MyAgenticTeam also acts as the smallest-capable implementation/test/review team after the Growth Orchestrator has selected an evidence-backed action. It must not create a parallel demand model, parallel schedule, or independent site priorities.
+
 Handoffs contain IDs, bounded summaries and confidence—not full pages or chat
-history. The control-plane credit limit is zero and no schedule is active until
-the owner explicitly approves billable execution. Production automation remains
-the tested GitHub/Supabase local-first path.
+history. The control-plane credit limit is zero and no billable execution is enabled unless explicitly approved. Production automation remains the tested GitHub/Supabase local-first path.
 
 ## Token and cost contract
 - deterministic filters, hashes, arithmetic and forecasts run before any LLM;
