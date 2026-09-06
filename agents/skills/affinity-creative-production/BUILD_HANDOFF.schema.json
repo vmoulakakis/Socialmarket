@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://socialmarket.local/schemas/affinity-build-handoff.schema.json",
+  "title": "AFFINITY Page Build Handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "task_id",
+    "page_id",
+    "page_dna_ref",
+    "layout_dna",
+    "brand_store_dna",
+    "component_plan",
+    "asset_manifest",
+    "design_tokens",
+    "implementation",
+    "analytics",
+    "qa_acceptance"
+  ],
+  "properties": {
+    "version": {"type": "string", "const": "1.0"},
+    "task_id": {"type": "string", "minLength": 3},
+    "page_id": {"type": "string", "minLength": 3},
+    "variant_id": {"type": ["string", "null"]},
+    "parent_page_id": {"type": ["string", "null"]},
+    "page_dna_ref": {"type": "string", "minLength": 1},
+    "layout_dna": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "archetype", "default_section_order", "conversion_action_model"],
+      "properties": {
+        "id": {"type": "string"},
+        "version": {"type": "string"},
+        "parent_layout_id": {"type": ["string", "null"]},
+        "archetype": {"type": "string"},
+        "brand_store_dna_id": {"type": ["string", "null"]},
+        "default_section_order": {"type": "array", "items": {"type": "string"}},
+        "required_roles": {"type": "array", "items": {"type": "string"}},
+        "optional_roles": {"type": "array", "items": {"type": "string"}},
+        "conversion_action_model": {"type": "string"},
+        "mobile_overrides": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "brand_store_dna": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "brand_voice",
+        "visual_personality",
+        "primary_colors",
+        "typography_character",
+        "image_style",
+        "cta_rule",
+        "motion_rule",
+        "content_density"
+      ],
+      "properties": {
+        "id": {"type": "string"},
+        "brand_voice": {"type": "string"},
+        "visual_personality": {"type": "string"},
+        "primary_colors": {"type": "array", "items": {"type": "string"}},
+        "neutral_colors": {"type": "array", "items": {"type": "string"}},
+        "typography_character": {"type": "string"},
+        "logo_usage": {"type": ["string", "null"]},
+        "image_style": {"type": "string"},
+        "icon_style": {"type": ["string", "null"]},
+        "radius_rule": {"type": ["string", "null"]},
+        "surface_rule": {"type": ["string", "null"]},
+        "shadow_rule": {"type": ["string", "null"]},
+        "cta_rule": {"type": "string"},
+        "motion_rule": {"type": "string"},
+        "content_density": {"type": "string"},
+        "layout_rhythm": {"type": ["string", "null"]},
+        "locale_rules": {"type": ["string", "null"]}
+      }
+    },
+    "component_plan": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order", "role", "component_id", "score", "purpose", "evidence_ids"],
+        "properties": {
+          "order": {"type": "integer", "minimum": 1},
+          "role": {"type": "string"},
+          "component_id": {"type": "string"},
+          "score": {"type": "number", "minimum": 0, "maximum": 100},
+          "purpose": {"type": "string"},
+          "barrier_ids": {"type": "array", "items": {"type": "string"}},
+          "evidence_ids": {"type": "array", "items": {"type": "string"}},
+          "required_inputs": {"type": "array", "items": {"type": "string"}},
+          "copy_ref": {"type": ["string", "null"]},
+          "asset_ids": {"type": "array", "items": {"type": "string"}},
+          "mobile_behavior": {"type": ["string", "null"]},
+          "analytics_events": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "asset_manifest": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["asset_id", "purpose", "asset_type", "source_type", "product_fidelity", "generated", "documentary_proof"],
+        "properties": {
+          "asset_id": {"type": "string"},
+          "purpose": {"type": "string"},
+          "asset_type": {"type": "string"},
+          "source_type": {"type": "string"},
+          "source_ref": {"type": ["string", "null"]},
+          "rights_or_provenance": {"type": ["string", "null"]},
+          "product_fidelity": {"type": "string", "enum": ["exact", "high", "contextual", "decorative"]},
+          "aspect_ratio": {"type": ["string", "null"]},
+          "mobile_crop": {"type": ["string", "null"]},
+          "generated": {"type": "boolean"},
+          "documentary_proof": {"type": "boolean", "const": false},
+          "warnings": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "design_tokens": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["container", "spacing", "typography", "colors", "radius", "cta", "focus", "motion", "breakpoints"]
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "framework", "route", "reuse_existing_stack", "component_strategy"],
+      "properties": {
+        "repository": {"type": "string"},
+        "framework": {"type": "string"},
+        "route": {"type": "string"},
+        "reuse_existing_stack": {"type": "boolean", "const": true},
+        "component_strategy": {"type": "string"},
+        "files_expected": {"type": "array", "items": {"type": "string"}},
+        "dependencies_allowed": {"type": "array", "items": {"type": "string"}},
+        "dependencies_forbidden": {"type": "array", "items": {"type": "string"}},
+        "builder_notes": {"type": ["string", "null"]}
+      }
+    },
+    "analytics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_metric", "events"],
+      "properties": {
+        "primary_metric": {"type": "string"},
+        "experiment_id": {"type": ["string", "null"]},
+        "events": {"type": "array", "items": {"type": "string"}},
+        "stable_dimensions": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "qa_acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_score", "required_viewports", "hard_failures_forbidden", "core_web_vitals_targets", "accessibility_target"],
+      "properties": {
+        "minimum_score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "required_viewports": {"type": "array", "items": {"type": "integer"}},
+        "hard_failures_forbidden": {"type": "array", "items": {"type": "string"}},
+        "core_web_vitals_targets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lcp_ms_max", "inp_ms_max", "cls_max", "percentile"],
+          "properties": {
+            "lcp_ms_max": {"type": "integer"},
+            "inp_ms_max": {"type": "integer"},
+            "cls_max": {"type": "number"},
+            "percentile": {"type": "integer"}
+          }
+        },
+        "accessibility_target": {"type": "string"}
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": {"type": "boolean"},
+        "reference": {"type": ["string", "null"]}
+      }
+    }
+  }
+}
