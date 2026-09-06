@@ -1,0 +1,35 @@
+{
+  "version": "commercial-portfolios-v1",
+  "owner": "socialmarket",
+  "portfolios": {
+    "core_affiliate_top100": {
+      "display_name": "Core Affiliate Top 100",
+      "source_workflow": ".github/workflows/product-intelligence-v1.yml",
+      "commission_rule": {"operator": "gte", "floor_eur": 10},
+      "max_items": 100,
+      "purpose": "Canonical Night Brain opportunity portfolio; EUR 10 is the hard minimum and the bounded business gate may raise the effective floor."
+    },
+    "greek_scarcity_top100": {
+      "display_name": "Greek Scarcity Top 100",
+      "source_workflow": ".github/workflows/top100-daily-v2.yml",
+      "commission_rule": {"operator": "gt", "floor_eur": 20},
+      "greece_scarcity_min": 0.6,
+      "max_items": 100,
+      "max_categories": 5,
+      "purpose": "High-conviction Greece-scarcity portfolio with stricter economics and category concentration control."
+    },
+    "semantic_marketplace_200": {
+      "display_name": "Semantic Marketplace 200",
+      "source_workflow": ".github/workflows/semantic-marketplace-200.yml",
+      "commission_rule": {"operator": "gt", "floor_eur": 30},
+      "max_items": 200,
+      "max_linkwise": 100,
+      "max_aliexpress": 100,
+      "merchant_max": 3,
+      "seller_max": 3,
+      "product_quality_min": 75,
+      "affinity_min": 76,
+      "purpose": "High-threshold incremental semantic marketplace portfolio spanning Linkwise and AliExpress."
+    }
+  }
+}
