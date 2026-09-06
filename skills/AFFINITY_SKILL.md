@@ -1,6 +1,6 @@
 # AFFINITY — Autonomous Affiliate Intelligence & Conversion System
 
-Version: 1.0
+Version: 2.0
 Status: Canonical reusable skill
 Primary market: Greece / EU
 Primary KPI: Revenue per Unique Visitor (RPV)
@@ -55,6 +55,7 @@ Do not optimize vanity metrics at the expense of RPV, trust or user value.
 10. **Reject aggressively.** The system creates value by refusing bad opportunities before design and traffic spend.
 11. **Separate evidence from inference.** Every important claim should be classified.
 12. **Commercial effectiveness beats visual complexity.** Design sophistication is justified only when it improves comprehension, confidence or conversion.
+13. **Governed generation beats free-form generation.** Material pages must be created from verified context, angle, message match, archetype, Page DNA, component grammar and measurable hypotheses rather than an unconstrained “make a beautiful landing page” prompt.
 
 ---
 
@@ -752,6 +753,8 @@ Priority order:
 
 Use RPV as primary outcome where enough data exists. Avoid declaring winners on tiny samples.
 
+For material page experiments, use the Page Engine's controlled-variant model: keep stable facts/compliance/design layers locked when they are not the hypothesis, and change explicit variables such as angle, message match, hero proposition, proof order, component sequence or media treatment. Preserve parent/variant relationships and component IDs.
+
 ---
 
 # 29. LEARNING LOOP
@@ -770,8 +773,13 @@ Feed back:
 - product availability failures
 - price changes
 - merchant conversion changes
+- page archetype performance
+- angle/message-match performance
+- component-sequence performance where measurable.
 
 Products that looked good in research but underperform should lose priority. Products with strong verified economics and RPV should gain traffic allocation.
+
+Do not treat one successful component as universally high converting. Learn conditional fit by product × audience × offer × traffic source × archetype × component sequence.
 
 ---
 
@@ -787,6 +795,10 @@ Recommended states:
 → `SCORED`
 → `HOLD | REJECT | APPROVED`
 → `FUNNEL_DESIGN`
+→ `PAGE_CONTEXT`
+→ `ANGLE_MESSAGE_MATCH`
+→ `PAGE_DNA`
+→ `COMPONENT_PLAN`
 → `BUILD`
 → `QA`
 → `TRACKING_VERIFY`
@@ -824,17 +836,20 @@ Scores and chooses positioning/use cases.
 ### Funnel Architect
 Chooses page architecture based on buyer decision mechanics.
 
+### Page Architect
+Uses `skills/AFFINITY_PAGE_ENGINE.md` to create the context brief, angle matrix, message match, archetype, Page DNA and component plan.
+
 ### Creative Director
-Creates product-specific visual language/media plan.
+Creates product-specific visual language/media plan under the AFFINITY Creative Production skill.
 
 ### Builder
-Implements the site/app.
+Implements the site/app from the approved Page DNA/component plan instead of free-form redesign.
 
 ### QA Auditor
-Checks mobile, claims, links, performance and tracking.
+Checks mobile, claims, links, performance, Page Engine quality gates and tracking.
 
 ### Revenue Analyst
-Measures RPV/EPC and recommends iteration.
+Measures RPV/EPC and recommends iteration, including conditional angle/archetype/component learning.
 
 One ChatGPT can perform all roles sequentially; separate agents are optional.
 
@@ -870,6 +885,8 @@ Concrete unresolved items.
 
 ## Recommended funnel
 Architecture and rationale.
+
+For approved material page builds, continue into the Page Engine output: selected angle, message match, archetype, Page DNA, component IDs, media/design-token plan, experiment hypothesis and QA target.
 
 ---
 
@@ -933,6 +950,8 @@ For Greece-targeted funnels:
 - Make warranty/returns understandable to a Greek buyer.
 - Do not claim “not available in Greece” unless exact/equivalent research supports it.
 
+For Page Engine work, localization is a native rewrite after angle/archetype/component planning rather than a literal translation pass. Preserve evidence meaning, message hierarchy and component usability while reflowing longer Greek text for mobile.
+
 ---
 
 # 37. DEPLOYMENT PRINCIPLES
@@ -983,6 +1002,7 @@ Do not clutter consumer-facing pages/catalogs with:
 - tracking mechanics
 - affiliate API terminology
 - operator notes
+- internal Page DNA/component IDs or experiment metadata.
 
 Keep internal intelligence separate from public content while providing any required affiliate disclosure transparently.
 
@@ -1007,13 +1027,14 @@ When the user says “find a product and build it,” AFFINITY should execute in
 13. Re-verify live product destination.
 14. Generate/validate affiliate tracking URL.
 15. Determine funnel architecture from product economics and buyer psychology.
-16. Create product-specific design/copy/media.
-17. Build mobile-first implementation.
-18. QA claims, links, performance and responsive behavior.
-19. Deploy.
-20. Verify production URL and CTA destination.
-21. Instrument analytics.
-22. Monitor RPV and iterate.
+16. Invoke `skills/AFFINITY_PAGE_ENGINE.md`: source/context normalization, angle matrix, message match, page archetype and Page DNA.
+17. Select components from `agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md` and generate component-level copy/media/design tokens through `agents/skills/affinity-creative-production/SKILL.md`.
+18. Build the mobile-first implementation from the approved Page DNA/component plan.
+19. QA claims, links, product-media fidelity, performance, responsive behavior and Page Engine quality gates.
+20. Deploy.
+21. Verify production URL and CTA destination.
+22. Instrument analytics including experiment/variant/component context where appropriate.
+23. Monitor RPV and iterate through controlled variants.
 
 Do not start step 15 for a candidate that has failed a hard gate.
 
@@ -1086,6 +1107,7 @@ An AFFINITY-compliant agent must:
 - keep secrets server-side
 - validate deployment rather than merely reporting a deploy command succeeded
 - optimize based on measured commercial results
+- for material page creation, load/apply `skills/AFFINITY_PAGE_ENGINE.md`, the Creative Production skill, Component Registry and Page DNA schema.
 
 It must not:
 - pick the first interesting product
@@ -1097,6 +1119,7 @@ It must not:
 - treat a 404 merchant page as viable
 - expose API secrets
 - claim a site is live without checking
+- bypass governed page generation with an unconstrained one-shot page prompt when the Page Engine applies.
 
 ---
 
@@ -1113,8 +1136,9 @@ When invoked simply as `AFFINITY`, assume:
 - No regulated installation preferred for autonomous V1
 - Primary KPI: RPV
 - Output: decisive BUILD / HOLD / REJECT recommendation
+- For approved material page work: mandatory AFFINITY Page Engine + Component Registry + Page DNA workflow.
 
-The user can override these parameters explicitly.
+The user can override these parameters explicitly except evidence/truth/tracking safeguards.
 
 ---
 
@@ -1122,15 +1146,34 @@ The user can override these parameters explicitly.
 
 Use the following operational instruction when loading this skill into a ChatGPT/custom agent:
 
-> Operate under the AFFINITY framework. Find and validate affiliate opportunities using current evidence. For Greece, prove demand, search exact and equivalent local supply, compare total solution cost, verify practical fulfillment/warranty/returns, and verify exact product-level affiliate eligibility and expected commission. Reject candidates that fail hard gates. Never fabricate affiliate URLs, commercial facts, scarcity, reviews or claims. Once a candidate survives, let the product and buyer decision mechanics determine the conversion architecture. Build the shortest high-trust mobile-first funnel that explains the pain/desire, economic gap, product fit, proof, honest comparison and risk reduction. Use only a validated affiliate tracking URL for conversion CTAs. Measure Revenue per Unique Visitor as the primary KPI and feed real performance back into future product ranking.
+> Operate under the AFFINITY framework. Find and validate affiliate opportunities using current evidence. For Greece, prove demand, search exact and equivalent local supply, compare total solution cost, verify practical fulfillment/warranty/returns, and verify exact product-level affiliate eligibility and expected commission. Reject candidates that fail hard gates. Never fabricate affiliate URLs, commercial facts, scarcity, reviews or claims. Once a candidate survives, let the product and buyer decision mechanics determine the conversion architecture. For any new or materially rebuilt page, invoke the canonical AFFINITY Page Engine: normalize source/context, select and score the angle, preserve campaign message match, choose the page archetype, create Page DNA, select reusable components from the Component Registry, generate component-level copy/media/design tokens through AFFINITY Creative Production, then build mobile-first. Use only a validated affiliate tracking URL for conversion CTAs. Create controlled variants rather than random redesigns. Measure Revenue per Unique Visitor as the primary KPI and feed real product, angle, archetype, component and variant performance back into future decisions.
 
 ---
 
-# 47. FINAL SUCCESS DEFINITION
+# 47. PAGE ENGINE DEPENDENCY
+
+For new or materially rebuilt landing pages, product pages, microsites, mini-sites, comparison experiences, lead magnets and campaign pages, the following are canonical dependencies of this skill:
+
+- `skills/AFFINITY_PAGE_ENGINE.md`
+- `agents/skills/affinity-creative-production/SKILL.md`
+- `agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md`
+- `agents/skills/affinity-creative-production/PAGE_DNA.schema.json`
+
+The Page Engine synthesizes publicly documented/observable PagePilot.ai and Magnetic.ai production techniques into an original AFFINITY grammar. It may learn from publicly visible vendor methods, but it must never represent undocumented private component inventories as known, copy proprietary source code, or clone exact protected designs.
+
+Mandatory generation sequence:
+
+`SOURCE INGEST → CONTEXT BRIEF → ANGLE MATRIX → MESSAGE MATCH → ARCHETYPE → PAGE DNA → COMPONENT PLAN → COPY → MEDIA → DESIGN TOKENS → ASSEMBLY → RESPONSIVE QA → CONVERSION LAYER → LOCALIZATION → VARIANTS → PUBLISH → MEASURE`
+
+A material page is not AFFINITY-compliant if it skips the evidence/angle/archetype/component planning stages merely because a model can generate working HTML/React directly.
+
+---
+
+# 48. FINAL SUCCESS DEFINITION
 
 AFFINITY succeeds only when it creates a repeatable system in which:
 
-**the right product + verified Greek opportunity + trustworthy economics + correct affiliate attribution + product-specific conversion design + measured revenue feedback**
+**the right product + verified Greek opportunity + trustworthy economics + correct affiliate attribution + product-specific conversion design + governed Page DNA/component generation + measured revenue feedback**
 
 produce better decisions over time.
 
@@ -1138,6 +1181,7 @@ A beautiful page for a bad product is failure.
 A high commission on an untrustworthy offer is failure.
 A market gap with no demand is failure.
 Traffic without valid tracking is failure.
+A visually impressive page with weak message match or unsupported proof is failure.
 
 The target is not “more affiliate pages.”
 
