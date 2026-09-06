@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://socialmarket.local/schemas/affinity-page-dna.schema.json",
+  "title": "AFFINITY Page DNA",
+  "description": "Machine-readable page specification used by AFFINITY Page Engine before implementation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "page_id",
+    "objective",
+    "market",
+    "locale",
+    "archetype",
+    "angle",
+    "message_match",
+    "design",
+    "sections",
+    "analytics",
+    "qa"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "page_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "parent_page_id": {
+      "type": ["string", "null"]
+    },
+    "variant_id": {
+      "type": ["string", "null"]
+    },
+    "objective": {
+      "type": "string",
+      "enum": [
+        "affiliate_click",
+        "purchase",
+        "add_to_cart",
+        "lead_capture",
+        "download",
+        "book_meeting",
+        "contact",
+        "content_engagement",
+        "share"
+      ]
+    },
+    "market": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 8
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "traffic_source": {
+      "type": ["string", "null"]
+    },
+    "campaign": {
+      "type": ["string", "null"]
+    },
+    "audience": {
+      "type": ["string", "null"]
+    },
+    "awareness": {
+      "type": "string",
+      "enum": [
+        "unaware",
+        "problem-aware",
+        "solution-aware",
+        "product-aware",
+        "most-aware",
+        "mixed",
+        "unknown"
+      ]
+    },
+    "purchase_mode": {
+      "type": "string",
+      "enum": [
+        "impulse",
+        "considered",
+        "high-ticket-considered",
+        "professional-procurement",
+        "lead-generation",
+        "content-consumption",
+        "mixed"
+      ]
+    },
+    "archetype": {
+      "type": "string",
+      "enum": [
+        "direct-product-landing",
+        "pain-gap-solution",
+        "benefit-led-dtc",
+        "demonstration-led",
+        "comparison-led",
+        "high-ticket-trust",
+        "savings-roi",
+        "quiz-recommender",
+        "use-case-branching",
+        "editorial-review",
+        "buying-guide",
+        "product-microsite",
+        "product-mini-site",
+        "offer-bundle",
+        "message-matched-landing",
+        "checklist",
+        "playbook",
+        "mini-guide",
+        "resource-list",
+        "personalized-sales-follow-up",
+        "link-in-bio",
+        "campaign-resource",
+        "prospect-specific-insight",
+        "custom"
+      ]
+    },
+    "angle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "class", "statement", "evidence_strength"],
+      "properties": {
+        "id": {"type": "string"},
+        "class": {
+          "type": "string",
+          "enum": [
+            "pain-point",
+            "desired-outcome",
+            "economic-savings",
+            "time-savings",
+            "labor-reduction",
+            "convenience",
+            "premium-quality",
+            "speed",
+            "risk-reduction",
+            "local-scarcity",
+            "price-value-gap",
+            "technical-superiority",
+            "ease-of-use",
+            "gift-lifestyle",
+            "professional-roi",
+            "social-proof-led",
+            "offer-led",
+            "trend-context",
+            "seasonal-use-case",
+            "segment-specific",
+            "comparison",
+            "custom"
+          ]
+        },
+        "statement": {"type": "string"},
+        "evidence_strength": {
+          "type": "string",
+          "enum": ["verified", "supported", "inferred", "unknown"]
+        }
+      }
+    },
+    "message_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "landing_headline", "cta_continuity"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "source_hook": {"type": ["string", "null"]},
+        "source_problem": {"type": ["string", "null"]},
+        "source_promise": {"type": ["string", "null"]},
+        "source_offer": {"type": ["string", "null"]},
+        "source_visual_theme": {"type": ["string", "null"]},
+        "landing_headline": {"type": "string"},
+        "landing_supporting_message": {"type": ["string", "null"]},
+        "proof_required": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "cta_continuity": {"type": "string"}
+      }
+    },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "voice": {"type": ["string", "null"]},
+        "sophistication": {"type": ["string", "null"]},
+        "emotional_tone": {"type": ["string", "null"]},
+        "visual_personality": {"type": ["string", "null"]},
+        "image_style": {"type": ["string", "null"]},
+        "icon_style": {"type": ["string", "null"]},
+        "motion_style": {"type": ["string", "null"]}
+      }
+    },
+    "design": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "personality",
+        "density",
+        "motion",
+        "container_max",
+        "section_spacing",
+        "body_line_length",
+        "radius"
+      ],
+      "properties": {
+        "personality": {"type": "string"},
+        "density": {
+          "type": "string",
+          "enum": ["compact", "medium", "spacious"]
+        },
+        "motion": {
+          "type": "string",
+          "enum": ["none", "restrained", "moderate", "storytelling"]
+        },
+        "container_max": {
+          "type": "integer",
+          "minimum": 800,
+          "maximum": 1600
+        },
+        "section_spacing": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 200
+        },
+        "body_line_length": {
+          "type": "integer",
+          "minimum": 40,
+          "maximum": 90
+        },
+        "display_font": {"type": ["string", "null"]},
+        "body_font": {"type": ["string", "null"]},
+        "hero_size": {"type": ["string", "null"]},
+        "h2_size": {"type": ["string", "null"]},
+        "body_size": {"type": ["string", "null"]},
+        "heading_color": {"type": ["string", "null"]},
+        "body_color": {"type": ["string", "null"]},
+        "brand_color": {"type": ["string", "null"]},
+        "accent_color": {"type": ["string", "null"]},
+        "button_background": {"type": ["string", "null"]},
+        "button_text": {"type": ["string", "null"]},
+        "radius": {
+          "type": "string",
+          "enum": ["sharp", "small", "medium", "large", "pill", "mixed"]
+        },
+        "shadow_rule": {"type": ["string", "null"]},
+        "focus_rule": {"type": ["string", "null"]}
+      }
+    },
+    "primary_cta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "action_type"],
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "action_type": {
+          "type": "string",
+          "enum": [
+            "affiliate_link",
+            "add_to_cart",
+            "checkout",
+            "form_submit",
+            "download",
+            "book_meeting",
+            "anchor",
+            "internal_link",
+            "external_link"
+          ]
+        },
+        "destination": {"type": ["string", "null"]},
+        "verified": {"type": "boolean", "default": false}
+      }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order", "type", "component_id", "purpose", "required"],
+        "properties": {
+          "order": {"type": "integer", "minimum": 1},
+          "type": {"type": "string"},
+          "component_id": {"type": "string"},
+          "purpose": {"type": "string"},
+          "required": {"type": "boolean"},
+          "copy": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "media": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "asset_type": {"type": ["string", "null"]},
+              "source": {"type": ["string", "null"]},
+              "fidelity_requirement": {
+                "type": "string",
+                "enum": ["exact", "high", "contextual", "decorative"]
+              },
+              "aspect_ratio": {"type": ["string", "null"]},
+              "mobile_crop": {"type": ["string", "null"]}
+            }
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "analytics_events": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "mobile_behavior": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "localization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "native_rewrite_required": {"type": "boolean"},
+        "local_delivery_context": {"type": "boolean"},
+        "local_warranty_context": {"type": "boolean"},
+        "local_comparison_context": {"type": "boolean"},
+        "notes": {"type": ["string", "null"]}
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "locked_fields": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "changed_fields": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "hypothesis": {"type": ["string", "null"]}
+      }
+    },
+    "analytics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_metric", "events"],
+      "properties": {
+        "primary_metric": {"type": "string"},
+        "events": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "experiment_id": {"type": ["string", "null"]},
+        "measurement_window": {"type": ["string", "null"]}
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_score", "hard_failures"],
+      "properties": {
+        "minimum_score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 85
+        },
+        "hard_failures": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "unsupported_claim",
+              "fake_proof",
+              "fake_urgency",
+              "tracking_unverified",
+              "destination_invalid",
+              "mobile_broken",
+              "critical_accessibility_failure",
+              "critical_performance_failure",
+              "product_media_misrepresentation",
+              "merchant_or_offer_mismatch"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
