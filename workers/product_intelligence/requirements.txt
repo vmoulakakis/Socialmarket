@@ -1,5 +1,7 @@
-ijson>=3.4,<4
-requests>=2.32,<3
-gdown>=5.2,<6
-Pillow>=11,<13
-qrcode[pil]>=8,<9
+# Production-direct dependencies pinned 2026-09-06.
+# Upgrade explicitly after workflow contract tests; do not use floating ranges here.
+ijson==3.5.1
+requests==2.34.2
+gdown==6.1.0
+Pillow==12.3.0
+qrcode[pil]==8.2
