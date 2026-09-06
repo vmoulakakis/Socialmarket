@@ -1,0 +1,42 @@
+name: AFFINITY Page Engine CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'skills/AFFINITY_SKILL.md'
+      - 'skills/AFFINITY_PAGE_ENGINE.md'
+      - 'config/affinity-page-engine.json'
+      - 'agents/skills/affinity-creative-production/**'
+      - 'agents/skills/growth-orchestrator/SKILL.md'
+      - 'projects/socialmarket-growthops/README.md'
+      - 'data/affinity-page-engine-example.json'
+      - 'scripts/validate-affinity-page-engine.mjs'
+      - 'package.json'
+      - '.github/workflows/affinity-page-engine-ci.yml'
+  pull_request:
+    paths:
+      - 'skills/AFFINITY_SKILL.md'
+      - 'skills/AFFINITY_PAGE_ENGINE.md'
+      - 'config/affinity-page-engine.json'
+      - 'agents/skills/affinity-creative-production/**'
+      - 'agents/skills/growth-orchestrator/SKILL.md'
+      - 'projects/socialmarket-growthops/README.md'
+      - 'data/affinity-page-engine-example.json'
+      - 'scripts/validate-affinity-page-engine.mjs'
+      - 'package.json'
+      - '.github/workflows/affinity-page-engine-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-page-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate AFFINITY Page Engine contracts
+        run: npm run test:affinity-page-engine
