@@ -1,0 +1,173 @@
+{
+  "version": "1.0",
+  "page_id": "example-gr-product-meta-v1",
+  "parent_page_id": null,
+  "variant_id": null,
+  "objective": "affiliate_click",
+  "market": "GR",
+  "locale": "el-GR",
+  "currency": "EUR",
+  "traffic_source": "meta",
+  "campaign": "example-campaign",
+  "audience": "Greek homeowners",
+  "awareness": "problem-aware",
+  "purchase_mode": "considered",
+  "archetype": "pain-gap-solution",
+  "angle": {
+    "id": "angle-economic-gap-01",
+    "class": "economic-savings",
+    "statement": "Show the verified economic gap before presenting the product",
+    "evidence_strength": "verified"
+  },
+  "message_match": {
+    "required": true,
+    "source_hook": "Example problem-led campaign hook",
+    "source_problem": "Avoidable recurring cost",
+    "source_promise": "Understand where the cost gap comes from",
+    "source_offer": "Current verified merchant offer",
+    "source_visual_theme": "clean home-efficiency visual",
+    "landing_headline": "See the cost gap before you choose",
+    "landing_supporting_message": "A transparent example Page DNA fixture using only placeholder claims.",
+    "proof_required": ["economic_comparison", "merchant_offer"],
+    "cta_continuity": "View the verified merchant offer"
+  },
+  "brand": {
+    "voice": "clear, evidence-led",
+    "sophistication": "consumer technical",
+    "emotional_tone": "confident, calm",
+    "visual_personality": "premium clean technical",
+    "image_style": "bright product-led",
+    "icon_style": "simple line icons",
+    "motion_style": "restrained"
+  },
+  "design": {
+    "personality": "premium-clean-technical",
+    "density": "medium",
+    "motion": "restrained",
+    "container_max": 1180,
+    "section_spacing": 96,
+    "body_line_length": 68,
+    "display_font": null,
+    "body_font": null,
+    "hero_size": "clamp(2.5rem,7vw,4.75rem)",
+    "h2_size": "clamp(2rem,4vw,3.25rem)",
+    "body_size": "1.0625rem",
+    "heading_color": "var(--text-strong)",
+    "body_color": "var(--text-body)",
+    "brand_color": "var(--brand)",
+    "accent_color": "var(--accent)",
+    "button_background": "var(--brand)",
+    "button_text": "var(--on-brand)",
+    "radius": "large",
+    "shadow_rule": "subtle only when hierarchy benefits",
+    "focus_rule": "high-visibility focus ring"
+  },
+  "primary_cta": {
+    "label": "Δες την προσφορά",
+    "action_type": "affiliate_link",
+    "destination": "https://example.invalid/verified-affiliate-placeholder",
+    "verified": false
+  },
+  "sections": [
+    {
+      "order": 1,
+      "type": "hero",
+      "component_id": "AF-B22",
+      "purpose": "Confirm campaign relevance and provide the real next action",
+      "required": true,
+      "copy": {"headline": "See the cost gap before you choose"},
+      "media": {"asset_type": "product_hero", "source": null, "fidelity_requirement": "exact", "aspect_ratio": "4:3", "mobile_crop": "contain"},
+      "evidence_ids": [],
+      "analytics_events": ["affiliate_cta_view"],
+      "mobile_behavior": "copy first, media second"
+    },
+    {
+      "order": 2,
+      "type": "pain",
+      "component_id": "AF-S18",
+      "purpose": "Make the verified recurring problem concrete",
+      "required": true,
+      "copy": {},
+      "evidence_ids": [],
+      "analytics_events": [],
+      "mobile_behavior": "single column"
+    },
+    {
+      "order": 3,
+      "type": "mechanism",
+      "component_id": "AF-S21",
+      "purpose": "Explain the solution mechanism",
+      "required": true,
+      "copy": {},
+      "evidence_ids": [],
+      "analytics_events": [],
+      "mobile_behavior": "steps stack vertically"
+    },
+    {
+      "order": 4,
+      "type": "comparison",
+      "component_id": "AF-S27",
+      "purpose": "Show total-solution-cost comparison honestly",
+      "required": true,
+      "copy": {},
+      "evidence_ids": [],
+      "analytics_events": ["comparison_view"],
+      "mobile_behavior": "cards or horizontally scrollable table with labels"
+    },
+    {
+      "order": 5,
+      "type": "trust",
+      "component_id": "AF-S26",
+      "purpose": "Resolve delivery, warranty, merchant and return uncertainty",
+      "required": true,
+      "copy": {},
+      "evidence_ids": [],
+      "analytics_events": ["trust_section_view"],
+      "mobile_behavior": "stack trust cards"
+    },
+    {
+      "order": 6,
+      "type": "faq",
+      "component_id": "PP-S06",
+      "purpose": "Resolve remaining buyer objections",
+      "required": true,
+      "copy": {},
+      "evidence_ids": [],
+      "analytics_events": [],
+      "mobile_behavior": "accordion"
+    },
+    {
+      "order": 7,
+      "type": "cta",
+      "component_id": "PP-S07",
+      "purpose": "Repeat the honest next action after objections are resolved",
+      "required": true,
+      "copy": {"cta": "Δες την προσφορά"},
+      "evidence_ids": [],
+      "analytics_events": ["affiliate_cta_view", "affiliate_click"],
+      "mobile_behavior": "full-width button"
+    }
+  ],
+  "localization": {
+    "native_rewrite_required": true,
+    "local_delivery_context": true,
+    "local_warranty_context": true,
+    "local_comparison_context": true,
+    "notes": "Fixture only; real product pages require current Greece evidence."
+  },
+  "variant": {
+    "locked_fields": ["product_facts", "compliance", "design_tokens"],
+    "changed_fields": ["hero_proposition"],
+    "hypothesis": "A message-matched economic hero improves qualified affiliate clicks"
+  },
+  "analytics": {
+    "primary_metric": "RPV",
+    "events": ["page_view", "affiliate_cta_view", "affiliate_click", "comparison_view", "trust_section_view"],
+    "experiment_id": null,
+    "measurement_window": null
+  },
+  "qa": {
+    "minimum_score": 85,
+    "hard_failures": []
+  }
+}
