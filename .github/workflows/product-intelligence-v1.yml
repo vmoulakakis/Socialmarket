@@ -32,6 +32,7 @@ jobs:
       # Parse the multi-GB Linkwise JSON once, then finish price-integrity validation
       # from the local SQLite materialization. Set false for immediate legacy rollback.
       PRODUCT_SINGLE_PARSE_STAGE: 'true'
+      COMMERCIAL_PORTFOLIO_TYPE: core_affiliate_top100
       PRODUCT_MIN_COMMISSION_EUR: '10'
       PRODUCT_MIN_MERCHANT_TRUST: '30'
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
@@ -42,8 +43,11 @@ jobs:
       AI_TASK_RUNTIME_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/ai-task-runtime-gateway
       AI_TASK_RUNTIME_DURABLE: 'true'
       LOCAL_OLLAMA_URL: http://127.0.0.1:11434
+      OLLAMA_VERSION: v0.33.3
+      OLLAMA_INSTALL_SHA256: 25f64b810b947145095956533e1bdf56eacea2673c55a7e586be4515fc882c9f
       PRODUCT_AI_ROUTE: qualified_local_router
       PRODUCT_LOCAL_MODEL: qwen3.5:4b
+      PRODUCT_LOCAL_MODEL_DIGEST_PREFIX: 2a654d98e6fb
       # GitHub-hosted runner has 2 cores. Two concurrent 4B generations were the
       # main source of observed timeouts, so inference is intentionally serial.
       PRODUCT_LOCAL_AI_WORKERS: '1'
@@ -65,8 +69,10 @@ jobs:
           cache: pip
           cache-dependency-path: workers/product_intelligence/requirements.txt
 
-      - name: Install product intelligence dependencies
-        run: pip install -r workers/product_intelligence/requirements.txt
+      - name: Install pinned product intelligence dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r workers/product_intelligence/requirements.txt
+          python -m pip freeze | sort > product-intelligence-installed.txt
 
       - name: Preflight persistence + runtime gateways
         run: |
@@ -84,11 +90,20 @@ jobs:
               if not health.get('ok'): raise SystemExit(f'{name} gateway unhealthy')
           PY
 
-      - name: Install local Ollama runtime
-        run: curl -fsSL https://ollama.com/install.sh | sh
-
-      - name: Start local Ollama and load qualified model
+      - name: Install checksum-verified Ollama runtime
+        shell: bash
         run: |
+          set -euo pipefail
+          installer="/tmp/ollama-install-${OLLAMA_VERSION}.sh"
+          curl -fsSL "https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/install.sh" -o "$installer"
+          echo "${OLLAMA_INSTALL_SHA256}  ${installer}" | sha256sum -c -
+          sh "$installer"
+          ollama --version
+
+      - name: Start local Ollama and load pinned qualified model
+        shell: bash
+        run: |
+          set -euo pipefail
           if ! curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null 2>&1; then
             nohup ollama serve > /tmp/ollama-product-ranking.log 2>&1 &
           fi
@@ -99,16 +114,23 @@ jobs:
           curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null
           ollama pull "$PRODUCT_LOCAL_MODEL"
           ollama list
+          model_id="$(ollama list | awk -v model="$PRODUCT_LOCAL_MODEL" '$1==model {print $2; exit}')"
+          test -n "$model_id" || (echo "Unable to resolve local model id for $PRODUCT_LOCAL_MODEL" && exit 1)
+          case "$model_id" in
+            "${PRODUCT_LOCAL_MODEL_DIGEST_PREFIX}"*) ;;
+            *) echo "Qwen model digest mismatch: expected ${PRODUCT_LOCAL_MODEL_DIGEST_PREFIX}*, got ${model_id}"; exit 1 ;;
+          esac
 
       - name: Validate zero-paid local inference contract
         run: |
           python - <<'PY'
-          import sys
+          import os, sys
           sys.path.insert(0,'workers/ai_runtime')
           from ollama_executor import OllamaExecutor
           from task_contract import AITask
 
-          ex=OllamaExecutor(name='night-brain-preflight',tier=2,model='qwen3.5:4b',max_output_tokens=120)
+          model=os.environ['PRODUCT_LOCAL_MODEL']
+          ex=OllamaExecutor(name='night-brain-preflight',tier=2,model=model,max_output_tokens=120)
           task=AITask(
               task_type='shopper_intent_preflight',role='Greek shopping intent classifier',
               instructions=(
@@ -125,7 +147,7 @@ jobs:
           assert 0 <= float(data.get('confidence')) <= 1, data
           assert float(telemetry.get('cost_usd') or 0)==0, telemetry
           assert telemetry.get('structured_output') is True, telemetry
-          print({'contract':'PASS','model':telemetry.get('model'),'route':telemetry.get('route'),'attempt':telemetry.get('attempt_no'),'cost_usd':0})
+          print({'contract':'PASS','portfolio':os.environ.get('COMMERCIAL_PORTFOLIO_TYPE'),'model':telemetry.get('model'),'route':telemetry.get('route'),'attempt':telemetry.get('attempt_no'),'cost_usd':0})
           PY
 
       - name: Validate live Linkwise feed contract
@@ -150,11 +172,11 @@ jobs:
           if size < 10_000_000: raise SystemExit('Product source unexpectedly small; refusing incomplete run')
           PY
 
-      - name: Night Brain — opportunistic Affiliate Top 100
+      - name: Night Brain — Core Affiliate Top 100
         id: night_brain
         run: python workers/product_intelligence/affiliate_night_brain_entrypoint.py "$PRODUCT_SOURCE_FEED"
 
-      - name: Reconcile + verify authoritative Top 100 contract
+      - name: Reconcile + verify authoritative Core Affiliate Top 100 contract
         run: python workers/product_intelligence/reconcile_night_brain_profile.py
 
       - name: Upload Night Brain decision profile
@@ -167,6 +189,7 @@ jobs:
           path: |
             product-ranking-v3-profile.json
             product-feed-safety-profile.json
+            product-intelligence-installed.txt
             /tmp/ollama-product-ranking.log
 
       - name: Remove raw feed and local staging from runner
