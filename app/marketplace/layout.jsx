@@ -1,13 +1,19 @@
 export const metadata = {
-  title: 'SocialMarket — Βρες αυτό που λύνει το πρόβλημα',
-  description: 'Social discovery marketplace με curated problem-solvers για πραγματικές ανάγκες: λιγότερη τριβή, περισσότερος χρόνος, πιο έξυπνη καθημερινότητα.',
+  title: 'AFFINITY — Small Solutions. A Better You.',
+  description: 'Premium problem-solving eShop με curated λύσεις για πραγματικές καθημερινές ανάγκες. Ανακάλυψε προϊόντα μέσα από pain, gap, solution και ξεκάθαρα buyer checks.',
   robots: { index: true, follow: true, noarchive: false, nosnippet: false },
   alternates: { canonical: '/marketplace' },
   openGraph: {
-    title: 'SocialMarket — Something annoying you? Find what fixes it.',
-    description: 'Pain-first social marketplace με curated λύσεις που ξεκινούν από πραγματικό πρόβλημα και use case.',
+    title: 'AFFINITY — Discover products that solve real problems.',
+    description: 'Curated problem-solving eShop για μια πιο εύκολη, όμορφη και οργανωμένη καθημερινότητα.',
     type: 'website',
     locale: 'el_GR',
+    siteName: 'AFFINITY',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AFFINITY — Small Solutions. A Better You.',
+    description: 'Discover products that solve real problems.',
   },
 };
 
