@@ -36,9 +36,13 @@ jobs:
       AI_TASK_RUNTIME_DURABLE: 'true'
       CATEGORY_PAIN_AI_ROUTE: local_router
       LOCAL_OLLAMA_URL: http://127.0.0.1:11434
+      OLLAMA_VERSION: v0.33.3
+      OLLAMA_INSTALL_SHA256: 25f64b810b947145095956533e1bdf56eacea2673c55a7e586be4515fc882c9f
       CATEGORY_PAIN_TIER1_MODEL: qwen3.5:4b
+      CATEGORY_PAIN_TIER1_MODEL_DIGEST_PREFIX: 2a654d98e6fb
       CATEGORY_PAIN_TIER2_MODEL: ''
       SEARXNG_BASE_URL: http://127.0.0.1:8080
+      SEARXNG_IMAGE: searxng/searxng:2026.9.5-c7f3080aa
       CATEGORY_PAIN_LIMIT: ${{ github.event_name == 'push' && '1' || inputs.limit || '80' }}
       CATEGORY_PAIN_WORKERS: '3'
       CATEGORY_PAIN_AI_BATCH: '1'
@@ -50,8 +54,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install deep evidence dependencies
-        run: pip install requests trafilatura yt-dlp
+      - name: Install pinned deep evidence dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r workers/market_intelligence/requirements-category-pain.txt
+          python -m pip freeze | sort > category-pain-installed.txt
       - name: Preflight evidence persistence and AI runtime gateways
         run: |
           EVIDENCE_HEALTH=$(curl -fsS "$EVIDENCE_GATEWAY")
@@ -70,10 +76,19 @@ jobs:
           assert a.get('stores_raw_prompts') is False
           assert a.get('stores_raw_evidence') is False
           PY
-      - name: Install local Ollama runtime
-        run: curl -fsSL https://ollama.com/install.sh | sh
-      - name: Start local Ollama and load qualified Category Pain model
+      - name: Install checksum-verified Ollama runtime
+        shell: bash
         run: |
+          set -euo pipefail
+          installer="/tmp/ollama-install-${OLLAMA_VERSION}.sh"
+          curl -fsSL "https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/install.sh" -o "$installer"
+          echo "${OLLAMA_INSTALL_SHA256}  ${installer}" | sha256sum -c -
+          sh "$installer"
+          ollama --version
+      - name: Start local Ollama and load pinned Category Pain model
+        shell: bash
+        run: |
+          set -euo pipefail
           if ! curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null 2>&1; then
             nohup ollama serve > /tmp/ollama-category-pain.log 2>&1 &
           fi
@@ -84,9 +99,17 @@ jobs:
           curl -fsS "$LOCAL_OLLAMA_URL/api/tags" >/dev/null
           ollama pull "$CATEGORY_PAIN_TIER1_MODEL"
           ollama list
-      - name: Start ephemeral SearXNG discovery engine
+          model_id="$(ollama list | awk -v model="$CATEGORY_PAIN_TIER1_MODEL" '$1==model {print $2; exit}')"
+          test -n "$model_id" || (echo "Unable to resolve model id for $CATEGORY_PAIN_TIER1_MODEL" && exit 1)
+          case "$model_id" in
+            "${CATEGORY_PAIN_TIER1_MODEL_DIGEST_PREFIX}"*) ;;
+            *) echo "Category Pain model digest mismatch: expected ${CATEGORY_PAIN_TIER1_MODEL_DIGEST_PREFIX}*, got ${model_id}"; exit 1 ;;
+          esac
+      - name: Start pinned ephemeral SearXNG discovery engine
         run: |
-          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+          docker pull "$SEARXNG_IMAGE"
+          docker image inspect "$SEARXNG_IMAGE" --format '{{json .RepoDigests}}'
+          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" "$SEARXNG_IMAGE"
           for i in $(seq 1 40); do
             if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
             sleep 2
@@ -135,4 +158,5 @@ jobs:
           retention-days: 30
           path: |
             workers/market_intelligence/semantic-category-pain-output.json
+            category-pain-installed.txt
             /tmp/ollama-category-pain.log
