@@ -2,18 +2,22 @@
 
 Status: CANONICAL
 Created: 2026-09-06
+Updated: 2026-09-07
 
 ## Purpose
 Persistent project reference for the autonomous GrowthOps operating model defined in the planning conversation.
 
 ## Core architecture
-PUBLIC SITES → Web Analytics → Supabase ← Conversion CSV ← SocialMarket Greek Demand Brain → Growth Orchestrator → Specialist Agents → AFFINITY / Creative Production → MyAgenticTeam → GitHub / Vercel / connected site adapters → Production Verification → Supabase Learning → SocialMarket AI Admin.
+PUBLIC SITES → Web Analytics → Supabase ← Conversion CSV ← SocialMarket Greek Demand Brain → Growth Orchestrator → Specialist Agents → AFFINITY / Creative Production → AFFINITY Page Engine / Component Registry / Page DNA → MyAgenticTeam → GitHub / Vercel / connected site adapters → Production Verification → Supabase Learning → SocialMarket AI Admin.
 
 ## Canonical sources
 - `agents/skills/growth-orchestrator/SKILL.md`
 - `docs/GROWTHOPS_FINAL_REFERENCE.md`
 - `skills/AFFINITY_SKILL.md`
+- `skills/AFFINITY_PAGE_ENGINE.md`
 - `agents/skills/affinity-creative-production/SKILL.md`
+- `agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md`
+- `agents/skills/affinity-creative-production/PAGE_DNA.schema.json`
 - `agents/skills/demand-intelligence-v3/SKILL.md`
 - `agents/skills/greece-market-intelligence/SKILL.md`
 - `agents/skills/competition-gap/SKILL.md`
@@ -34,7 +38,12 @@ PUBLIC SITES → Web Analytics → Supabase ← Conversion CSV ← SocialMarket 
 Collect → Validate → Map Market Intent → Diagnose → Prioritize → Delegate → Execute → Deploy → Verify → Measure → Learn.
 
 ## Creation standard
-Every new or materially revised landing page, mini-site, article/post, comparison page or creative asset must use canonical demand/pain/competition context, AFFINITY funnel logic, AFFINITY Creative Production art direction, the best-fit modern framework for the existing project, performance-first implementation, accessibility, verified claims and conversion instrumentation.
+Every new or materially revised landing page, mini-site, article/post, comparison page or creative asset must use canonical demand/pain/competition context, AFFINITY funnel logic, AFFINITY Creative Production art direction, and—when the output is a page or page-like campaign asset—the canonical AFFINITY Page Engine workflow.
+
+For new/materially rebuilt pages the default production sequence is:
+`SOURCE INGEST → CONTEXT BRIEF → ANGLE MATRIX → MESSAGE MATCH → ARCHETYPE → PAGE DNA → COMPONENT PLAN → COPY → MEDIA → DESIGN TOKENS → ASSEMBLY → RESPONSIVE QA → CONVERSION LAYER → LOCALIZATION → VARIANTS → PUBLISH → MEASURE`.
+
+Page construction must prefer components from `COMPONENT_REGISTRY.md`, validate against `PAGE_DNA.schema.json` where structured generation is supported, use the best-fit modern framework for the existing project, remain performance-first and accessible, preserve verified claims, and include conversion instrumentation. Vendor-derived PagePilot/Magnetic patterns are used as abstract production techniques only; never copy proprietary code or exact designs.
 
 ## Duplicate prevention
 - Standalone Daily Public SEO: disabled.
