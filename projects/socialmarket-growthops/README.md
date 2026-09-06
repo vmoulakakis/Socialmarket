@@ -8,16 +8,19 @@ Updated: 2026-09-07
 Persistent project reference for the autonomous GrowthOps operating model defined in the planning conversation.
 
 ## Core architecture
-PUBLIC SITES → Web Analytics → Supabase ← Conversion CSV ← SocialMarket Greek Demand Brain → Growth Orchestrator → Specialist Agents → AFFINITY / Creative Production → AFFINITY Page Engine / Config / Prompt Contracts / Component Registry / Page DNA / Build Handoff / QA / Experiments → MyAgenticTeam → GitHub / Vercel / connected site adapters → Production Verification → Supabase Learning → SocialMarket AI Admin.
+PUBLIC SITES → Web Analytics → Supabase ← Conversion CSV ← SocialMarket Greek Demand Brain → Growth Orchestrator → Specialist Agents → AFFINITY / Creative Production → AFFINITY Site Engine + Page Engine / Config / Prompt Contracts / Component Registry / Site DNA / Page DNA / Build Handoff / QA / Experiments → MyAgenticTeam → GitHub / Vercel / connected site adapters → Production Verification → Supabase Learning → SocialMarket AI Admin.
 
 ## Canonical sources
 - `agents/skills/growth-orchestrator/SKILL.md`
 - `docs/GROWTHOPS_FINAL_REFERENCE.md`
 - `skills/AFFINITY_SKILL.md`
+- `skills/AFFINITY_SITE_ENGINE.md`
 - `skills/AFFINITY_PAGE_ENGINE.md`
 - `config/affinity-page-engine.json`
+- `agents/skills/affinity-creative-production/README.md`
 - `agents/skills/affinity-creative-production/SKILL.md`
 - `agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md`
+- `agents/skills/affinity-creative-production/SITE_DNA.schema.json`
 - `agents/skills/affinity-creative-production/PAGE_DNA.schema.json`
 - `agents/skills/affinity-creative-production/PROMPT_CONTRACTS.md`
 - `agents/skills/affinity-creative-production/QA_GATES.md`
@@ -44,17 +47,27 @@ PUBLIC SITES → Web Analytics → Supabase ← Conversion CSV ← SocialMarket 
 ## Daily loop
 Collect → Validate → Map Market Intent → Diagnose → Prioritize → Delegate → Execute → Deploy → Verify → Measure → Learn.
 
-## Creation standard
-Every new or materially revised landing page, mini-site, article/post, comparison page or creative asset must use canonical demand/pain/competition context, AFFINITY funnel logic, AFFINITY Creative Production art direction, and—when the output is a page or page-like campaign asset—the canonical AFFINITY Page Engine workflow.
+## Creation standard — pages
+Every new or materially revised landing page, article/post, comparison page, lead magnet or campaign asset must use canonical demand/pain/competition context, AFFINITY funnel logic, AFFINITY Creative Production art direction and the canonical AFFINITY Page Engine workflow.
 
-For new/materially rebuilt pages the production sequence is:
+Page sequence:
 
 `SOURCE INGEST → CONTEXT BRIEF → BRAND/STORE DNA → DECISION BARRIERS → ANGLE MATRIX → MESSAGE MATCH → ARCHETYPE → LAYOUT DNA → PAGE DNA → COMPONENT PLAN → COPY → MEDIA → DESIGN TOKENS → ASSEMBLY → RESPONSIVE QA → CONVERSION LAYER → LOCALIZATION → VARIANTS → PUBLISH → MEASURE → LEARN`.
 
-### Why the extra governed stages matter
-- **Brand/Store DNA** makes pages native to the existing brand rather than isolated templates.
+## Creation standard — full sites / stores / multi-page projects
+Full website work additionally invokes `skills/AFFINITY_SITE_ENGINE.md` before independent page implementation.
+
+Site sequence:
+
+`SITE CONTEXT → BRAND/STORE DNA → SITE TYPE → USER JOURNEYS → INFORMATION ARCHITECTURE → NAVIGATION → ROUTE INVENTORY → SITE DNA → PAGE DNA PER ROUTE → PAGE FAMILIES/LAYOUT DNA → GLOBAL COMPONENTS → CONVERSION PATHS → INTERNAL LINKING → SEO/LOCALIZATION → BUILD HANDOFFS → CROSS-ROUTE QA → DEPLOY → MEASURE`.
+
+A site must not be produced as a collection of unrelated AI-generated pages. Site DNA owns the global journeys, information architecture, navigation, route inventory, global components, cross-route conversion model and site SEO; Page DNA owns each individual route.
+
+### Why the governed stages matter
+- **Brand/Store DNA** makes pages and routes native to one coherent brand rather than isolated templates.
 - **Decision Barriers** prevent bloated pages by requiring each section to resolve a real purchase/lead obstacle.
 - **Layout DNA** makes strong page structures persistent, versionable, duplicable and reusable instead of one-off generations.
+- **Site DNA** makes multi-page sites coherent across journeys, navigation, page families, SEO and conversion paths.
 - **Component Scoring** selects sections by objective/evidence/mobile/performance fit rather than visual preference.
 - **Build Handoff** prevents the builder from redesigning strategy during coding.
 - **QA Gates** audit the rendered page, product-media fidelity, message match, accessibility, performance and tracking.
@@ -63,7 +76,7 @@ For new/materially rebuilt pages the production sequence is:
 Page construction must prefer components from `COMPONENT_REGISTRY.md`, use structured Page DNA and Build Handoff contracts where supported, reuse the existing project stack, remain performance-first and accessible, preserve verified claims, and include conversion instrumentation.
 
 ## Vendor research synthesis
-The engine incorporates publicly documented/observable PagePilot.ai techniques including source-URL ingestion, angle selection, reusable layouts, modular sections/blocks, drag/reorder/editability, brand matching, responsive controls, AI product imagery, structured description copy, ad copy/creative, cart/upsell logic, localization and Shopify publishing. It also incorporates publicly documented Magnetic.ai techniques including audience/problem/offer/quick-win context, document/research inputs, analyze→outline→copy→images→layout generation, message-matched pages, lead-magnet formats, personalized follow-up, reusable/remixable assets and hosted/exportable campaign pages.
+The engine incorporates publicly documented/observable PagePilot.ai techniques including source-URL ingestion, angle selection, reusable layouts, modular sections/blocks, drag/reorder/editability, brand matching, responsive controls, AI product imagery, structured description copy, ad copy/creative, cart/upsell logic, localization, Shopify publishing and whole-store assembly concepts including homepage, products, collections, navigation and shared theme/layout. It also incorporates publicly documented Magnetic.ai techniques including audience/problem/offer/quick-win context, document/research inputs, analyze→outline→copy→images→layout generation, message-matched pages, lead-magnet formats, personalized follow-up, reusable/remixable assets and hosted/exportable campaign pages.
 
 These are abstract production techniques only. Never copy vendor proprietary code, private templates, undocumented private component inventories or exact protected designs.
 
@@ -79,7 +92,18 @@ Material page work defaults to:
 - analytics/experiment instrumentation
 - rollback reference.
 
-Run `npm run test:affinity-page-engine` after Page Engine contract changes.
+Full-site work additionally requires:
+- Site DNA
+- route inventory with Page DNA refs
+- journey/navigation validation
+- no important orphan routes
+- broken internal-link check
+- global Brand/Store DNA consistency
+- sitemap/robots/canonical/localization consistency
+- global commerce/affiliate action validation
+- end-to-end conversion-path QA.
+
+Run `npm run test:affinity-page-engine` after Page/Site Engine contract changes. CI protects these contracts on `main` and pull requests.
 
 ## Duplicate prevention
 - Standalone Daily Public SEO: disabled.
