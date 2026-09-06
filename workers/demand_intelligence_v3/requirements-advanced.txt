@@ -1,7 +1,8 @@
-numpy>=2.0
-pandas>=2.2
-statsforecast>=2.0
-ruptures>=1.1.10
-rapidfuzz>=3.9
-networkx>=3.3
-# Optional challengers are installed best-effort in the workflow and remain gated by history/readiness.
+# Deep Demand V3.1 deterministic/statistical production dependencies pinned 2026-09-06.
+numpy==2.5.2
+pandas==3.0.5
+statsforecast==2.1.1
+ruptures==1.1.10
+rapidfuzz==3.14.6
+networkx==3.6.1
+# Optional challengers are pinned separately in the workflow and remain best-effort/readiness-gated.
