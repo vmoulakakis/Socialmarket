@@ -12,6 +12,7 @@ on:
       - 'workers/market_intelligence/merchant_intelligence_v4.py'
       - 'workers/market_intelligence/evidence_collectors.py'
       - 'workers/market_intelligence/audit_agent.py'
+      - 'workers/market_intelligence/requirements-production.txt'
       - '.github/workflows/merchant-intelligence-v3.yml'
 
 permissions:
@@ -29,6 +30,7 @@ jobs:
     env:
       MERCHANT_RESEARCH_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/merchant-research-gateway
       SEARXNG_BASE_URL: http://127.0.0.1:8080
+      SEARXNG_IMAGE: searxng/searxng:2026.9.5-c7f3080aa
       MERCHANT_RESEARCH_LIMIT: '350'
       MERCHANT_RESEARCH_WORKERS: '3'
       MERCHANT_COLLECTOR_BUDGET_PER_KIND: '12'
@@ -41,13 +43,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install merchant evidence stack
+      - name: Install pinned merchant evidence stack
         run: |
-          pip install requests beautifulsoup4 trafilatura scrapy yt-dlp gallery-dl playwright
+          python -m pip install --disable-pip-version-check -r workers/market_intelligence/requirements-production.txt
           python -m playwright install chromium
-      - name: Start ephemeral SearXNG
+          python -m pip freeze | sort > merchant-evidence-installed.txt
+      - name: Start pinned ephemeral SearXNG
         run: |
-          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" searxng/searxng:latest
+          docker pull "$SEARXNG_IMAGE"
+          docker image inspect "$SEARXNG_IMAGE" --format '{{json .RepoDigests}}'
+          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" "$SEARXNG_IMAGE"
           for i in $(seq 1 40); do
             if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
             sleep 2
