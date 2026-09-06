@@ -73,7 +73,7 @@ jobs:
           PY
 
       - name: Discover only new or materially changed products
-        run: python workers/product_intelligence/semantic_marketplace_200_incremental.py
+        run: python workers/product_intelligence/semantic_marketplace_200_smart.py
 
       - name: Verify immutable portfolio and incremental invariants
         run: |
