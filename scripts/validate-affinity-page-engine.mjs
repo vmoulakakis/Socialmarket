@@ -3,11 +3,13 @@ import fs from 'node:fs';
 const requiredFiles = [
   'skills/AFFINITY_SKILL.md',
   'skills/AFFINITY_PAGE_ENGINE.md',
+  'skills/AFFINITY_SITE_ENGINE.md',
   'config/affinity-page-engine.json',
   'agents/skills/affinity-creative-production/README.md',
   'agents/skills/affinity-creative-production/SKILL.md',
   'agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md',
   'agents/skills/affinity-creative-production/PAGE_DNA.schema.json',
+  'agents/skills/affinity-creative-production/SITE_DNA.schema.json',
   'agents/skills/affinity-creative-production/PROMPT_CONTRACTS.md',
   'agents/skills/affinity-creative-production/QA_GATES.md',
   'agents/skills/affinity-creative-production/BUILD_HANDOFF.schema.json',
@@ -37,12 +39,14 @@ function parseJson(file) {
 
 const config = parseJson('config/affinity-page-engine.json');
 const pageSchema = parseJson('agents/skills/affinity-creative-production/PAGE_DNA.schema.json');
+const siteSchema = parseJson('agents/skills/affinity-creative-production/SITE_DNA.schema.json');
 const buildSchema = parseJson('agents/skills/affinity-creative-production/BUILD_HANDOFF.schema.json');
 const experimentSchema = parseJson('agents/skills/affinity-creative-production/EXPERIMENT.schema.json');
 const fixture = parseJson('data/affinity-page-engine-example.json');
 
 const affinity = read('skills/AFFINITY_SKILL.md');
 const engine = read('skills/AFFINITY_PAGE_ENGINE.md');
+const siteEngine = read('skills/AFFINITY_SITE_ENGINE.md');
 const index = read('agents/skills/affinity-creative-production/README.md');
 const creative = read('agents/skills/affinity-creative-production/SKILL.md');
 const registry = read('agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md');
@@ -106,11 +110,16 @@ if (fixture) {
 
 for (const [schema, name] of [
   [pageSchema, 'Page DNA schema'],
+  [siteSchema, 'Site DNA schema'],
   [buildSchema, 'Build Handoff schema'],
   [experimentSchema, 'Experiment schema']
 ]) {
   if (schema?.$schema !== 'https://json-schema.org/draft/2020-12/schema') errors.push(`${name} must use JSON Schema 2020-12`);
 }
+
+if (!siteSchema?.required?.includes('routes')) errors.push('Site DNA must require route inventory');
+if (!siteSchema?.required?.includes('conversion_paths')) errors.push('Site DNA must require conversion paths');
+if (!siteSchema?.properties?.routes?.items?.properties?.page_dna_ref) errors.push('Site DNA routes must reference Page DNA');
 
 const registryIds = [];
 for (const line of registry.split('\n')) {
@@ -131,8 +140,12 @@ const contractChecks = [
   [affinity, 'AFFINITY_PAGE_ENGINE.md', 'AFFINITY core Page Engine dependency'],
   [affinity, 'PAGE_DNA.schema.json', 'AFFINITY core Page DNA dependency'],
   [engine, 'COMPONENT_REGISTRY.md', 'Page Engine component registry dependency'],
+  [siteEngine, 'SITE_DNA.schema.json', 'Site Engine Site DNA dependency'],
+  [siteEngine, 'User journeys before sitemap', 'Site Engine journey-first architecture'],
+  [siteEngine, 'Page DNA per route', 'Site Engine route Page DNA model'],
   [index, 'Authority / precedence', 'Canonical stack precedence'],
   [index, '201 unique component', 'Validated component-count declaration'],
+  [index, 'Site DNA sits above Page DNA', 'Site/Page hierarchy'],
   [creative, 'PAGE_DNA.schema.json', 'Creative Page DNA dependency'],
   [prompts, 'DECISION-BARRIER AGENT', 'Decision barrier prompt stage'],
   [prompts, 'BRAND / STORE DNA AGENT', 'Brand/Store DNA prompt stage'],
@@ -155,4 +168,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`AFFINITY Page Engine PASS: ${requiredFiles.length} required files, ${registryIds.length} component IDs, pipeline/config/schema/fixture/orchestration contracts verified.`);
+console.log(`AFFINITY Page/Site Engine PASS: ${requiredFiles.length} required files, ${registryIds.length} component IDs, Page/Site DNA and pipeline/config/schema/orchestration contracts verified.`);
