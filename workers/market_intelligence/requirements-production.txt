@@ -1,0 +1,9 @@
+# Direct production dependencies pinned 2026-09-06.
+# Keep upgrades explicit and tested; do not replace with floating installs in workflows.
+requests==2.34.2
+beautifulsoup4==4.15.0
+trafilatura==2.2.0
+Scrapy==2.17.0
+yt-dlp==2026.7.4
+gallery-dl==1.32.11
+playwright==1.62.0
