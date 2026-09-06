@@ -1,4 +1,4 @@
-name: AFFINITY Page Engine CI
+name: AFFINITY Page + Site Engine CI
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
     paths:
       - 'skills/AFFINITY_SKILL.md'
       - 'skills/AFFINITY_PAGE_ENGINE.md'
+      - 'skills/AFFINITY_SITE_ENGINE.md'
       - 'config/affinity-page-engine.json'
       - 'agents/skills/affinity-creative-production/**'
       - 'agents/skills/growth-orchestrator/SKILL.md'
@@ -19,6 +20,7 @@ on:
     paths:
       - 'skills/AFFINITY_SKILL.md'
       - 'skills/AFFINITY_PAGE_ENGINE.md'
+      - 'skills/AFFINITY_SITE_ENGINE.md'
       - 'config/affinity-page-engine.json'
       - 'agents/skills/affinity-creative-production/**'
       - 'agents/skills/growth-orchestrator/SKILL.md'
@@ -30,7 +32,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  validate-page-engine:
+  validate-page-site-engine:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -38,5 +40,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Validate AFFINITY Page Engine contracts
+      - name: Validate AFFINITY Page and Site Engine contracts
         run: npm run test:affinity-page-engine
