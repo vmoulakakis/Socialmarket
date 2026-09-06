@@ -1,0 +1,125 @@
+{
+  "version": "affinity-page-builder-v1",
+  "brand": {
+    "name": "AFFINITY",
+    "tagline": "Small Solutions. A Better You.",
+    "positioning": "problem-solving premium social commerce",
+    "market": "GR",
+    "currency": "EUR"
+  },
+  "principles": [
+    "problem-first-not-catalog-first",
+    "benefit-led-copy",
+    "brand-consistent-sections",
+    "mobile-first-responsive",
+    "evidence-before-claims",
+    "one-primary-cta-per-section",
+    "affiliate-destination-only-at-conversion-points",
+    "share-the-branded-case-not-the-raw-affiliate-link",
+    "real-urgency-only",
+    "fast-visual-comprehension"
+  ],
+  "public_pagepilot_patterns_adapted": {
+    "source_to_page": "product source data becomes a fully branded product landing page",
+    "modular_builder": "sections and blocks can be reordered or conditionally rendered",
+    "niche_templates": "section emphasis changes by use case rather than one universal template",
+    "ai_enrichment": "copy, angles, FAQs and creative prompts are generated from product evidence",
+    "cro_blocks": "hero, benefit grid, proof, FAQ, comparison, objections, sticky CTA, offer modal and upsell slots",
+    "creative_reuse": "the page produces social-ready creative variants and share metadata",
+    "seo": "dynamic metadata, schema, canonical URLs and sitemap entries",
+    "mobile": "all sections must work on narrow screens before desktop polish"
+  },
+  "page_types": {
+    "store_home": [
+      "announcement_bar",
+      "brand_nav",
+      "editorial_hero",
+      "featured_solutions",
+      "pain_gap_solution",
+      "curation_trust",
+      "problem_collections",
+      "social_share_band",
+      "newsletter",
+      "footer"
+    ],
+    "product_case": [
+      "brand_nav",
+      "product_hero",
+      "fast_benefits",
+      "pain_gap_solution",
+      "visual_use_case",
+      "why_now",
+      "evidence_proof",
+      "best_for",
+      "objection_check",
+      "faq",
+      "offer_cta",
+      "qr_share",
+      "related_solutions",
+      "sticky_mobile_cta"
+    ]
+  },
+  "blocks": {
+    "product_hero": {
+      "required": ["product_name", "image_url", "solution_statement"],
+      "cta": "open_affiliate_modal",
+      "secondary_cta": "scroll_to_story"
+    },
+    "fast_benefits": {
+      "source": ["job_to_be_done", "semantic_tags", "social_copy"],
+      "max_items": 4
+    },
+    "pain_gap_solution": {
+      "required": ["pain_statement", "gap_statement", "solution_statement"]
+    },
+    "visual_use_case": {
+      "images": ["creative_images", "image_url"],
+      "fallback": "single-image-editorial-layout"
+    },
+    "why_now": {
+      "source": "social_copy.urgency_angle",
+      "fallback": "price-and-availability-can-change",
+      "forbidden": ["fake-countdown", "fake-stock", "fabricated-demand"]
+    },
+    "evidence_proof": {
+      "source": ["product_quality_score", "semantic_fit_score", "whitespace_score", "quality_evidence"],
+      "forbidden": ["fake-reviews", "fake-certifications", "unverified-superlatives"]
+    },
+    "offer_cta": {
+      "action": "open_affiliate_modal",
+      "destination": "tracking_url",
+      "rel": "sponsored noreferrer"
+    },
+    "qr_share": {
+      "qr_destination": "tracking_url",
+      "share_destination": "canonical_case_url",
+      "networks": ["native", "whatsapp", "facebook", "linkedin", "x"]
+    },
+    "sticky_mobile_cta": {
+      "action": "open_affiliate_modal",
+      "visibility": "mobile"
+    }
+  },
+  "selection_logic": {
+    "rare_find": "whitespace_score >= 86",
+    "social_pick": "viral_score >= 84",
+    "demand_pick": "demand_score >= 86",
+    "strong_use_case": "semantic_fit_score >= 78",
+    "publishable_quality": "product_quality_score >= 75"
+  },
+  "copy_contract": {
+    "hook": "specific pain or desired outcome in one sentence",
+    "benefit": "translate feature into human result",
+    "objection": "state what the buyer should verify before purchase",
+    "cta": "action plus immediate value, never vague shop-now-only copy",
+    "disclosure": "affiliate relationship and mutable price/availability stated clearly"
+  },
+  "creative_contract": {
+    "hero": "premium editorial product/lifestyle image",
+    "social_square": "1080x1080",
+    "social_feed": "1080x1350",
+    "social_story": "1080x1920",
+    "must_preserve_real_product": true,
+    "no_fake_before_after": true
+  }
+}
