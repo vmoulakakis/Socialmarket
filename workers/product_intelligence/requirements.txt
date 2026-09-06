@@ -2,6 +2,6 @@
 # Upgrade explicitly after workflow contract tests; do not use floating ranges here.
 ijson==3.5.1
 requests==2.34.2
-gdown==6.1.0
+gdown==5.2.0
 Pillow==12.3.0
 qrcode[pil]==8.2
