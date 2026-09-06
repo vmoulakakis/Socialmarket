@@ -11,6 +11,7 @@ const requiredFiles = [
   'agents/skills/affinity-creative-production/PAGE_DNA.schema.json',
   'agents/skills/affinity-creative-production/SITE_DNA.schema.json',
   'agents/skills/affinity-creative-production/PROMPT_CONTRACTS.md',
+  'agents/skills/affinity-creative-production/IMPLEMENTATION_ADAPTERS.md',
   'agents/skills/affinity-creative-production/QA_GATES.md',
   'agents/skills/affinity-creative-production/BUILD_HANDOFF.schema.json',
   'agents/skills/affinity-creative-production/EXPERIMENT.schema.json',
@@ -51,6 +52,7 @@ const index = read('agents/skills/affinity-creative-production/README.md');
 const creative = read('agents/skills/affinity-creative-production/SKILL.md');
 const registry = read('agents/skills/affinity-creative-production/COMPONENT_REGISTRY.md');
 const prompts = read('agents/skills/affinity-creative-production/PROMPT_CONTRACTS.md');
+const adapters = read('agents/skills/affinity-creative-production/IMPLEMENTATION_ADAPTERS.md');
 const qa = read('agents/skills/affinity-creative-production/QA_GATES.md');
 const orchestrator = read('agents/skills/growth-orchestrator/SKILL.md');
 const growthOps = read('projects/socialmarket-growthops/README.md');
@@ -151,6 +153,10 @@ const contractChecks = [
   [prompts, 'BRAND / STORE DNA AGENT', 'Brand/Store DNA prompt stage'],
   [prompts, 'LAYOUT DNA AGENT', 'Layout DNA prompt stage'],
   [prompts, 'COMPONENT PLANNER / SCORER', 'Component scorer prompt stage'],
+  [adapters, 'Semantic intelligence is global; rendering is local.', 'Implementation adapter portability principle'],
+  [adapters, 'next-react', 'Next/React adapter'],
+  [adapters, 'shopify-theme', 'Shopify adapter'],
+  [adapters, 'builder-native', 'Builder-native adapter'],
   [qa, 'WCAG 2.2 AA', 'Accessibility QA contract'],
   [qa, 'LCP ≤ 2.5 s', 'LCP QA contract'],
   [qa, 'Variant-isolation gate', 'Experiment isolation QA contract'],
@@ -168,4 +174,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`AFFINITY Page/Site Engine PASS: ${requiredFiles.length} required files, ${registryIds.length} component IDs, Page/Site DNA and pipeline/config/schema/orchestration contracts verified.`);
+console.log(`AFFINITY Page/Site Engine PASS: ${requiredFiles.length} required files, ${registryIds.length} component IDs, Page/Site DNA, adapters and pipeline/config/schema/orchestration contracts verified.`);
