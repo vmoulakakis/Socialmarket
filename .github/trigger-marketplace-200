@@ -1,2 +1,2 @@
-triggered_at=2026-09-06T10:30:00Z
-purpose=affinity_eshop_creation_e2e_with_expiry_aware_oidc
+triggered_at=2026-09-06T11:10:00Z
+purpose=bootstrap_once_then_trusted_merchant_product_deltas
