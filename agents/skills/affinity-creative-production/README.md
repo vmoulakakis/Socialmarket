@@ -1,32 +1,40 @@
-# AFFINITY Creative Production / Page Engine — Canonical Index
+# AFFINITY Creative Production / Page + Site Engine — Canonical Index
 
 Status: CANONICAL
-Version: 2.0
+Version: 2.1
 Updated: 2026-09-07
 
-This directory contains the governed creative/page-generation layer used by AFFINITY and GrowthOps.
+This directory contains the governed creative, page-generation and multi-page site-generation layer used by AFFINITY and GrowthOps.
 
 ## Authority / precedence
 When two documents appear to overlap, apply them in this order:
 
 1. `skills/AFFINITY_SKILL.md` — commercial truth, hard gates, affiliate integrity, market/evidence authority.
-2. `config/affinity-page-engine.json` — authoritative executable pipeline, scoring thresholds, page-length policy, barrier map, performance/accessibility targets and learning dimensions.
-3. `skills/AFFINITY_PAGE_ENGINE.md` — page-generation strategy and vendor-pattern synthesis.
-4. `PROMPT_CONTRACTS.md` — strict stage/agent input-output contracts.
-5. `COMPONENT_REGISTRY.md` — canonical component IDs and functional grammar.
-6. `PAGE_DNA.schema.json` — page strategy/composition object.
-7. `BUILD_HANDOFF.schema.json` — deterministic builder implementation contract.
-8. `EXPERIMENT.schema.json` — controlled parent/variant testing contract.
-9. `QA_GATES.md` — production acceptance and rendered-page QA.
-10. `SKILL.md` — creative implementation/art direction/copy/media execution policy.
+2. `config/affinity-page-engine.json` — authoritative executable page pipeline, scoring thresholds, page-length policy, barrier map, performance/accessibility targets and learning dimensions.
+3. `skills/AFFINITY_SITE_ENGINE.md` — site-level information architecture, user journeys, route families, navigation and cross-route governance.
+4. `skills/AFFINITY_PAGE_ENGINE.md` — individual page-generation strategy and vendor-pattern synthesis.
+5. `PROMPT_CONTRACTS.md` — strict stage/agent input-output contracts.
+6. `COMPONENT_REGISTRY.md` — canonical component IDs and functional grammar.
+7. `SITE_DNA.schema.json` — multi-page website/store architecture object.
+8. `PAGE_DNA.schema.json` — individual page strategy/composition object.
+9. `BUILD_HANDOFF.schema.json` — deterministic builder implementation contract.
+10. `EXPERIMENT.schema.json` — controlled parent/variant testing contract.
+11. `QA_GATES.md` — production acceptance and rendered-page QA.
+12. `SKILL.md` — creative implementation/art direction/copy/media execution policy.
 
 Growth orchestration authority remains `agents/skills/growth-orchestrator/SKILL.md`.
 
-## Canonical production flow
+## Canonical page production flow
 
 `SOURCE INGEST → CONTEXT BRIEF → BRAND/STORE DNA → DECISION BARRIERS → ANGLE MATRIX → MESSAGE MATCH → ARCHETYPE → LAYOUT DNA → PAGE DNA → COMPONENT PLAN → COPY → MEDIA → DESIGN TOKENS → BUILD → RESPONSIVE QA → CONVERSION LAYER → LOCALIZATION → CONTROLLED VARIANTS → PUBLISH → MEASURE → LEARN`
 
 A material commercial page must not bypass this flow with an unconstrained one-shot generation prompt.
+
+## Canonical site production flow
+
+`SITE CONTEXT → BRAND/STORE DNA → SITE TYPE → USER JOURNEYS → INFORMATION ARCHITECTURE → NAVIGATION → ROUTE INVENTORY → SITE DNA → PAGE DNA PER ROUTE → PAGE FAMILIES/LAYOUT DNA → GLOBAL COMPONENTS → CONVERSION PATHS → INTERNAL LINKING → SEO/LOCALIZATION → BUILD HANDOFFS → CROSS-ROUTE QA → DEPLOY → MEASURE`
+
+A full website must not be created as a pile of independently generated pages. Site DNA owns cross-page coherence; Page DNA owns each route.
 
 ## Runtime artifacts
 A serious page build should produce or be able to reconstruct:
@@ -49,6 +57,21 @@ A serious page build should produce or be able to reconstruct:
 - deployment/rollback reference
 - analytics/learning record.
 
+A serious site build additionally produces:
+- site context
+- site type
+- user journeys
+- information architecture/taxonomy
+- navigation model
+- route inventory
+- Site DNA
+- page-family/layout mappings
+- global component map
+- conversion paths
+- internal-link map
+- sitemap/robots/canonical/localization strategy
+- cross-route QA.
+
 ## PagePilot.ai synthesis
 Public PagePilot methods integrated as abstract patterns include:
 - product/source URL ingestion
@@ -65,7 +88,8 @@ Public PagePilot methods integrated as abstract patterns include:
 - ad copy + matching creative generation
 - localized rewrites
 - cart drawer, upsell/cross-sell and shipping-threshold concepts for owned commerce
-- Shopify publish workflow.
+- Shopify publish workflow
+- whole-store concepts: branded homepage, product pages, collections, navigation and shared theme/layout.
 
 The registry contains every PagePilot block/section name publicly verified in the research pass plus original AFFINITY functional equivalents. PagePilot publicly describes 35+ CRO sections/blocks and a 50+ component visual library, but does not publicly enumerate its full private inventory. Never claim undisclosed vendor internals as known.
 
@@ -114,7 +138,7 @@ Sections require a job. Default primary-section ranges:
 Longer is permitted only when additional sections resolve additional material barriers or deliver promised content value. Repetition is not a reason for length.
 
 ## Brand/Store DNA
-Pages inherit a persistent brand system by default:
+Pages and sites inherit a persistent brand system by default:
 - voice
 - visual personality
 - colors
@@ -128,7 +152,7 @@ Pages inherit a persistent brand system by default:
 - layout rhythm
 - locale rules.
 
-A page should not invent a new visual identity unless that change is the explicit creative/experiment hypothesis.
+A page/site should not invent a new visual identity unless that change is the explicit creative/experiment hypothesis.
 
 ## Layout DNA
 Strong page structures are persistent/versioned assets, not disposable generations.
@@ -142,6 +166,24 @@ Layout DNA supports:
 - retire.
 
 Never silently mutate a shared winning layout used by live pages. Duplicate/version first.
+
+## Site DNA
+Site DNA sits above Page DNA and controls:
+- site type
+- locales/market/objective
+- user journeys
+- information architecture/taxonomy
+- header/navigation/footer model
+- route inventory and indexing
+- Page DNA reference per route
+- global components
+- ecommerce vs affiliate handoff mode
+- conversion paths
+- site-level SEO
+- analytics
+- cross-route QA.
+
+This is mandatory for full-site/store/multi-page work.
 
 ## Media truth
 Asset source priority:
@@ -165,6 +207,8 @@ Default release requirements:
 - experiment/analytics instrumentation where applicable
 - rollback reference.
 
+For sites additionally verify navigation, route integrity, internal links, global design consistency, sitemap/robots/canonical behavior, global commerce/affiliate actions and cross-route conversion journeys.
+
 ## Automated contract validation
 Run:
 
@@ -172,7 +216,7 @@ Run:
 npm run test:affinity-page-engine
 ```
 
-The CI workflow `.github/workflows/affinity-page-engine-ci.yml` protects Page Engine contract changes on `main` and pull requests.
+The CI workflow `.github/workflows/affinity-page-engine-ci.yml` protects Page/Site Engine contract changes on `main` and pull requests.
 
 The validator checks required files, JSON parseability, pipeline stages, Page DNA fixture, component-ID uniqueness/coverage, key thresholds and orchestration dependencies.
 
@@ -191,6 +235,12 @@ Not allowed:
 - clone exact protected designs/brand identities as the AFFINITY component library.
 
 ## Final operating principle
+For a page:
+
 **Verified context → decision barriers → angle → message match → archetype → reusable Layout DNA → Page DNA → scored components → constrained copy/media → deterministic build → rendered QA → controlled experiments → RPV learning.**
 
-That is the canonical AFFINITY page-production system.
+For a full site:
+
+**Journeys → information architecture → Site DNA → coherent route/Page DNA family → global navigation/design/conversion system → cross-route QA → measured business outcomes.**
+
+That is the canonical AFFINITY page-and-site production system.
