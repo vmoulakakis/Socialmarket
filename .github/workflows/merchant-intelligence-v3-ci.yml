@@ -30,8 +30,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install worker dependencies
-        run: pip install requests beautifulsoup4 trafilatura scrapy yt-dlp gallery-dl playwright
+      - name: Install pinned worker dependencies
+        run: pip install -r workers/market_intelligence/requirements-production.txt
       - name: Compile workers
         run: |
           python -m py_compile workers/market_intelligence/semantic_taxonomy.py
@@ -75,9 +75,9 @@ jobs:
           grep -q 'id-token: write' .github/workflows/merchant-intelligence-v3.yml
           grep -q 'socialmarket-searxng' .github/workflows/merchant-intelligence-v3.yml
           grep -q 'merchant_intelligence_v4.py' .github/workflows/merchant-intelligence-v3.yml
-          grep -q 'trafilatura' .github/workflows/merchant-intelligence-v3.yml
-          grep -q 'playwright' .github/workflows/merchant-intelligence-v3.yml
-          grep -q 'yt-dlp' .github/workflows/merchant-intelligence-v3.yml
+          grep -q '^trafilatura==' workers/market_intelligence/requirements-production.txt
+          grep -q '^playwright==' workers/market_intelligence/requirements-production.txt
+          grep -q '^yt-dlp==' workers/market_intelligence/requirements-production.txt
           test -f supabase/functions/generic-embedding-worker/index.ts
           test -f supabase/functions/semantic-pain-search/index.ts
           test -f supabase/functions/merchant-research-gateway/index.ts
