@@ -24,6 +24,7 @@ jobs:
     env:
       MARKETPLACE200_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway
       MARKETPLACE200_AI_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway
+      MARKETPLACE_INCREMENTAL_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace-incremental-gateway
       MARKETPLACE_SOCIAL_FUNNEL_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace-social-funnel-gateway
       ALIEXPRESS_AFFILIATE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway
       PRODUCT_SOURCE_FEED: linkwise-products.json
@@ -34,6 +35,7 @@ jobs:
       MARKETPLACE200_AI_WORKERS: '6'
       MARKETPLACE200_DAILY_HANDOFF: '10'
       LINKWISE_SHARD_WORKERS: '6'
+      LINKWISE_PROGRAM_WORKERS: '6'
 
     steps:
       - uses: actions/checkout@v4
@@ -52,25 +54,28 @@ jobs:
           urls={
             'data':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-agent-gateway',
             'ai':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace200-ai-gateway',
+            'incremental':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace-incremental-gateway',
             'social':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/marketplace-social-funnel-gateway',
             'ali':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway',
           }
           out={}
           for key,url in urls.items():
               with urllib.request.urlopen(url,timeout=30) as r:out[key]=json.loads(r.read().decode())
-          print({'data':out['data'].get('ok'),'ai':out['ai'].get('ok'),'social':out['social'].get('ok'),'ali':out['ali']})
+          print({'data':out['data'].get('ok'),'ai':out['ai'].get('ok'),'incremental':out['incremental'],'social':out['social'].get('ok'),'ali':out['ali']})
           assert out['data'].get('ok') is True
           assert out['ai'].get('ok') is True
+          assert out['incremental'].get('ok') is True
+          assert out['incremental'].get('strategy')=='baseline-once-then-product-deltas'
           assert out['social'].get('ok') is True
           assert out['ali'].get('ok') is True
           assert out['ali'].get('configured') is True
           assert out['ali'].get('tracking_configured') is True
           PY
 
-      - name: Discover audit and persist SocialMarket
-        run: python workers/product_intelligence/semantic_marketplace_200_parallel.py
+      - name: Discover only new or materially changed products
+        run: python workers/product_intelligence/semantic_marketplace_200_incremental.py
 
-      - name: Verify immutable portfolio invariants
+      - name: Verify immutable portfolio and incremental invariants
         run: |
           python - <<'PY'
           import json
@@ -88,11 +93,15 @@ jobs:
           assert policy.get('max_products_per_merchant')==3,p
           assert policy.get('product_quality_min')==75,p
           assert policy.get('affinity_min')==76,p
+          link=(p.get('stages') or {}).get('linkwise_full_feed') or {}
           ali=(p.get('stages') or {}).get('aliexpress_api') or {}
-          assert ali.get('api_blocked') is not True,p
-          assert ali.get('configured') is True,p
-          assert ali.get('tracking_configured') is True,p
-          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'handoff':(p.get('handoff') or {}).get('products_handed_off'),'ali_api':ali})
+          assert link.get('mode') in ('baseline_once','trusted_program_delta'),p
+          assert ali.get('mode')=='product_delta',p
+          if link.get('mode')=='trusted_program_delta':
+              assert 'trusted_programs' in link,p
+              assert 'new_or_changed' in link,p
+              assert 'unchanged' in link,p
+          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'linkwise_mode':link.get('mode'),'linkwise_delta':link.get('new_or_changed'),'ali_delta':ali.get('new_or_changed'),'handoff':(p.get('handoff') or {}).get('products_handed_off')})
           PY
 
       - name: Upload auditable production profile
