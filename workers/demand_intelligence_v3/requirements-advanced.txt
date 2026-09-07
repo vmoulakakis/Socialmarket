@@ -1,6 +1,6 @@
-# Deep Demand V3.1 deterministic/statistical production dependencies pinned 2026-09-06.
+# Deep Demand V3.1 deterministic/statistical production dependencies pinned 2026-09-07.
 numpy==2.5.2
-pandas==3.0.5
+pandas==2.3.3
 statsforecast==2.1.1
 ruptures==1.1.10
 rapidfuzz==3.14.6
