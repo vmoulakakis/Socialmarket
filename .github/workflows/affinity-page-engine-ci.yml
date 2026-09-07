@@ -42,3 +42,5 @@ jobs:
           node-version: 22
       - name: Validate AFFINITY Page and Site Engine contracts
         run: npm run test:affinity-page-engine
+
+# Revalidated on 2026-09-07 after Site Engine PAGE DNA PER ROUTE contract landed on main.
