@@ -1,2 +1,4 @@
-triggered_at=2026-09-06T11:10:00Z
-purpose=bootstrap_once_then_trusted_merchant_product_deltas
+triggered_at=2026-09-07T08:05:00Z
+purpose=rerun_high_demand_greek_whitespace_top100_refill
+policy=max_2_products_per_merchant_or_seller
+portfolios=100_linkwise_plus_100_aliexpress_candidates_to_final_top100
