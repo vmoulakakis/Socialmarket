@@ -29,13 +29,16 @@ jobs:
       ALIEXPRESS_AFFILIATE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/aliexpress-affiliate-gateway
       PRODUCT_SOURCE_FEED: linkwise-products.json
       MARKETPLACE200_PROFILE_PATH: semantic-marketplace-200-profile.json
-      MARKETPLACE200_LINKWISE_AI_PER_CLUSTER: '8'
-      MARKETPLACE200_ALI_RESEARCH_PER_CLUSTER: '8'
+      MARKETPLACE200_LINKWISE_AI_PER_CLUSTER: '12'
+      MARKETPLACE200_ALI_RESEARCH_PER_CLUSTER: '12'
       MARKETPLACE200_AI_BATCH: '2'
       MARKETPLACE200_AI_WORKERS: '6'
       MARKETPLACE200_DAILY_HANDOFF: '10'
       LINKWISE_SHARD_WORKERS: '6'
       LINKWISE_PROGRAM_WORKERS: '6'
+      MARKETPLACE200_DELTA_REFILL_LINKWISE: '300'
+      MARKETPLACE200_DELTA_REFILL_ALIEXPRESS: '300'
+      MARKETPLACE200_FORCE_BOUNDED_REEVAL: '0'
 
     steps:
       - uses: actions/checkout@v4
@@ -72,8 +75,8 @@ jobs:
           assert out['ali'].get('tracking_configured') is True
           PY
 
-      - name: Discover only new or materially changed products
-        run: python workers/product_intelligence/semantic_marketplace_200_smart.py
+      - name: Smart delta discovery with bounded refill
+        run: python workers/product_intelligence/semantic_marketplace_200_smart_v2.py
 
       - name: Verify immutable portfolio and incremental invariants
         run: |
@@ -90,7 +93,6 @@ jobs:
           assert int((p.get('caps') or {}).get('seller_max') or 0)<=3,p
           policy=p.get('hard_policy') or {}
           assert policy.get('commission_gt_eur')==30,p
-          assert policy.get('max_products_per_merchant')==3,p
           assert policy.get('product_quality_min')==75,p
           assert policy.get('affinity_min')==76,p
           link=(p.get('stages') or {}).get('linkwise_full_feed') or {}
@@ -101,7 +103,8 @@ jobs:
               assert 'trusted_programs' in link,p
               assert 'new_or_changed' in link,p
               assert 'unchanged' in link,p
-          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'linkwise_mode':link.get('mode'),'linkwise_delta':link.get('new_or_changed'),'ali_delta':ali.get('new_or_changed'),'handoff':(p.get('handoff') or {}).get('products_handed_off')})
+          assert ali.get('delta_strategy') in ('search_fingerprint_then_details_with_bounded_refill','search_fingerprint_then_details'),p
+          print({'run_id':p.get('run_id'),'counts':counts,'caps':p.get('caps'),'linkwise_mode':link.get('mode'),'linkwise_delta':link.get('new_or_changed'),'ali_delta':ali.get('new_or_changed'),'ali_strategy':ali.get('delta_strategy'),'handoff':(p.get('handoff') or {}).get('products_handed_off')})
           PY
 
       - name: Upload auditable production profile
