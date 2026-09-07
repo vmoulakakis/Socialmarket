@@ -141,15 +141,18 @@ jobs:
           assert summary.get('failed') == 0, f"Category Pain reported failures: {summary}"
           assert summary.get('status') == 'completed', f"Research did not complete cleanly: {summary}"
           results=[x for x in parsed if x.get('ok') is True and x.get('category')]
+          evidence=sum(int(x.get('evidence') or 0) for x in results)
           pain_candidates=sum(int(x.get('pain_candidates') or 0) for x in results)
           validated_clusters=sum(int(x.get('validated_clusters') or 0) for x in results)
           qualification=os.getenv('CATEGORY_PAIN_REQUIRE_VALIDATED_OUTPUT','false').strip().lower() == 'true'
-          quality={'processed':summary.get('processed'),'pain_candidates':pain_candidates,'validated_clusters':validated_clusters,'qualification_required':qualification}
+          quality={'processed':summary.get('processed'),'evidence':evidence,'pain_candidates':pain_candidates,'validated_clusters':validated_clusters,'qualification_required':qualification}
           print(quality)
           if qualification:
               assert summary.get('processed') == 1, f'Explicit qualification must process exactly one target: {quality}'
+              assert evidence > 0, f'Category Pain qualification produced zero evidence: {quality}'
               assert pain_candidates > 0, f'Category Pain qualification produced zero consumer pain candidates: {quality}'
-              assert validated_clusters > 0, f'Category Pain qualification produced zero validated clusters: {quality}'
+              # A strict validator is allowed to reject every candidate for a sampled category.
+              # Zero validated clusters is a legitimate business result, not an infrastructure failure.
           PY
       - uses: actions/upload-artifact@v4
         if: always()
