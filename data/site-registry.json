@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "sourceOfTruth": "SocialMarket",
+  "primaryRuntime": "vercel",
+  "sites": [
+    {"id":"socialmarket","project":"socialmarket","productionUrl":"https://socialmarket-theta.vercel.app","repo":"vmoulakakis/Socialmarket","role":"control-plane","managed":true,"indexPolicy":"private-admin"},
+    {"id":"eu-local-day","project":"socialmarket","productionUrl":"https://socialmarket-theta.vercel.app/eu-local-day","repo":"vmoulakakis/Socialmarket","role":"affiliate-funnel","managed":true,"indexPolicy":"public"},
+    {"id":"beatbot-sora-70","project":"beatbot-sora-70-pool-savings","productionUrl":"https://beatbot-sora-70-pool-savings-ayzopqxfi.vercel.app","repo":null,"role":"affiliate-funnel","managed":false,"knownIssues":["orphan-source-linkage","x-robots-tag-noindex","affiliate-url-not-verified"]},
+    {"id":"affiliateos","project":"affiliateos","productionUrl":"https://affiliateos-c0vinw5l1-vassilis-projects-3bf8541b.vercel.app","repo":null,"role":"affiliate-hub","managed":false,"knownIssues":["orphan-source-linkage","api-refresh-timeout-60s"]},
+    {"id":"myaffiliate","project":"myaffiliate","productionUrl":"https://myaffiliate-m8qr7vpmi-vassilis-projects-3bf8541b.vercel.app","repo":null,"role":"affiliate-hub","managed":false,"knownIssues":["deployment-error","missing-public-output-directory","orphan-source-linkage"]},
+    {"id":"dealora-ai","project":"dealora-ai","productionUrl":null,"repo":"vmoulakakis/dealora-ai","role":"commerce-app","managed":false},
+    {"id":"revolut-money-friction-scan","project":"revolut-money-friction-scan","productionUrl":null,"repo":"vmoulakakis/revolut-money-friction-scan","role":"tool","managed":false},
+    {"id":"travelai-greece","project":"travelai_greece","productionUrl":null,"repo":"vmoulakakis/travelai_greece","role":"travel","managed":false},
+    {"id":"xtool-ip919max-greece","project":"xtool-ip919max-greece","productionUrl":null,"repo":null,"role":"affiliate-funnel","managed":false},
+    {"id":"stairlift-pro-gr","project":"stairlift-pro-gr","productionUrl":null,"repo":null,"role":"affiliate-funnel","managed":false},
+    {"id":"agora-signal-greece","project":"agora-signal-greece","productionUrl":null,"repo":null,"role":"market-intelligence","managed":false},
+    {"id":"eu-solution-foundry","project":"eu-solution-foundry","productionUrl":null,"repo":null,"role":"commerce","managed":false},
+    {"id":"elite-deals-static-live","project":"elite-deals-static-live","productionUrl":null,"repo":null,"role":"affiliate-hub","managed":false},
+    {"id":"elite-deals-live","project":"elite-deals-live","productionUrl":null,"repo":null,"role":"affiliate-hub","managed":false},
+    {"id":"elite-deals-test","project":"elite-deals-test","productionUrl":null,"repo":null,"role":"test","managed":false},
+    {"id":"elite-deals-gr","project":"elite-deals-gr","productionUrl":null,"repo":null,"role":"affiliate-hub","managed":false},
+    {"id":"aigora","project":"aigora","productionUrl":null,"repo":null,"role":"market-intelligence","managed":false},
+    {"id":"travel-ai","project":"travel-ai","productionUrl":null,"repo":null,"role":"travel","managed":false},
+    {"id":"travel-ai-v27-live","project":"travel-ai-v27-live","productionUrl":null,"repo":null,"role":"travel","managed":false}
+  ]
+}
