@@ -1,20 +1,48 @@
 #!/usr/bin/env python3
 """AFFINITY smart incremental launcher v2.
 
-Linkwise inherits merchant-first program feeds + conditional HTTP refresh.
-AliExpress performs a cheap search-result fingerprint first and requests product
-Details / Greek-market evidence / AI only for NEW or materially CHANGED product IDs.
+Fast production strategy:
+- Linkwise keeps merchant-first program feeds + conditional HTTP refresh.
+- AliExpress fingerprints lightweight search results before expensive details.
+- NEW / materially CHANGED products always have priority.
+- If a delta is too small, a bounded deterministic slice of unchanged products
+  is re-evaluated so the portfolio can refill without a full catalogue AI run.
+- Refilled products still pass every existing commission, merchant/seller,
+  Greek-market, Product Research, Skeptic, quality and AFFINITY gate.
 """
 from __future__ import annotations
 
 import json
 import math
+import os
 from typing import Any
 
 import semantic_marketplace_200_smart as smart
 
 base=smart.base
 core=smart.core
+
+REFILL_LINKWISE=max(40,min(500,int(os.getenv('MARKETPLACE200_DELTA_REFILL_LINKWISE','300'))))
+REFILL_ALI=max(40,min(500,int(os.getenv('MARKETPLACE200_DELTA_REFILL_ALIEXPRESS','300'))))
+FORCE_BOUNDED_REEVAL=os.getenv('MARKETPLACE200_FORCE_BOUNDED_REEVAL','0')=='1'
+_ORIGINAL_DELTA_STATUS=base.delta_status
+
+
+def smart_delta_status(network:str,rows:list[dict[str,Any]])->dict[str,str]:
+    """Preserve true deltas and add only a bounded refill slice when needed."""
+    statuses=_ORIGINAL_DELTA_STATUS(network,rows)
+    if not statuses:return statuses
+    floor=REFILL_ALI if network=='aliexpress_affiliate_api' else REFILL_LINKWISE
+    real_delta=[k for k,v in statuses.items() if v in ('new','changed')]
+    unchanged=[k for k,v in statuses.items() if v=='unchanged']
+    needed=floor if FORCE_BOUNDED_REEVAL else max(0,floor-len(real_delta))
+    if needed<=0:return statuses
+    for key in sorted(unchanged)[:needed]:statuses[key]='changed'
+    return statuses
+
+
+# Both Linkwise and AliExpress now share the same bounded-refill delta contract.
+base.delta_status=smart_delta_status
 
 
 def ali_search_fingerprint(x:dict[str,Any])->str:
@@ -64,7 +92,7 @@ def incremental_aliexpress_v2(clusters:list[dict[str,Any]],excluded:set[str]):
     delta_ids={k for k,v in statuses.items() if v in ('new','changed')}
     delta_preview=[x for x in candidates if x['source_product_id'] in delta_ids]
 
-    # Phase B: expensive detail refresh only for deltas.
+    # Phase B: expensive detail refresh only for true deltas + bounded refill.
     refreshed={};ids=[x['source_product_id'] for x in delta_preview]
     for start in range(0,len(ids),40):
         try:
@@ -91,7 +119,7 @@ def incremental_aliexpress_v2(clusters:list[dict[str,Any]],excluded:set[str]):
         })
     if ledger:base.checkpoint('aliexpress_affiliate_api',ledger)
 
-    # Phase C: only deltas reach Greek-market research.
+    # Phase C: only bounded delta/refill rows reach Greek-market research.
     buckets={str(c['cluster_key']):[] for c in clusters}
     for x in delta:buckets[str(x['semantic_cluster_key'])].append(x)
     evidence={};research_stats={}
@@ -102,10 +130,10 @@ def incremental_aliexpress_v2(clusters:list[dict[str,Any]],excluded:set[str]):
 
     unchanged=sum(1 for v in statuses.values() if v=='unchanged')
     base.inc('mark_source',source_network='aliexpress_affiliate_api',source_partition='semantic_discovery',baseline_completed=True,changed=bool(delta),metadata={
-      'strategy':'search_fingerprint_then_details_only_on_delta','search_candidates':len(candidates),'new_or_changed':len(delta_preview),'details_candidates':len(ids),'unchanged':unchanged,'api_calls':api_calls
+      'strategy':'search_fingerprint_then_details_on_delta_with_bounded_refill','search_candidates':len(candidates),'new_changed_or_refill':len(delta_preview),'details_candidates':len(ids),'unchanged_after_refill':unchanged,'api_calls':api_calls
     })
     return evidence,{
-      'mode':'product_delta','delta_strategy':'search_fingerprint_then_details','api_calls':api_calls,'api_candidates':len(candidates),
+      'mode':'product_delta','delta_strategy':'search_fingerprint_then_details_with_bounded_refill','api_calls':api_calls,'api_candidates':len(candidates),
       'commission_gt30_unique':len(candidates),'new_or_changed':len(delta_preview),'details_requested':len(ids),'unchanged':unchanged,
       'trusted_sellers_seen':sum(1 for x in delta if x.get('seller_trust_state')=='trusted'),'greek_research':research_stats,
       'ai_shortlist':sum(len(v) for v in evidence.values())
