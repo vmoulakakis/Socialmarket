@@ -2,7 +2,7 @@ import os,time,requests
 from urllib.parse import quote
 
 AUDIENCE='socialmarket-supabase-worker'
-FUNCTION_URL=os.getenv('SUPABASE_WORKER_GATEWAY','https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway')
+FUNCTION_URL=os.getenv('SUPABASE_WORKER_GATEWAY','https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway')
 _token=None
 _token_at=0.0
 
@@ -27,7 +27,7 @@ def db_call(method,resource,params=None,data=None,prefer=None):
     if prefer:payload['prefer']=prefer
     for attempt in range(2):
         token=_oidc_token(force=attempt>0)
-        r=requests.post(FUNCTION_URL,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},json=payload,timeout=180)
+        r=requests.post(FUNCTION_URL,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},json=payload,timeout=60)
         if r.status_code==401 and attempt==0:
             continue
         r.raise_for_status()
