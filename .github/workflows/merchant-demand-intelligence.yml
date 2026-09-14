@@ -4,6 +4,12 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '20 1 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'workers/market_intelligence/merchant_demand_intelligence.py'
+      - '.github/workflows/merchant-demand-intelligence.yml'
+      - 'supabase/migrations/20260914131800_vmdb_010_merchant_demand_intelligence.sql'
 
 permissions:
   contents: read
@@ -40,7 +46,8 @@ jobs:
           h=json.load(open('vmdb-worker-health.json'))
           assert h.get('ok') is True
           assert h.get('merchant360') is True
-          assert int(h.get('version',0)) >= 3
+          assert h.get('productAdmission') is True
+          assert int(h.get('version',0)) >= 4
           PY
       - name: Start pinned ephemeral SearXNG
         run: |
