@@ -18,6 +18,7 @@ AUDIENCE = "socialmarket-supabase-worker"
 MODEL_ENDPOINT = "https://models.github.ai/inference/chat/completions"
 MODEL = os.getenv("MERCHANT_AI_MODEL", "openai/gpt-4.1")
 LIMIT = max(1, min(int(os.getenv("MERCHANT_360_LIMIT", "24")), 60))
+AI_MAX_TOKENS = max(80, min(int(os.getenv("MERCHANT_AI_MAX_TOKENS", "220")), 400))
 
 _token = None
 _token_at = 0.0
@@ -60,16 +61,13 @@ def github_model_judge(payload: dict) -> dict:
     if not token:
         return {"verdict": "needs_review", "confidence_delta": 0.0, "why_selected": None, "why_rejected": "github_model_token_missing"}
     system = (
-        "You are a rigorous Greek affiliate-commerce investment committee. Use ONLY supplied evidence. "
-        "Do not invent demand, competition, prices, warranties, shipping or merchant facts. "
-        "The system objective is to select merchants whose products can solve real consumer problems in Greece, with high demand and under-served/low competition. "
-        "Return JSON only with verdict (selected|needs_review|rejected), confidence_delta between -0.10 and 0.05, why_selected, why_rejected. "
-        "Do not alter numeric demand/competition metrics."
+        "Greek affiliate-commerce verifier. Use ONLY supplied evidence. Never invent facts. "
+        "Return compact JSON only: verdict selected|needs_review|rejected, confidence_delta -0.10..0.05, why_selected, why_rejected."
     )
     r = requests.post(
         MODEL_ENDPOINT,
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json={"model": MODEL, "temperature": 0.1, "max_tokens": 500, "response_format": {"type": "json_object"}, "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]},
+        json={"model": MODEL, "temperature": 0, "max_tokens": AI_MAX_TOKENS, "response_format": {"type": "json_object"}, "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))}]},
         timeout=45,
     )
     if not r.ok:
