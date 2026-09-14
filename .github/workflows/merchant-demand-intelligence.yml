@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - 'workers/market_intelligence/merchant_demand_intelligence.py'
+      - 'workers/market_intelligence/merchant_demand_cost_first.py'
       - '.github/workflows/merchant-demand-intelligence.yml'
       - 'supabase/migrations/20260914131800_vmdb_010_merchant_demand_intelligence.sql'
 
@@ -31,7 +32,6 @@ jobs:
       MERCHANT_360_LIMIT: '60'
       MERCHANT_AI_MODEL: openai/gpt-4.1
       MERCHANT_AI_MAX_TOKENS: '220'
-      MERCHANT_AI_REVIEW_MARGIN: '8'
       GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -61,10 +61,10 @@ jobs:
           done
           docker logs socialmarket-searxng || true
           exit 1
-      - name: Compile Merchant 360 worker
-        run: python -m py_compile workers/market_intelligence/merchant_demand_intelligence.py workers/market_intelligence/merchant_intelligence_v3.py
-      - name: Run Merchant 360 cost-first batch
-        run: python workers/market_intelligence/merchant_demand_intelligence.py | tee merchant-demand-360-output.json
+      - name: Compile Merchant 360 workers
+        run: python -m py_compile workers/market_intelligence/merchant_demand_intelligence.py workers/market_intelligence/merchant_demand_cost_first.py workers/market_intelligence/merchant_intelligence_v3.py
+      - name: Run Merchant 360 zero-token-first batch
+        run: python workers/market_intelligence/merchant_demand_cost_first.py | tee merchant-demand-360-output.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
