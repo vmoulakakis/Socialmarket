@@ -8,26 +8,22 @@ on:
 permissions:
   contents: read
   id-token: write
-concurrency:
-  group: merchant-resolution
-  cancel-in-progress: true
 jobs:
   resolve:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: workers/market_intelligence
     env:
-      SUPABASE_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
+      SUPABASE_WORKER_GATEWAY: https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
-      - run: pip install --disable-pip-version-check -r requirements.txt rapidfuzz
+      - run: pip install -r requirements.txt rapidfuzz
       - name: Resolve duplicate offers and rank merchants
         run: python resolve_merchants.py | tee merchant-resolution-output.txt
       - uses: actions/upload-artifact@v4
@@ -35,4 +31,3 @@ jobs:
         with:
           name: merchant-resolution-output
           path: workers/market_intelligence/merchant-resolution-output.txt
-          retention-days: 7
