@@ -31,8 +31,9 @@ jobs:
       PRODUCT_REUSE_STAGE_DB: 'false'
       PRODUCT_SINGLE_PARSE_STAGE: 'true'
       COMMERCIAL_PORTFOLIO_TYPE: core_affiliate_top100
-      PRODUCT_MIN_COMMISSION_EUR: '10'
+      PRODUCT_MIN_COMMISSION_EUR: '15'
       PRODUCT_MIN_MERCHANT_TRUST: '30'
+      VMDB_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
       PRODUCT_INTELLIGENCE_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-intelligence-gateway
       PRODUCT_CONFIG_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-config-gateway
       PRODUCT_RANKING_GATEWAY: https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-ranking-gateway
@@ -79,11 +80,13 @@ jobs:
             'creative':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-creative-gateway',
             'observability':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/product-run-observability-gateway',
             'ai_runtime':'https://rpfadpdnnxequgvdcfoq.supabase.co/functions/v1/ai-task-runtime-gateway',
+            'vmdb':'https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway',
           }
           for name,url in urls.items():
               with urllib.request.urlopen(url,timeout=30) as r: health=json.loads(r.read().decode())
-              print(name,{k:health.get(k) for k in ('ok','service','version','contract')})
+              print(name,{k:health.get(k) for k in ('ok','service','version','contract','merchant360','productAdmission')})
               if not health.get('ok'): raise SystemExit(f'{name} gateway unhealthy')
+          if not health.get('productAdmission'): raise SystemExit('VMDB product admission gate unavailable')
           PY
 
       - name: Install checksum-verified Ollama runtime
@@ -124,19 +127,9 @@ jobs:
           sys.path.insert(0,'workers/ai_runtime')
           from ollama_executor import OllamaExecutor
           from task_contract import AITask
-
           model=os.environ['PRODUCT_LOCAL_MODEL']
           ex=OllamaExecutor(name='night-brain-preflight',tier=2,model=model,max_output_tokens=120)
-          task=AITask(
-              task_type='shopper_intent_preflight',role='Greek shopping intent classifier',
-              instructions=(
-                  'Classify only the supplied user_query. intent must be one of security, pool, cleaning, style, other. '
-                  'For a user who is going on holiday and wants to monitor the house, return intent security. '
-                  'confidence must be a number from 0 to 1.'
-              ),
-              payload={'user_query':'Φεύγω διακοπές και θέλω να βλέπω το σπίτι'},
-              required_keys=('intent','confidence'),cacheable=False,max_tier=2,
-          )
+          task=AITask(task_type='shopper_intent_preflight',role='Greek shopping intent classifier',instructions='Classify only the supplied user_query. intent must be one of security, pool, cleaning, style, other. For a user who is going on holiday and wants to monitor the house, return intent security. confidence must be a number from 0 to 1.',payload={'user_query':'Φεύγω διακοπές και θέλω να βλέπω το σπίτι'},required_keys=('intent','confidence'),cacheable=False,max_tier=2)
           assert ex.available(task), 'qualified local model unavailable'
           data,telemetry=ex.run(task)
           assert str(data.get('intent')).lower() == 'security', data
@@ -168,9 +161,9 @@ jobs:
           if size < 10_000_000: raise SystemExit('Product source unexpectedly small; refusing incomplete run')
           PY
 
-      - name: Night Brain — Core Affiliate Top 100
+      - name: Night Brain — VMDB-approved merchants only
         id: night_brain
-        run: python workers/product_intelligence/affiliate_night_brain_entrypoint.py "$PRODUCT_SOURCE_FEED"
+        run: python workers/product_intelligence/affiliate_night_brain_vmdb_entrypoint.py "$PRODUCT_SOURCE_FEED"
 
       - name: Reconcile + verify authoritative Core Affiliate Top 100 contract
         run: python workers/product_intelligence/reconcile_night_brain_profile.py
