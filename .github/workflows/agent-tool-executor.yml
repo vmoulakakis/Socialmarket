@@ -1,0 +1,40 @@
+name: Agent Tool Executor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 * * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+  models: read
+
+concurrency:
+  group: socialmarket-agent-tool-executor
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
+      AGENT_MAX_TASKS_PER_RUN: '2'
+      GITHUB_MODELS_MODEL: openai/gpt-4.1
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Execute bounded queued agent tasks
+        run: python workers/agent_executor/run.py
