@@ -1,0 +1,71 @@
+name: Merchant Demand Intelligence 360
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 1 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'workers/market_intelligence/merchant_demand_intelligence.py'
+      - '.github/workflows/merchant-demand-intelligence.yml'
+      - 'supabase/migrations/20260914131800_vmdb_010_merchant_demand_intelligence.sql'
+
+permissions:
+  contents: read
+  id-token: write
+  models: read
+
+concurrency:
+  group: merchant-demand-intelligence-360
+  cancel-in-progress: false
+
+jobs:
+  merchant-360:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      VMDB_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
+      SEARXNG_BASE_URL: http://127.0.0.1:8080
+      SEARXNG_IMAGE: searxng/searxng:2026.9.5-c7f3080aa
+      MERCHANT_360_LIMIT: '24'
+      MERCHANT_AI_MODEL: openai/gpt-4.1
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install merchant intelligence dependencies
+        run: python -m pip install --disable-pip-version-check -r workers/market_intelligence/requirements-production.txt
+      - name: Check VMDB OIDC gateway
+        run: |
+          curl -fsS "$VMDB_WORKER_GATEWAY" | tee vmdb-worker-health.json
+          python - <<'PY'
+          import json
+          h=json.load(open('vmdb-worker-health.json'))
+          assert h.get('ok') is True
+          assert h.get('merchant360') is True
+          assert h.get('productAdmission') is True
+          assert int(h.get('version',0)) >= 4
+          PY
+      - name: Start pinned ephemeral SearXNG
+        run: |
+          docker pull "$SEARXNG_IMAGE"
+          docker run -d --name socialmarket-searxng -p 8080:8080 -v "$PWD/workers/market_intelligence/searxng-settings.yml:/etc/searxng/settings.yml:ro" "$SEARXNG_IMAGE"
+          for i in $(seq 1 40); do
+            if curl -fsS "http://127.0.0.1:8080/search?q=test&format=json" >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker logs socialmarket-searxng || true
+          exit 1
+      - name: Compile Merchant 360 worker
+        run: python -m py_compile workers/market_intelligence/merchant_demand_intelligence.py workers/market_intelligence/merchant_intelligence_v3.py
+      - name: Run Merchant 360 demand analysis
+        run: python workers/market_intelligence/merchant_demand_intelligence.py | tee merchant-demand-360-output.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: merchant-demand-intelligence-360
+          retention-days: 30
+          path: merchant-demand-360-output.json
