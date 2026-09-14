@@ -1,15 +1,16 @@
 import {NextResponse} from 'next/server';
 import {timingSafeEqual} from 'node:crypto';
 import {orchestrate,getSiteRegistry} from '@/lib/orchestrator/runtime';
+import {persistenceHealth} from '@/lib/orchestrator/store';
 
 export const runtime='nodejs';
 export const maxDuration=30;
 
 const MAX_PROMPT_CHARS=Number(process.env.ORCHESTRATOR_MAX_PROMPT_CHARS||6000);
 
-function configured(){
+function staticConfig(){
   return {
-    database:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    databaseSecret:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
     llm:Boolean(process.env.DEEPSEEK_API_KEY||process.env.OPENROUTER_API_KEY),
     auth:Boolean(process.env.ORCHESTRATOR_SECRET),
     realToolAdapters:false
@@ -28,13 +29,14 @@ function authorized(req){
 }
 
 export async function GET(){
-  const deps=configured();
-  const supervisedReady=deps.database&&deps.llm&&deps.auth;
+  const config=staticConfig();
+  const persistence=await persistenceHealth();
+  const supervisedReady=persistence.ok&&config.llm&&config.auth;
   return NextResponse.json({
     service:'SocialMarket Autonomous Commerce OS',
     status:supervisedReady?'supervised-beta':'degraded',
     fullAutonomy:false,
-    dependencies:deps,
+    dependencies:{...config,persistence},
     limits:{maxPromptChars:MAX_PROMPT_CHARS,maxDurationSeconds:30},
     registry:getSiteRegistry()
   });
