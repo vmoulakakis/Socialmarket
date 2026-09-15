@@ -2,7 +2,7 @@ import os,time,requests
 from urllib.parse import quote
 
 AUDIENCE='socialmarket-supabase-worker'
-FUNCTION_URL=os.getenv('SUPABASE_WORKER_GATEWAY','https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway')
+FUNCTION_URL=os.getenv('SUPABASE_WORKER_GATEWAY','https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway')
 _token=None
 _token_at=0.0
 
