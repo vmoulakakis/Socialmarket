@@ -17,7 +17,7 @@ jobs:
       run:
         working-directory: workers/market_intelligence
     env:
-      SUPABASE_WORKER_GATEWAY: https://prrehmcvpyhupvlhtbzg.supabase.co/functions/v1/github-worker-gateway
+      SUPABASE_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
