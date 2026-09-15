@@ -1,15 +1,9 @@
 name: Product Intelligence + Promotion Ranking
 
+# Legacy product gateways reference the deleted Supabase project.
+# Keep the Night Brain workflow available for diagnostics, but never run automatically.
 on:
   workflow_dispatch:
-  schedule:
-    # 22:15 UTC = 01:15 Athens during summer time. Deep Demand runs independently
-    # earlier; Night Brain uses the freshest available context but never waits on it.
-    - cron: '15 22 * * *'
-  push:
-    branches: [main]
-    paths:
-      - '.github/trigger-product-local-final'
 
 concurrency:
   group: socialmarket-affiliate-night-brain
