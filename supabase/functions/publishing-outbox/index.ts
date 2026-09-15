@@ -56,7 +56,8 @@ async function rpc(name:string,params:Record<string,unknown>={}){
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204});
   if(req.method==="GET")return json({
-    ok:true,service:"publishing-outbox",auth:"github-oidc",audience:AUDIENCE,version:6,
+    ok:true,service:"publishing-outbox",auth:"github-oidc",audience:AUDIENCE,version:16,
+    database:"vmdb",
     contract:{
       archive_after_schedule:true,capacity_per_channel:true,provider_capacity:true,rolling_refill:true,weekly_learning:true,
       platforms:["facebook","instagram","tiktok","linkedin"],
@@ -72,7 +73,7 @@ Deno.serve(async(req:Request)=>{
     const action=String(body?.action||"health");
     if(action==="health"){
       const result=await rpc("worker_v2_outbox_health");
-      return json({ok:true,repository:claims.repository,version:6,...(result as object)});
+      return json({ok:true,repository:claims.repository,version:16,...(result as object)});
     }
     if(action==="peek"){
       const jobs=await rpc("worker_v2_outbox_peek",{p_limit:Math.max(1,Math.min(Number(body?.limit||10),50))});
