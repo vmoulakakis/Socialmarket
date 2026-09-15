@@ -1,5 +1,7 @@
 name: Deep Demand Intelligence V3.1
 
+# Legacy model-lab gateway references the deleted Supabase project.
+# Keep inputs and diagnostic logic available, but never run automatically.
 on:
   workflow_dispatch:
     inputs:
@@ -7,16 +9,6 @@ on:
         description: Maximum taxonomy nodes to analyze
         required: false
         default: '120'
-  schedule:
-    - cron: '30 19 * * *'
-  workflow_run:
-    workflows: ['Semantic Category Pain Intelligence']
-    types: [completed]
-    branches: [main]
-  push:
-    branches: [main]
-    paths:
-      - '.github/deep-demand-final-trigger'
 
 permissions:
   contents: read
