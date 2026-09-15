@@ -16,7 +16,7 @@ def api(method,path,params=None,data=None,prefer=None):
     if data is not None: payload['data']=data
     if prefer: payload['prefer']=prefer
     r=requests.post(GATEWAY_URL,headers={'Authorization':f'Bearer {OIDC_TOKEN}','Content-Type':'application/json'},json=payload,timeout=180)
-    r.raise_for_status()
+    if not r.ok: raise RuntimeError(f'gateway {r.status_code}: {r.text[:2000]}')
     body=r.json()
     if not body.get('ok'): raise RuntimeError(body)
     return body.get('result')
@@ -34,6 +34,7 @@ def commission_map():
         rows.extend(page)
         if len(page)<1000: break
         offset+=1000
+    print(json.dumps({'eligible_merchants_loaded':len(rows)}),flush=True)
     return {str(x['legacy_merchant_id']):x for x in rows if x.get('legacy_merchant_id') is not None}
 
 def expected_commission(price,m):
@@ -55,12 +56,12 @@ def patch_run(rid,counts,status='running',extra=None):
     api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={**counts,'status':status,'checkpoint':{'streaming':True,'batch_size':BATCH,'checkpoint_every':CHECKPOINT_EVERY,**(extra or {})}},prefer='return=minimal')
 
 def product_stream(raw):
-    # Linkwise full feed is expected as a top-level array. Keep parsing streaming/bounded-memory.
     yield from ijson.items(raw,'item')
 
 def main():
     merchants=commission_map(); counts={'scanned':0,'invalid':0,'commission_unknown':0,'commission_rejected':0,'inactive':0,'expired':0,'duplicate':0,'eligible':0,'inserted':0,'updated':0,'unchanged':0,'bytes_read':0}; out=[]
-    run=(api('POST','commerce_feed_runs',data={'source_key':SOURCE,'run_type':'full_stream','status':'running','min_commission_eur':float(MIN_COMMISSION),'batch_size':BATCH},prefer='return=representation') or [])[0]; rid=run['id']
+    run=(api('POST','commerce_feed_runs',data={'source_key':SOURCE,'run_type':'bootstrap','status':'running','min_commission_eur':float(MIN_COMMISSION),'batch_size':BATCH,'checkpoint':{'streaming':True}},prefer='return=representation') or [])[0]; rid=run['id']
+    print(json.dumps({'run_id':rid,'status':'started'}),flush=True)
     try:
         with requests.get(FEED_URL,stream=True,timeout=(30,900)) as r:
             r.raise_for_status(); r.raw.decode_content=True
