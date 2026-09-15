@@ -1,8 +1,8 @@
 name: AFFINITY Semantic Marketplace 200
 
+# Legacy marketplace gateways reference the deleted Supabase project.
+# Keep the bounded diagnostic modes available, but never run automatically.
 on:
-  schedule:
-    - cron: '10 2 * * *'
   workflow_dispatch:
     inputs:
       run_mode:
@@ -14,10 +14,6 @@ on:
           - normal
           - policy_rebuild
           - full_rebuild
-  push:
-    branches: [main]
-    paths:
-      - '.github/trigger-marketplace-200'
 
 concurrency:
   group: affinity-semantic-marketplace-200
