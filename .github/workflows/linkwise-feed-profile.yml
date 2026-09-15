@@ -1,0 +1,37 @@
+name: Linkwise Feed Profile
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/linkwise-feed-profile.yml'
+      - 'workers/linkwise_feed_profiler/**'
+
+concurrency:
+  group: linkwise-full-feed-profile
+  cancel-in-progress: false
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - name: Stream and measure complete Linkwise joined-program feed
+        env:
+          LINKWISE_FEED_URL: ${{ secrets.LINKWISE_FEED_URL }}
+          LINKWISE_PROFILE_REPORT: linkwise_feed_profile.json
+          PYTHONUNBUFFERED: '1'
+        run: python workers/linkwise_feed_profiler/run.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linkwise-feed-profile
+          path: linkwise_feed_profile.json
+          if-no-files-found: ignore
+          retention-days: 14
