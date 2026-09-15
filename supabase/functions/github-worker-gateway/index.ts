@@ -15,6 +15,7 @@ const ALLOWED_WORKFLOWS = new Set([
   "vmoulakakis/Socialmarket/.github/workflows/market-intelligence.yml@refs/heads/main",
   "vmoulakakis/Socialmarket/.github/workflows/merchant-demand-intelligence.yml@refs/heads/main",
   "vmoulakakis/Socialmarket/.github/workflows/agent-tool-executor.yml@refs/heads/main",
+  "vmoulakakis/Socialmarket/.github/workflows/linkwise-product-discovery.yml@refs/heads/main",
 ]);
 
 const ALLOWED_TABLES = new Set([
@@ -22,7 +23,8 @@ const ALLOWED_TABLES = new Set([
   "market_research_runs","market_signals","forecast_runs","forecasts","opportunity_scores","evidence_audits",
   "creative_jobs","creative_assets","approvals","agent_runs","app_settings","agent_tool_tasks","agent_budget_policies","agent_usage_ledger",
   "merchant_profiles","merchant_category_memberships","merchant_evidence","merchant_research_runs","merchant_demand_assessments","merchant_rankings",
-  "merchant_selection_policies","merchant_latest_360","merchant_product_discovery_eligible","product_discovery_runs","merchant_product_candidates",
+  "merchant_selection_policies","merchant_latest_360","merchant_product_discovery_eligible","merchant_product_bootstrap_eligible",
+  "product_discovery_runs","merchant_product_candidates",
   "market_problem_clusters","problem_demand_assessments","merchant_problem_fits",
   "commerce_raw_evidence","commerce_semantic_documents","commerce_taxonomy_nodes","commerce_problem_product_matches",
   "commerce_feed_runs","commerce_feed_eligible_offers","commerce_pipeline_checkpoints","commerce_pipeline_policies",
@@ -35,6 +37,7 @@ const ALLOWED_RPCS = new Set([
   "category_universe","eligible_products_for_niche_discovery","apply_product_identity_updates","apply_final_offer_updates",
   "reserve_agent_budget","finalize_agent_budget","release_agent_budget","claim_agent_tool_task","finish_agent_tool_task","fail_agent_tool_task",
   "vmdb_refresh_semantic_memory","vmdb_semantic_embedding_claim","vmdb_semantic_embedding_ack","vmdb_semantic_search","vmdb_ai_backend_health",
+  "vmdb_product_bootstrap_health",
 ]);
 
 const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks`));
@@ -72,10 +75,11 @@ Deno.serve(async (req: Request) => {
       budgets: true,
       merchant360: true,
       productAdmission: true,
+      productBootstrap: true,
       semanticMemory: true,
       aiBackendHealth: true,
       directPublishingOutboxAccess: false,
-      version: 5,
+      version: 6,
     });
   }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
