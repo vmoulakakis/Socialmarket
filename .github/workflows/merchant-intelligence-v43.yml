@@ -1,14 +1,9 @@
 name: Merchant Intelligence V4.3 Semantic
 
+# Legacy gateway dependencies reference the deleted Supabase project.
+# Keep this workflow available for diagnostics, but never run it automatically.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '45 0 * * 1'
-  push:
-    branches: [main]
-    paths:
-      - 'workers/market_intelligence/requirements-production.txt'
-      - '.github/workflows/merchant-intelligence-v43.yml'
 
 permissions:
   contents: read
