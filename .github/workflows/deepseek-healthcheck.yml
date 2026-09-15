@@ -1,10 +1,9 @@
 name: DeepSeek Health Check
 
+# Legacy product-intelligence gateway references the deleted Supabase project.
+# Keep this healthcheck available only for manual diagnostics.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/deepseek-healthcheck.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
