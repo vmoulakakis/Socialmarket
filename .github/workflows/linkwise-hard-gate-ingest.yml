@@ -2,6 +2,12 @@ name: Linkwise Hard Gate Ingest
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - vmdb/backend-v2-commerce-intelligence
+    paths:
+      - 'workers/linkwise_hard_gate_ingest/**'
+      - '.github/workflows/linkwise-hard-gate-ingest.yml'
   schedule:
     - cron: '17 3 * * 1'
 
