@@ -1,3 +1,4 @@
+# Production full-feed streaming worker; push intentionally triggers Linkwise Hard Gate Ingest.
 import os,json,hashlib,requests,ijson
 from decimal import Decimal,InvalidOperation
 from datetime import datetime,timezone
@@ -29,25 +30,21 @@ def commission_map():
 
 def expected_commission(price,m):
     vals=[]
-    flat=dec(m.get('flat_commission_min_eur'))
-    pct=dec(m.get('percent_commission_min'))
+    flat=dec(m.get('flat_commission_min_eur')); pct=dec(m.get('percent_commission_min'))
     if flat is not None: vals.append((flat,'flat_min'))
     if pct is not None: vals.append((price*pct/Decimal('100'),'percent_min'))
     return max(vals,key=lambda x:x[0]) if vals else (None,None)
 
 def stable_hash(p,expected):
     keys=('product_id','program_id','sku','model_name','product_name','category','price','discount','in_stock','valid_from','valid_to','tracking_url')
-    s='|'.join(str(p.get(k) or '') for k in keys)+f'|{expected}'
-    return hashlib.sha256(s.encode()).hexdigest()
+    return hashlib.sha256(('|'.join(str(p.get(k) or '') for k in keys)+f'|{expected}').encode()).hexdigest()
 
 def flush(rows):
     if not rows:return 0
-    api('POST','commerce_feed_eligible_offers',params={'on_conflict':'source_key,program_id,source_product_id'},data=rows,prefer='resolution=merge-duplicates,return=minimal')
-    return len(rows)
+    api('POST','commerce_feed_eligible_offers',params={'on_conflict':'source_key,program_id,source_product_id'},data=rows,prefer='resolution=merge-duplicates,return=minimal'); return len(rows)
 
 def patch_run(rid,counts,status='running',extra=None):
-    data={**counts,'status':status,'checkpoint':{'streaming':True,'batch_size':BATCH,'checkpoint_every':CHECKPOINT_EVERY,**(extra or {})}}
-    api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data=data,prefer='return=minimal')
+    api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={**counts,'status':status,'checkpoint':{'streaming':True,'batch_size':BATCH,'checkpoint_every':CHECKPOINT_EVERY,**(extra or {})}},prefer='return=minimal')
 
 def main():
     merchants=commission_map(); counts={'scanned':0,'invalid':0,'commission_unknown':0,'commission_rejected':0,'inactive':0,'expired':0,'duplicate':0,'eligible':0,'inserted':0,'updated':0,'unchanged':0,'bytes_read':0}; out=[]
@@ -56,8 +53,7 @@ def main():
         with requests.get(FEED_URL,stream=True,timeout=(30,900)) as r:
             r.raise_for_status(); r.raw.decode_content=True
             for p in ijson.items(r.raw,'item'):
-                counts['scanned']+=1
-                pid=p.get('product_id'); prog=p.get('program_id'); price=dec(p.get('price'))
+                counts['scanned']+=1; pid=p.get('product_id'); prog=p.get('program_id'); price=dec(p.get('price'))
                 if not pid or not prog or not p.get('tracking_url') or not p.get('product_name') or price is None or price<=0: counts['invalid']+=1; continue
                 if p.get('in_stock') is not None and not truthy(p.get('in_stock')): counts['inactive']+=1; continue
                 m=merchants.get(str(prog))
@@ -68,18 +64,15 @@ def main():
                 raw={'product_id':pid,'program_id':prog,'program_name':p.get('program_name') or m.get('merchant_name'),'sku':p.get('sku'),'model_name':p.get('model_name'),'product_name':p.get('product_name'),'category':p.get('category'),'price':float(price),'tracking_url':p.get('tracking_url'),'image_url':p.get('image_url') or p.get('thumb_url'),'in_stock':True,'valid_from':p.get('valid_from'),'valid_to':p.get('valid_to'),'on_sale':p.get('on_sale'),'discount':p.get('discount'),'times_bought':p.get('times_bought')}
                 out.append({'source_key':SOURCE,'source_product_id':str(pid),'program_id':str(prog),'program_name':raw['program_name'],'sku':str(p['sku']) if p.get('sku') else None,'model_name':p.get('model_name'),'product_name':str(p.get('product_name')),'category_raw':p.get('category'),'price_eur':float(price),'expected_commission_eur':float(exp),'commission_basis':basis,'tracking_url':p.get('tracking_url'),'image_url':raw['image_url'],'in_stock':True,'valid_from':p.get('valid_from') or None,'valid_to':p.get('valid_to') or None,'on_sale':truthy(p.get('on_sale')),'discount':float(dec(p.get('discount'))) if dec(p.get('discount')) is not None else None,'times_bought':int(dec(p.get('times_bought')) or 0),'content_hash':stable_hash(p,exp),'raw_snapshot':raw,'last_seen_at':datetime.now(timezone.utc).isoformat(),'is_active':True,'intelligence_status':'pending'})
                 counts['eligible']+=1
-                if len(out)>=BATCH:
-                    counts['inserted']+=flush(out); out=[]
+                if len(out)>=BATCH: counts['inserted']+=flush(out); out=[]
                 if counts['scanned']%CHECKPOINT_EVERY==0:
-                    counts['bytes_read']=getattr(r.raw,'tell',lambda:0)() or counts['bytes_read']; patch_run(rid,counts)
-                    print(json.dumps({'run_id':rid,**counts}),flush=True)
+                    try: counts['bytes_read']=r.raw.tell() or counts['bytes_read']
+                    except Exception: pass
+                    patch_run(rid,counts); print(json.dumps({'run_id':rid,**counts}),flush=True)
         counts['inserted']+=flush(out)
         try: counts['bytes_read']=r.raw.tell() or counts['bytes_read']
         except Exception: pass
-        patch_run(rid,counts,'completed',{'all_eligible_products':True})
-        api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={'finished_at':datetime.now(timezone.utc).isoformat()},prefer='return=minimal')
-        print(json.dumps({'run_id':rid,**counts},indent=2),flush=True)
+        patch_run(rid,counts,'completed',{'all_eligible_products':True}); api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={'finished_at':datetime.now(timezone.utc).isoformat()},prefer='return=minimal'); print(json.dumps({'run_id':rid,**counts},indent=2),flush=True)
     except Exception as e:
-        api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={'status':'failed','error':str(e)[:2000],'finished_at':datetime.now(timezone.utc).isoformat(),'checkpoint':{'streaming':True,'batch_size':BATCH}},prefer='return=minimal')
-        raise
+        api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={'status':'failed','error':str(e)[:2000],'finished_at':datetime.now(timezone.utc).isoformat(),'checkpoint':{'streaming':True,'batch_size':BATCH}},prefer='return=minimal'); raise
 if __name__=='__main__':main()
