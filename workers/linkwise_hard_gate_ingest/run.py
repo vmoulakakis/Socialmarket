@@ -1,22 +1,25 @@
-# Production full-feed streaming worker; push intentionally triggers Linkwise Hard Gate Ingest.
+# Production full-feed streaming worker using GitHub OIDC -> Supabase gateway.
 import os,json,hashlib,requests,ijson
 from decimal import Decimal,InvalidOperation
 from datetime import datetime,timezone
 
 FEED_URL=os.environ['LINKWISE_FEED_URL']
-SUPABASE_URL=os.environ['SUPABASE_URL'].rstrip('/')
-SERVICE_KEY=os.environ['SUPABASE_SERVICE_ROLE_KEY']
+GATEWAY_URL=os.environ['SUPABASE_GATEWAY_URL']
+OIDC_TOKEN=os.environ['SUPABASE_OIDC_TOKEN']
 MIN_COMMISSION=Decimal(os.getenv('MIN_EXPECTED_COMMISSION_EUR','10'))
 BATCH=int(os.getenv('UPSERT_BATCH_SIZE','500'))
 CHECKPOINT_EVERY=int(os.getenv('CHECKPOINT_EVERY','10000'))
 SOURCE='linkwise'
-H={'apikey':SERVICE_KEY,'Authorization':f'Bearer {SERVICE_KEY}','Content-Type':'application/json'}
 
 def api(method,path,params=None,data=None,prefer=None):
-    h=dict(H)
-    if prefer:h['Prefer']=prefer
-    r=requests.request(method,f'{SUPABASE_URL}/rest/v1/{path}',headers=h,params=params,json=data,timeout=120)
-    r.raise_for_status(); return r.json() if r.content else None
+    payload={'method':method,'resource':path,'params':params or {}}
+    if data is not None: payload['data']=data
+    if prefer: payload['prefer']=prefer
+    r=requests.post(GATEWAY_URL,headers={'Authorization':f'Bearer {OIDC_TOKEN}','Content-Type':'application/json'},json=payload,timeout=180)
+    r.raise_for_status()
+    body=r.json()
+    if not body.get('ok'): raise RuntimeError(body)
+    return body.get('result')
 
 def dec(v):
     try:return Decimal(str(v))
@@ -25,7 +28,12 @@ def dec(v):
 def truthy(v): return str(v).strip().lower() in {'1','true','yes','y','in stock','available'}
 
 def commission_map():
-    rows=api('GET','merchant_product_discovery_eligible',params={'select':'id,legacy_merchant_id,merchant_name,flat_commission_min_eur,flat_commission_max_eur,percent_commission_min,percent_commission_max,hard_gate_pass,eligible_for_product_discovery','hard_gate_pass':'eq.true','eligible_for_product_discovery':'eq.true','limit':'5000'}) or []
+    rows=[]; offset=0
+    while True:
+        page=api('GET','merchant_product_discovery_eligible',params={'select':'id,legacy_merchant_id,merchant_name,flat_commission_min_eur,flat_commission_max_eur,percent_commission_min,percent_commission_max,hard_gate_pass,eligible_for_product_discovery','hard_gate_pass':'eq.true','eligible_for_product_discovery':'eq.true','limit':'1000','offset':str(offset)}) or []
+        rows.extend(page)
+        if len(page)<1000: break
+        offset+=1000
     return {str(x['legacy_merchant_id']):x for x in rows if x.get('legacy_merchant_id') is not None}
 
 def expected_commission(price,m):
@@ -46,13 +54,17 @@ def flush(rows):
 def patch_run(rid,counts,status='running',extra=None):
     api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={**counts,'status':status,'checkpoint':{'streaming':True,'batch_size':BATCH,'checkpoint_every':CHECKPOINT_EVERY,**(extra or {})}},prefer='return=minimal')
 
+def product_stream(raw):
+    # Linkwise full feed is expected as a top-level array. Keep parsing streaming/bounded-memory.
+    yield from ijson.items(raw,'item')
+
 def main():
     merchants=commission_map(); counts={'scanned':0,'invalid':0,'commission_unknown':0,'commission_rejected':0,'inactive':0,'expired':0,'duplicate':0,'eligible':0,'inserted':0,'updated':0,'unchanged':0,'bytes_read':0}; out=[]
     run=(api('POST','commerce_feed_runs',data={'source_key':SOURCE,'run_type':'full_stream','status':'running','min_commission_eur':float(MIN_COMMISSION),'batch_size':BATCH},prefer='return=representation') or [])[0]; rid=run['id']
     try:
         with requests.get(FEED_URL,stream=True,timeout=(30,900)) as r:
             r.raise_for_status(); r.raw.decode_content=True
-            for p in ijson.items(r.raw,'item'):
+            for p in product_stream(r.raw):
                 counts['scanned']+=1; pid=p.get('product_id'); prog=p.get('program_id'); price=dec(p.get('price'))
                 if not pid or not prog or not p.get('tracking_url') or not p.get('product_name') or price is None or price<=0: counts['invalid']+=1; continue
                 if p.get('in_stock') is not None and not truthy(p.get('in_stock')): counts['inactive']+=1; continue
@@ -70,8 +82,6 @@ def main():
                     except Exception: pass
                     patch_run(rid,counts); print(json.dumps({'run_id':rid,**counts}),flush=True)
         counts['inserted']+=flush(out)
-        try: counts['bytes_read']=r.raw.tell() or counts['bytes_read']
-        except Exception: pass
         patch_run(rid,counts,'completed',{'all_eligible_products':True}); api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={'finished_at':datetime.now(timezone.utc).isoformat()},prefer='return=minimal'); print(json.dumps({'run_id':rid,**counts},indent=2),flush=True)
     except Exception as e:
         api('PATCH','commerce_feed_runs',params={'id':f'eq.{rid}'},data={'status':'failed','error':str(e)[:2000],'finished_at':datetime.now(timezone.utc).isoformat(),'checkpoint':{'streaming':True,'batch_size':BATCH}},prefer='return=minimal'); raise
