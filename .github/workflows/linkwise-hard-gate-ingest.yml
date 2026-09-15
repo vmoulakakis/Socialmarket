@@ -19,13 +19,13 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install requests ijson
-      - name: Stream, gate and persist eligible offers
+      - name: Stream, gate and persist all eligible offers
         env:
           LINKWISE_FEED_URL: ${{ secrets.LINKWISE_FEED_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           MIN_EXPECTED_COMMISSION_EUR: '10'
-          MAX_PRODUCTS_PER_MERCHANT: '30'
           UPSERT_BATCH_SIZE: '500'
+          CHECKPOINT_EVERY: '10000'
           PYTHONUNBUFFERED: '1'
         run: python workers/linkwise_hard_gate_ingest/run.py
