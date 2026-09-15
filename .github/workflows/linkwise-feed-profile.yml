@@ -1,0 +1,25 @@
+name: Linkwise Feed Profile
+
+on:
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - name: Stream and measure Linkwise feed (no DB writes)
+        env:
+          LINKWISE_FEED_URL: ${{ secrets.LINKWISE_FEED_URL }}
+          LINKWISE_PROFILE_REPORT: linkwise_feed_profile.json
+        run: python workers/linkwise_feed_profiler/run.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linkwise-feed-profile
+          path: linkwise_feed_profile.json
+          retention-days: 14
