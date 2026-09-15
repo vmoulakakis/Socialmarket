@@ -1,21 +1,14 @@
 name: Semantic Category Pain Intelligence
 
+# Legacy evidence and AI runtime gateways reference the deleted Supabase project.
+# Keep this workflow available for diagnostics, but never run it automatically.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/generic-evidence-intelligence.yml'
-      - '.github/category-pain-final-trigger'
   workflow_dispatch:
     inputs:
       limit:
         description: 'Canonical taxonomy nodes to research (1-100)'
         required: false
         default: '20'
-  workflow_run:
-    workflows: ['Merchant Intelligence V4.3 Semantic']
-    types: [completed]
-    branches: [main]
 
 permissions:
   contents: read
