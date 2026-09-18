@@ -14,7 +14,7 @@ function timeoutResult(ms, value) {
 
 export default function AuthGate({ children }) {
   const pathname = usePathname();
-  const publicRoute = pathname === '/marketplace' || pathname?.startsWith('/marketplace/');
+  const publicRoute = pathname === '/marketplace' || pathname?.startsWith('/marketplace/') || pathname === '/luxecorner' || pathname?.startsWith('/luxecorner/');
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
