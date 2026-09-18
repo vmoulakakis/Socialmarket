@@ -16,6 +16,7 @@ const ALLOWED_WORKFLOWS = new Set([
   "vmoulakakis/Socialmarket/.github/workflows/merchant-demand-intelligence.yml@refs/heads/main",
   "vmoulakakis/Socialmarket/.github/workflows/agent-tool-executor.yml@refs/heads/main",
   "vmoulakakis/Socialmarket/.github/workflows/linkwise-product-discovery.yml@refs/heads/main",
+  "vmoulakakis/Socialmarket/.github/workflows/linkwise-top100-commission.yml@refs/heads/main",
 ]);
 
 const ALLOWED_TABLES = new Set([
@@ -30,7 +31,7 @@ const ALLOWED_TABLES = new Set([
   "commerce_feed_runs","commerce_feed_eligible_offers","commerce_pipeline_checkpoints","commerce_pipeline_policies",
   "commerce_agent_runs","commerce_learning_calibrations","commerce_performance_events",
   "product_selection_policies","product_selection_funnel","product_selection_1000",
-  "social_presentation_intelligence","social_distribution_metrics",
+  "social_presentation_intelligence","social_distribution_metrics","linkwise_program_commissions",
 ]);
 
 const ALLOWED_RPCS = new Set([
