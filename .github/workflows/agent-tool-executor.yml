@@ -36,6 +36,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - name: Execute bounded queued agent tasks
         run: python workers/agent_executor/run_v2.py
