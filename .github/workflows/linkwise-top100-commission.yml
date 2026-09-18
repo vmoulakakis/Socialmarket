@@ -25,7 +25,6 @@ jobs:
     timeout-minutes: 45
     env:
       SUPABASE_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
-      MIN_EXPECTED_COMMISSION_EUR: '12'
       MAX_PRODUCTS: '100'
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +33,7 @@ jobs:
           python-version: '3.12'
       - name: Install streaming dependencies
         run: pip install requests ijson
-      - name: Ingest top 100 Linkwise products above EUR 12 commission
+      - name: Ingest global top 100 Linkwise products by calculated commission
         run: python workers/product_intelligence/linkwise_top100_commission.py
       - name: Upload run summary
         if: always()
