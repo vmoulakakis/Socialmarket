@@ -21,7 +21,8 @@ const groups=[
   {href:'/optimization',label:'Optimization',code:'OP'},
  ]},
  {label:'System',items:[
-  {href:'/configuration',label:'Configuration',code:'CF'},
+  {href:'/admin',label:'Admin Control',code:'AD'},
+  {href:'/configuration',label:'Legacy Product Config',code:'CF'},
  ]},
 ];
 
