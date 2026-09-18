@@ -62,11 +62,11 @@ export default async function LuxeProductPage({params}){
     <section className={styles.productHero}>
       <div className={styles.detailMedia}>{p.image_url?<img src={p.image_url} alt={p.product_name}/>:<div className={styles.productFallback}/>}</div>
       <div className={styles.detailCopy}>
-        <span className={styles.eyebrow}>CURATED PICK · #{p.rank}</span>
+        <span className={styles.eyebrow}>PREMIUM SELECTION</span>
         <h1>{p.product_name}</h1>
         <p className={styles.detailLead}>Ένα statement piece με premium κλίμακα και strong visual presence — για σαλόνι που θέλει να χτίσει όλη την αισθητική του γύρω από ένα κεντρικό έπιπλο.</p>
         <div className={styles.detailPrice}>{money(p.price_eur)}</div>
-        <a className={styles.detailCta} href={p.tracking_url} target="_blank" rel="sponsored noopener">See current price & availability ↗</a>
+        <a className={styles.detailCta} href={p.tracking_url} target="_blank" rel="sponsored noopener">Δες τρέχουσα τιμή & διαθεσιμότητα ↗</a>
         <small>Η τελική τιμή, διαθεσιμότητα και όροι αγοράς επιβεβαιώνονται στο κατάστημα.</small>
       </div>
     </section>
@@ -80,9 +80,9 @@ export default async function LuxeProductPage({params}){
     <section className={styles.finalCta}>
       <span>THE DECISION</span>
       <h2>If it defines the room,<br/>it deserves the space.</h2>
-      <a className={styles.primary} href={p.tracking_url} target="_blank" rel="sponsored noopener">View at {p.program_name||'partner store'} ↗</a>
+      <a className={styles.primary} href={p.tracking_url} target="_blank" rel="sponsored noopener">Δες στο κατάστημα ↗</a>
     </section>
 
-    <footer className={styles.footer}><div><b>LUXECORNER</b><p>Curated premium living.</p></div><p>Affiliate disclosure: ενδέχεται να λαμβάνουμε προμήθεια όταν πραγματοποιείται αγορά μέσω επιλεγμένων συνδέσμων, χωρίς πρόσθετη χρέωση για εσένα.</p></footer>
+    <footer className={styles.footer}><div><b>LUXECORNER</b><p>Curated premium living.</p></div><p>Σημείωση: ορισμένοι σύνδεσμοι ενδέχεται να είναι συνεργαζόμενοι. Η τελική τιμή και διαθεσιμότητα επιβεβαιώνονται πάντα στο κατάστημα.</p></footer>
   </main>;
 }
