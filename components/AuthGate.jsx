@@ -17,7 +17,6 @@ export default function AuthGate({ children }) {
   const publicRoute = pathname === '/marketplace' || pathname?.startsWith('/marketplace/');
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
@@ -31,7 +30,7 @@ export default function AuthGate({ children }) {
     const hardStop = setTimeout(() => {
       if (!mounted) return;
       setLoading(false);
-      setMessage((old) => old || 'Ο έλεγχος session καθυστέρησε. Μπορείς να συνδεθείς ξανά.');
+      setMessage((old) => old || 'Ο έλεγχος session καθυστέρησε. Μπορείς να ζητήσεις νέο magic link.');
     }, SESSION_TIMEOUT_MS);
 
     const acceptSession = async (nextSession) => {
@@ -83,30 +82,39 @@ export default function AuthGate({ children }) {
     };
   }, [publicRoute]);
 
-  async function signIn(event) {
+  async function sendMagicLink(event) {
     event.preventDefault();
-    if (!password || signingIn) return;
+    if (signingIn) return;
     setSigningIn(true);
     setMessage('');
     try {
+      const redirectTo = typeof window !== 'undefined'
+        ? `${window.location.origin}${pathname || '/admin'}`
+        : undefined;
       const result = await Promise.race([
-        supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password }),
+        supabase.auth.signInWithOtp({
+          email: ADMIN_EMAIL,
+          options: {
+            shouldCreateUser: false,
+            emailRedirectTo: redirectTo,
+          },
+        }),
         timeoutResult(SIGNIN_TIMEOUT_MS, { timeout: true }),
       ]);
       if (result?.timeout) {
-        setMessage('Η απάντηση σύνδεσης καθυστέρησε. Αν το login ολοκληρώθηκε, πάτησε “Retry session”.');
+        setMessage('Η αποστολή καθυστέρησε. Έλεγξε το email σου πριν ξαναδοκιμάσεις.');
         setSigningIn(false);
         return;
       }
       if (result?.error) {
-        setMessage(result.error.message === 'Invalid login credentials' ? 'Λάθος password.' : result.error.message);
+        setMessage(result.error.message || 'Αποτυχία αποστολής magic link.');
         setSigningIn(false);
         return;
       }
-      setPassword('');
+      setMessage('Magic link στάλθηκε. Άνοιξε το email και πάτησε το link για είσοδο.');
       setSigningIn(false);
     } catch (error) {
-      setMessage(error?.message || 'Αποτυχία σύνδεσης.');
+      setMessage(error?.message || 'Αποτυχία αποστολής magic link.');
       setSigningIn(false);
     }
   }
@@ -116,7 +124,6 @@ export default function AuthGate({ children }) {
       await Promise.race([supabase.auth.signOut(), timeoutResult(5000, null)]);
     } finally {
       setSession(null);
-      setPassword('');
     }
   }
 
@@ -131,11 +138,10 @@ export default function AuthGate({ children }) {
       <div className="auth-card">
         <div className="eyebrow">Private Admin</div>
         <h1>SocialMarket AI</h1>
-        <p className="sub">Private admin access με email και password.</p>
-        <form onSubmit={signIn} className="auth-form">
+        <p className="sub">Passwordless admin access με ασφαλές Supabase Magic Link.</p>
+        <form onSubmit={sendMagicLink} className="auth-form">
           <input className="search" type="email" value={ADMIN_EMAIL} readOnly autoComplete="username" aria-label="Admin email" />
-          <input className="search" type="password" value={password} onChange={(event)=>setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" required autoFocus />
-          <button className="button" type="submit" disabled={signingIn}>{signingIn ? 'Signing in…' : 'Sign in'}</button>
+          <button className="button" type="submit" disabled={signingIn}>{signingIn ? 'Sending…' : 'Send magic link'}</button>
           <button className="link-button" type="button" onClick={()=>window.location.reload()}>Retry session</button>
         </form>
         {message && <p className="muted">{message}</p>}
