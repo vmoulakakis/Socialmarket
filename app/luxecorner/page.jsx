@@ -37,7 +37,7 @@ export default async function LuxeCornerPage(){
   let products=[];
   try{products=await getLuxeTop100()}catch{}
   const hero=products[0];
-  const featured=products.slice(0,12);
+  const featured=products;
   const schema={
     '@context':'https://schema.org',
     '@graph':[
@@ -69,7 +69,7 @@ export default async function LuxeCornerPage(){
         <p>Premium γωνιακοί καναπέδες και statement pieces επιλεγμένα για χώρους που θέλουν παρουσία, υφή και χαρακτήρα.</p>
         <div className={styles.heroActions}><a href="#edit" className={styles.primary}>Explore the Edit</a><a href="#guide" className={styles.secondary}>Find your style</a></div>
       </div>
-      <div className={styles.heroNote}>Editorial curation · Live availability · Affiliate links</div>
+      <div className={styles.heroNote}>Curated interiors · Premium pieces · Live store pricing</div>
     </section>
 
     <section className={styles.intro}>
@@ -85,18 +85,18 @@ export default async function LuxeCornerPage(){
     </section>
 
     <section id="edit" className={styles.edit}>
-      <div className={styles.sectionHead}><div><span>THE MOST WANTED</span><h2>Statement pieces worth building a room around.</h2></div><p>Live curated selection από το current product universe. Κάθε CTA οδηγεί μέσω του affiliate tracking route στο merchant.</p></div>
+      <div className={styles.sectionHead}><div><span>THE MOST WANTED</span><h2>Statement pieces worth building a room around.</h2></div><p>Μια επιμελημένη συλλογή premium καναπέδων για διαφορετικά μεγέθη χώρου, υφές και αισθητικές. Δες κάθε επιλογή αναλυτικά ή έλεγξε άμεσα την τρέχουσα τιμή και διαθεσιμότητα στο κατάστημα.</p></div>
       <div className={styles.productGrid}>
         {featured.map((p,i)=><article key={`${p.program_id}-${p.source_product_id}`} className={styles.productCard}>
           <Link href={productPath(p)} className={styles.productImage}>
             {p.image_url?<img src={p.image_url} alt={p.product_name} loading={i<4?'eager':'lazy'}/>:<div className={styles.productFallback}/>}
-            <span className={styles.rank}>#{p.rank}</span>
+            <span className={styles.rank}>CURATED</span>
           </Link>
           <div className={styles.productBody}>
             <span className={styles.merchant}>{p.program_name||'Curated partner'}</span>
             <h3><Link href={productPath(p)}>{p.product_name}</Link></h3>
-            <div className={styles.productMeta}><strong>{money(p.price_eur)}</strong><span>Curated premium pick</span></div>
-            <div className={styles.cardActions}><Link href={productPath(p)}>View editorial</Link><a href={p.tracking_url} target="_blank" rel="sponsored noopener">See price & availability ↗</a></div>
+            <div className={styles.productMeta}><strong>{money(p.price_eur)}</strong><span>Premium selection</span></div>
+            <div className={styles.cardActions}><Link href={productPath(p)}>Δες λεπτομέρειες</Link><a href={p.tracking_url} target="_blank" rel="sponsored noopener">Δες τιμή & διαθεσιμότητα ↗</a></div>
           </div>
         </article>)}
       </div>
@@ -121,7 +121,7 @@ export default async function LuxeCornerPage(){
 
     <footer className={styles.footer}>
       <div><b>LUXECORNER</b><p>Curated premium living.</p></div>
-      <p>Οι σύνδεσμοι προϊόντων μπορεί να είναι affiliate links. Η τελική τιμή και διαθεσιμότητα επιβεβαιώνονται στο κατάστημα.</p>
+      <p>Οι τιμές και η διαθεσιμότητα ενημερώνονται από τα συνεργαζόμενα καταστήματα και επιβεβαιώνονται πριν την αγορά.</p>
     </footer>
   </main>
 }
