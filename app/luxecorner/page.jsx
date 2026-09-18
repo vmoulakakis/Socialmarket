@@ -21,10 +21,16 @@ export const metadata={
 };
 
 const collections=[
- ['Statement Corners','Γωνιακοί καναπέδες που δίνουν ταυτότητα και αρχιτεκτονικό βάρος στον χώρο.'],
- ['Velvet Icons','Βελούδο, βαθιές υφές και editorial παρουσία για πιο cinematic σαλόνια.'],
- ['Soft Luxury','Λινό, ουδέτερες αποχρώσεις και ήρεμη πολυτέλεια χωρίς υπερβολή.'],
- ['Sofa Beds','Πρακτικότητα που δεν δείχνει πρακτική: sofa beds με premium αισθητική.']
+ ['Statement Corners','Γωνιακοί καναπέδες που δίνουν ταυτότητα και αρχιτεκτονικό βάρος στον χώρο.','/luxecorner/collections/goniakoi-kanapedes'],
+ ['Velvet Icons','Βελούδο, βαθιές υφές και editorial παρουσία για πιο cinematic σαλόνια.','/luxecorner/collections/veloudinoi-kanapedes'],
+ ['Soft Luxury','Λινό, ουδέτερες αποχρώσεις και ήρεμη πολυτέλεια χωρίς υπερβολή.','/luxecorner/collections/premium-kanapedes'],
+ ['Sofa Beds','Πρακτικότητα που δεν δείχνει πρακτική: sofa beds με premium αισθητική.','/luxecorner/collections/kanapedes-krevati']
+];
+const faqs=[
+ ['Πώς επιλέγονται οι καναπέδες στη LuxeCorner;','Με editorial κριτήρια όπως κλίμακα, σιλουέτα, υλικό, οπτική παρουσία και suitability για premium living spaces.'],
+ ['Οι τιμές είναι πάντα ίδιες;','Όχι. Οι τιμές και η διαθεσιμότητα μπορούν να αλλάζουν και επιβεβαιώνονται πάντα στο συνεργαζόμενο κατάστημα.'],
+ ['Τι πρέπει να μετρήσω πριν αγοράσω μεγάλο γωνιακό καναπέ;','Το τελικό footprint, τα περάσματα, τις πόρτες, το ασανσέρ ή κλιμακοστάσιο και τις βασικές οπτικές γραμμές του σαλονιού.'],
+ ['Τα links είναι affiliate;','Ορισμένοι σύνδεσμοι είναι affiliate links και μπορεί να αποφέρουν προμήθεια χωρίς πρόσθετη χρέωση για τον αγοραστή.']
 ];
 
 export default async function LuxeCornerPage(){
@@ -39,7 +45,8 @@ export default async function LuxeCornerPage(){
       {'@type':'CollectionPage','@id':`${BASE}/luxecorner#page`,url:`${BASE}/luxecorner`,name:TITLE,description:DESCRIPTION,isPartOf:{'@id':`${BASE}/luxecorner#website`}},
       {'@type':'ItemList',name:'LuxeCorner Premium Sofa Edit',numberOfItems:featured.length,itemListElement:featured.map((p,i)=>({
         '@type':'ListItem',position:i+1,url:`${BASE}${productPath(p)}`,name:p.product_name
-      }))}
+      }))},
+      {'@type':'FAQPage',mainEntity:faqs.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
     ]
   };
 
@@ -72,8 +79,8 @@ export default async function LuxeCornerPage(){
     </section>
 
     <section id="moods" className={styles.moods}>
-      {collections.map(([title,copy],i)=><article key={title} className={styles.moodCard}>
-        <span>0{i+1}</span><h3>{title}</h3><p>{copy}</p><a href="#edit">Discover →</a>
+      {collections.map(([title,copy,href],i)=><article key={title} className={styles.moodCard}>
+        <span>0{i+1}</span><h3>{title}</h3><p>{copy}</p><Link href={href}>Discover →</Link>
       </article>)}
     </section>
 
@@ -103,6 +110,8 @@ export default async function LuxeCornerPage(){
         <article><b>03 · Presence</b><h3>Άφησε τον καναπέ να ηγηθεί.</h3><p>Σε premium σαλόνια, η σωστή σιλουέτα μπορεί να λειτουργήσει σαν το βασικό αρχιτεκτονικό στοιχείο.</p></article>
       </div>
     </section>
+
+    <section className={styles.faq}><div><span>BUYING QUESTIONS</span><h2>Know before you choose.</h2></div><div>{faqs.map(([q,a])=><details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div></section>
 
     <section className={styles.finalCta}>
       <span>MAKE THE ROOM</span>
