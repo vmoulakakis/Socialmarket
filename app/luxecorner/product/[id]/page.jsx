@@ -38,7 +38,6 @@ export default async function LuxeProductPage({params}){
         brand:{'@type':'Brand',name:p.program_name||'LuxeCorner curated partner'},
         offers:{
           '@type':'Offer',url:p.tracking_url,priceCurrency:'EUR',price:Number(p.price_eur),
-          availability:'https://schema.org/InStock',
           seller:{'@type':'Organization',name:p.program_name||'Partner store'}
         }
       },
