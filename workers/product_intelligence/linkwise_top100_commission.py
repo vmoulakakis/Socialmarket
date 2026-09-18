@@ -13,7 +13,6 @@ COLUMNS=[
     "discount","times_bought","sku","model_name"
 ]
 BASE="https://affiliate.linkwi.se/feeds/1.2/{client}/programs-joined/columns-{columns}/catinc-{category}/catex-0/proginc-0/progex-0/feed.json"
-MIN_COMMISSION=float(os.getenv("MIN_EXPECTED_COMMISSION_EUR","12"))
 MAX_PRODUCTS=max(1,min(100,int(os.getenv("MAX_PRODUCTS","100"))))
 HEAP_SIZE=max(MAX_PRODUCTS*5,300)
 
@@ -78,11 +77,11 @@ def scan():
                 if p.get("in_stock") is not None and not b(p.get("in_stock")):
                     outstock+=1; continue
                 commission,basis=expected(price,rule)
-                if commission is None or commission<=MIN_COMMISSION:
+                if commission is None or commission<=0:
                     continue
                 eligible+=1
                 row={
-                    "source_key":"linkwise_gt12_top100",
+                    "source_key":"linkwise_top100_calculated_commission",
                     "source_product_id":str(p.get("product_id")),
                     "program_id":pid,
                     "program_name":p.get("program_name") or rule.get("program_name"),
@@ -102,8 +101,8 @@ def scan():
                     "times_bought":int(n(p.get("times_bought")) or 0),
                     "last_seen_at":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime()),
                     "is_active":True,
-                    "intelligence_status":"commission_gt12_candidate",
-                    "linkwise_route":"top100_commission_gt12"
+                    "intelligence_status":"top100_calculated_commission_candidate",
+                    "linkwise_route":"top100_calculated_commission"
                 }
                 key=(row["program_id"],row["source_product_id"])
                 item=(commission, key, row)
@@ -111,7 +110,7 @@ def scan():
                     heapq.heappush(heap,item)
                 elif commission>heap[0][0]:
                     heapq.heapreplace(heap,item)
-        print(json.dumps({"category":category,"scanned":scanned,"eligible_gt12":eligible}),flush=True)
+        print(json.dumps({"category":category,"scanned":scanned,"commission_calculated":eligible}),flush=True)
 
     best={}
     for commission,key,row in sorted(heap,reverse=True):
@@ -126,11 +125,10 @@ def scan():
             prefer="resolution=merge-duplicates,return=representation")
     return {
         "ok":True,
-        "policy":"top100 expected commission > 12 EUR",
-        "min_expected_commission_eur":MIN_COMMISSION,
+        "policy":"global top100 by calculated expected commission EUR",
         "max_products":MAX_PRODUCTS,
         "scanned":scanned,
-        "eligible_gt12":eligible,
+        "commission_calculated":eligible,
         "selected":len(selected),
         "invalid":invalid,
         "out_of_stock":outstock,
