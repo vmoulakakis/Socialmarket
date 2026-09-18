@@ -33,7 +33,7 @@ function activePath(pathname,href){
 
 export default function AppShell({children}){
  const pathname=usePathname();
- const isPublicRoute=pathname?.startsWith('/affinity-b2b')||pathname?.startsWith('/affinity/')||pathname==='/marketplace'||pathname?.startsWith('/marketplace/');
+ const isPublicRoute=pathname?.startsWith('/affinity-b2b')||pathname?.startsWith('/affinity/')||pathname==='/marketplace'||pathname?.startsWith('/marketplace/')||pathname==='/luxecorner'||pathname?.startsWith('/luxecorner/');
  const [collapsed,setCollapsed]=useState(false);
  const context=useMemo(()=>{
   const item=groups.flatMap(g=>g.items).find(x=>activePath(pathname,x.href));
