@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -78,8 +79,8 @@ def upsert_product(p: dict[str, Any]) -> dict[str, Any]:
         "image_url": p.get("product_main_image_url"),
         "category": p.get("second_level_category_name"),
         "raw_payload": p,
-        "last_seen_at": "now()",
-        "observed_at": "now()",
+        "last_seen_at": datetime.now(timezone.utc).isoformat(),
+        "observed_at": datetime.now(timezone.utc).isoformat(),
     }
     rows = db_call(
         "POST",
@@ -114,8 +115,8 @@ def upsert_offer(product_id: str, p: dict[str, Any]) -> tuple[dict[str, Any], De
         },
         "logistics_evidence": {"ship_to_days": p.get("ship_to_days")},
         "raw_payload": p,
-        "last_seen_at": "now()",
-        "observed_at": "now()",
+        "last_seen_at": datetime.now(timezone.utc).isoformat(),
+        "observed_at": datetime.now(timezone.utc).isoformat(),
     }
     rows = db_call(
         "POST",
@@ -172,7 +173,7 @@ def run_query(row: dict[str, Any], pages: int) -> dict[str, int]:
         "PATCH",
         "ai_source_queries",
         params={"id": f"eq.{row['id']}"},
-        data={"last_run_at": "now()", "updated_at": "now()"},
+        data={"last_run_at": datetime.now(timezone.utc).isoformat(), "updated_at": datetime.now(timezone.utc).isoformat()},
         prefer="return=minimal",
     )
     return stats
