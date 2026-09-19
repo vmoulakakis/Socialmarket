@@ -82,6 +82,24 @@ create table if not exists public.ai_demand_signals (
   metadata jsonb not null default '{}'::jsonb
 );
 
+create table if not exists public.ai_demand_forecasts (
+  id uuid primary key default gen_random_uuid(),
+  market_code text not null default 'GR',
+  topic_key text not null,
+  problem_cluster_id uuid null references public.market_problem_clusters(id) on delete set null,
+  model_name text null,
+  horizon_30 jsonb not null default '{}'::jsonb,
+  horizon_60 jsonb not null default '{}'::jsonb,
+  horizon_90 jsonb not null default '{}'::jsonb,
+  expected_peak jsonb not null default '{}'::jsonb,
+  drivers jsonb not null default '[]'::jsonb,
+  risks jsonb not null default '[]'::jsonb,
+  confidence numeric null,
+  evidence_ids uuid[] not null default '{}'::uuid[],
+  raw_output jsonb not null default '{}'::jsonb,
+  forecasted_at timestamptz not null default now()
+);
+
 create table if not exists public.ai_product_evaluations (
   id uuid primary key default gen_random_uuid(),
   product_candidate_id uuid not null references public.ai_product_candidates(id) on delete cascade,
@@ -116,6 +134,8 @@ create index if not exists ai_demand_signals_topic_idx
   on public.ai_demand_signals(market_code, topic_key, observed_at desc);
 create index if not exists ai_demand_signals_source_idx
   on public.ai_demand_signals(source_family, source_name, observed_at desc);
+create index if not exists ai_demand_forecasts_topic_idx
+  on public.ai_demand_forecasts(market_code, topic_key, forecasted_at desc);
 create index if not exists ai_product_evaluations_product_idx
   on public.ai_product_evaluations(product_candidate_id, evaluated_at desc);
 
@@ -155,12 +175,14 @@ alter table public.ai_product_candidates enable row level security;
 alter table public.ai_product_offers enable row level security;
 alter table public.ai_demand_signals enable row level security;
 alter table public.ai_product_evaluations enable row level security;
+alter table public.ai_demand_forecasts enable row level security;
 
 revoke all on public.ai_source_queries from anon, authenticated;
 revoke all on public.ai_product_candidates from anon, authenticated;
 revoke all on public.ai_product_offers from anon, authenticated;
 revoke all on public.ai_demand_signals from anon, authenticated;
 revoke all on public.ai_product_evaluations from anon, authenticated;
+revoke all on public.ai_demand_forecasts from anon, authenticated;
 revoke all on public.ai_promotion_candidates_v from anon, authenticated;
 
 grant all on public.ai_source_queries to service_role;
@@ -168,4 +190,5 @@ grant all on public.ai_product_candidates to service_role;
 grant all on public.ai_product_offers to service_role;
 grant all on public.ai_demand_signals to service_role;
 grant all on public.ai_product_evaluations to service_role;
+grant all on public.ai_demand_forecasts to service_role;
 grant select on public.ai_promotion_candidates_v to service_role;
