@@ -17,6 +17,7 @@ const ALLOWED_WORKFLOWS = new Set([
   "vmoulakakis/Socialmarket/.github/workflows/agent-tool-executor.yml@refs/heads/main",
   "vmoulakakis/Socialmarket/.github/workflows/linkwise-product-discovery.yml@refs/heads/main",
   "vmoulakakis/Socialmarket/.github/workflows/linkwise-top100-commission.yml@refs/heads/main",
+  "vmoulakakis/Socialmarket/.github/workflows/direct-aliexpress-agentic.yml@refs/heads/main",
 ]);
 
 const ALLOWED_TABLES = new Set([
@@ -32,6 +33,7 @@ const ALLOWED_TABLES = new Set([
   "commerce_agent_runs","commerce_learning_calibrations","commerce_performance_events",
   "product_selection_policies","product_selection_funnel","product_selection_1000",
   "social_presentation_intelligence","social_distribution_metrics","linkwise_program_commissions",
+  "ai_source_queries","ai_product_candidates","ai_product_offers","ai_demand_signals","ai_product_evaluations","ai_promotion_candidates_v",
 ]);
 
 const ALLOWED_RPCS = new Set([
