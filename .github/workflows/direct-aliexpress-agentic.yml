@@ -1,0 +1,39 @@
+name: Direct AliExpress Agentic Sourcing
+
+on:
+  workflow_dispatch:
+    inputs:
+      query_limit:
+        description: Active AI source queries to run
+        required: false
+        default: '30'
+      pages_per_query:
+        description: AliExpress pages per query
+        required: false
+        default: '2'
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VMDB_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
+      SUPABASE_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
+      ALIEXPRESS_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/aliexpress-affiliate-gateway
+      MARKET_CODE: GR
+      SOURCE_QUERY_LIMIT: ${{ inputs.query_limit || '30' }}
+      ALIEXPRESS_PAGES_PER_QUERY: ${{ inputs.pages_per_query || '2' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - name: Direct AliExpress candidate sourcing
+        run: python workers/product_intelligence/direct_aliexpress_agentic.py
