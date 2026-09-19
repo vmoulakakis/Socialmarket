@@ -18,6 +18,7 @@ const ALLOWED_WORKFLOWS = new Set([
   "vmoulakakis/Socialmarket/.github/workflows/linkwise-product-discovery.yml@refs/heads/main",
   "vmoulakakis/Socialmarket/.github/workflows/linkwise-top100-commission.yml@refs/heads/main",
   "vmoulakakis/Socialmarket/.github/workflows/direct-aliexpress-agentic.yml@refs/heads/main",
+  "vmoulakakis/Socialmarket/.github/workflows/agentic-commerce-backend.yml@refs/heads/main",
 ]);
 
 const ALLOWED_TABLES = new Set([
