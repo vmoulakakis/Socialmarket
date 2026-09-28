@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase';
 
 const ADMIN_EMAIL = 'vmoulakakis@gmail.com';
 const SESSION_TIMEOUT_MS = 6000;
-const SIGNIN_TIMEOUT_MS = 12000;
 
 function timeoutResult(ms, value) {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
@@ -30,7 +29,7 @@ export default function AuthGate({ children }) {
     const hardStop = setTimeout(() => {
       if (!mounted) return;
       setLoading(false);
-      setMessage((old) => old || 'Ο έλεγχος session καθυστέρησε. Μπορείς να ζητήσεις νέο magic link.');
+      setMessage((old) => old || 'Ο έλεγχος σύνδεσης καθυστέρησε. Δοκίμασε ξανά.');
     }, SESSION_TIMEOUT_MS);
 
     const acceptSession = async (nextSession) => {
@@ -48,7 +47,7 @@ export default function AuthGate({ children }) {
         } catch {}
         if (mounted) {
           setSession(null);
-          setMessage('Δεν επιτρέπεται πρόσβαση σε αυτόν τον λογαριασμό.');
+          setMessage(`Ο λογαριασμός ${email || 'Google'} δεν έχει δικαίωμα πρόσβασης. Συνδέσου με ${ADMIN_EMAIL}.`);
           setLoading(false);
         }
         return;
@@ -67,7 +66,7 @@ export default function AuthGate({ children }) {
       void acceptSession(result?.data?.session ?? null);
     }).catch((error) => {
       if (!mounted) return;
-      setMessage(error?.message || 'Αποτυχία ελέγχου session.');
+      setMessage(error?.message || 'Αποτυχία ελέγχου σύνδεσης.');
       setLoading(false);
     });
 
@@ -82,8 +81,7 @@ export default function AuthGate({ children }) {
     };
   }, [publicRoute]);
 
-  async function sendMagicLink(event) {
-    event.preventDefault();
+  async function signInWithGoogle() {
     if (signingIn) return;
     setSigningIn(true);
     setMessage('');
@@ -91,30 +89,22 @@ export default function AuthGate({ children }) {
       const redirectTo = typeof window !== 'undefined'
         ? `${window.location.origin}${pathname || '/admin'}`
         : undefined;
-      const result = await Promise.race([
-        supabase.auth.signInWithOtp({
-          email: ADMIN_EMAIL,
-          options: {
-            shouldCreateUser: false,
-            emailRedirectTo: redirectTo,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          queryParams: {
+            prompt: 'select_account',
+            login_hint: ADMIN_EMAIL,
           },
-        }),
-        timeoutResult(SIGNIN_TIMEOUT_MS, { timeout: true }),
-      ]);
-      if (result?.timeout) {
-        setMessage('Η αποστολή καθυστέρησε. Έλεγξε το email σου πριν ξαναδοκιμάσεις.');
+        },
+      });
+      if (error) {
+        setMessage(error.message || 'Δεν ήταν δυνατή η έναρξη σύνδεσης Google.');
         setSigningIn(false);
-        return;
       }
-      if (result?.error) {
-        setMessage(result.error.message || 'Αποτυχία αποστολής magic link.');
-        setSigningIn(false);
-        return;
-      }
-      setMessage('Magic link στάλθηκε. Άνοιξε το email και πάτησε το link για είσοδο.');
-      setSigningIn(false);
     } catch (error) {
-      setMessage(error?.message || 'Αποτυχία αποστολής magic link.');
+      setMessage(error?.message || 'Δεν ήταν δυνατή η έναρξη σύνδεσης Google.');
       setSigningIn(false);
     }
   }
@@ -138,13 +128,15 @@ export default function AuthGate({ children }) {
       <div className="auth-card">
         <div className="eyebrow">Private Admin</div>
         <h1>SocialMarket AI</h1>
-        <p className="sub">Passwordless admin access με ασφαλές Supabase Magic Link.</p>
-        <form onSubmit={sendMagicLink} className="auth-form">
-          <input className="search" type="email" value={ADMIN_EMAIL} readOnly autoComplete="username" aria-label="Admin email" />
-          <button className="button" type="submit" disabled={signingIn}>{signingIn ? 'Sending…' : 'Send magic link'}</button>
-          <button className="link-button" type="button" onClick={()=>window.location.reload()}>Retry session</button>
-        </form>
-        {message && <p className="muted">{message}</p>}
+        <p className="sub">Σύνδεση διαχειριστή με Google.</p>
+        <div className="auth-form">
+          <button className="button" type="button" onClick={signInWithGoogle} disabled={signingIn}>
+            {signingIn ? 'Μετάβαση στη Google…' : 'Σύνδεση με Google'}
+          </button>
+          <p className="muted">Επιτρεπόμενος λογαριασμός: <strong>{ADMIN_EMAIL}</strong>. Άλλοι λογαριασμοί Google αποσυνδέονται αυτόματα.</p>
+          <button className="link-button" type="button" onClick={() => window.location.reload()}>Δοκίμασε ξανά</button>
+        </div>
+        {message && <p className="muted" role="alert">{message}</p>}
       </div>
     </main>;
   }
