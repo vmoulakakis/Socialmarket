@@ -17,6 +17,7 @@ export default function AuthGate({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [password, setPassword] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
@@ -47,13 +48,14 @@ export default function AuthGate({ children }) {
         } catch {}
         if (mounted) {
           setSession(null);
-          setMessage(`Ο λογαριασμός ${email || 'Google'} δεν έχει δικαίωμα πρόσβασης. Συνδέσου με ${ADMIN_EMAIL}.`);
+          setMessage(`Ο λογαριασμός ${email || 'που επιλέχθηκε'} δεν έχει δικαίωμα πρόσβασης. Συνδέσου με ${ADMIN_EMAIL}.`);
           setLoading(false);
         }
         return;
       }
 
       setSession(nextSession);
+      setPassword('');
       setMessage('');
       setLoading(false);
     };
@@ -81,30 +83,25 @@ export default function AuthGate({ children }) {
     };
   }, [publicRoute]);
 
-  async function signInWithGoogle() {
+  async function signIn(event) {
+    event.preventDefault();
     if (signingIn) return;
     setSigningIn(true);
     setMessage('');
     try {
-      const redirectTo = typeof window !== 'undefined'
-        ? `${window.location.origin}${pathname || '/admin'}`
-        : undefined;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo,
-          queryParams: {
-            prompt: 'select_account',
-            login_hint: ADMIN_EMAIL,
-          },
-        },
+      const { error } = await supabase.auth.signInWithPassword({
+        email: ADMIN_EMAIL,
+        password,
       });
       if (error) {
-        setMessage(error.message || 'Δεν ήταν δυνατή η έναρξη σύνδεσης Google.');
+        setMessage('Δεν ήταν δυνατή η σύνδεση. Έλεγξε τον κωδικό ή βεβαιώσου ότι έχει οριστεί κωδικός για αυτόν τον λογαριασμό στο Supabase.');
         setSigningIn(false);
+        return;
       }
-    } catch (error) {
-      setMessage(error?.message || 'Δεν ήταν δυνατή η έναρξη σύνδεσης Google.');
+      setPassword('');
+      setSigningIn(false);
+    } catch {
+      setMessage('Παρουσιάστηκε σφάλμα σύνδεσης. Δοκίμασε ξανά.');
       setSigningIn(false);
     }
   }
@@ -114,6 +111,7 @@ export default function AuthGate({ children }) {
       await Promise.race([supabase.auth.signOut(), timeoutResult(5000, null)]);
     } finally {
       setSession(null);
+      setPassword('');
     }
   }
 
@@ -128,14 +126,25 @@ export default function AuthGate({ children }) {
       <div className="auth-card">
         <div className="eyebrow">Private Admin</div>
         <h1>SocialMarket AI</h1>
-        <p className="sub">Σύνδεση διαχειριστή με Google.</p>
-        <div className="auth-form">
-          <button className="button" type="button" onClick={signInWithGoogle} disabled={signingIn}>
-            {signingIn ? 'Μετάβαση στη Google…' : 'Σύνδεση με Google'}
+        <p className="sub">Σύνδεση διαχειριστή με email και κωδικό.</p>
+        <form onSubmit={signIn} className="auth-form">
+          <input className="search" type="email" value={ADMIN_EMAIL} readOnly autoComplete="username" aria-label="Email διαχειριστή" />
+          <input
+            className="search"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Κωδικός πρόσβασης"
+            autoComplete="current-password"
+            required
+            aria-label="Κωδικός πρόσβασης"
+          />
+          <button className="button" type="submit" disabled={signingIn || !password}>
+            {signingIn ? 'Σύνδεση…' : 'Σύνδεση'}
           </button>
-          <p className="muted">Επιτρεπόμενος λογαριασμός: <strong>{ADMIN_EMAIL}</strong>. Άλλοι λογαριασμοί Google αποσυνδέονται αυτόματα.</p>
+          <p className="muted">Επιτρέπεται μόνο ο λογαριασμός <strong>{ADMIN_EMAIL}</strong>.</p>
           <button className="link-button" type="button" onClick={() => window.location.reload()}>Δοκίμασε ξανά</button>
-        </div>
+        </form>
         {message && <p className="muted" role="alert">{message}</p>}
       </div>
     </main>;
