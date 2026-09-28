@@ -128,8 +128,15 @@ export default function AuthGate({ children }) {
         ? `${window.location.origin}${pathname || '/admin'}?resetPassword=1`
         : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(ADMIN_EMAIL, { redirectTo });
+      const rateLimited = error && (
+        error.status === 429
+        || error.code === 'over_email_send_rate_limit'
+        || /rate limit|too many requests/i.test(error.message || '')
+      );
       setMessage(error
-        ? 'Δεν στάλθηκε email επαναφοράς. Έλεγξε τις ρυθμίσεις Supabase Auth.'
+        ? rateLimited
+          ? 'Το όριο αποστολής email επαναφοράς του Supabase έφτασε τα 2 email/ώρα. Περίμενε περίπου μία ώρα από την τελευταία αποστολή και δοκίμασε μία φορά.'
+          : 'Δεν στάλθηκε email επαναφοράς. Έλεγξε τη ρύθμιση αποστολής email του Supabase.'
         : `Στάλθηκε σύνδεσμος επαναφοράς στο ${ADMIN_EMAIL}. Άνοιξέ τον και όρισε νέο κωδικό.`);
     } catch {
       setMessage('Δεν στάλθηκε email επαναφοράς. Δοκίμασε ξανά.');
