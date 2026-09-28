@@ -18,7 +18,9 @@ export default function AuthGate({ children }) {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [password, setPassword] = useState('');
-  const [signingIn, setSigningIn] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [recoveryFlow, setRecoveryFlow] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (publicRoute) {
@@ -27,6 +29,16 @@ export default function AuthGate({ children }) {
     }
 
     let mounted = true;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const hashParams = new URLSearchParams(url.hash.slice(1));
+      if (url.searchParams.get('resetPassword') === '1' || hashParams.get('type') === 'recovery') {
+        setRecoveryFlow(true);
+      }
+      const authError = hashParams.get('error_description');
+      if (authError) setMessage('Ο σύνδεσμος επαναφοράς δεν είναι έγκυρος ή έχει λήξει. Ζήτησε νέο σύνδεσμο.');
+    }
+
     const hardStop = setTimeout(() => {
       if (!mounted) return;
       setLoading(false);
@@ -72,7 +84,8 @@ export default function AuthGate({ children }) {
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'PASSWORD_RECOVERY') setRecoveryFlow(true);
       void acceptSession(nextSession ?? null);
     });
 
@@ -85,8 +98,8 @@ export default function AuthGate({ children }) {
 
   async function signIn(event) {
     event.preventDefault();
-    if (signingIn) return;
-    setSigningIn(true);
+    if (busy) return;
+    setBusy(true);
     setMessage('');
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -94,15 +107,63 @@ export default function AuthGate({ children }) {
         password,
       });
       if (error) {
-        setMessage('Δεν ήταν δυνατή η σύνδεση. Έλεγξε τον κωδικό ή βεβαιώσου ότι έχει οριστεί κωδικός για αυτόν τον λογαριασμό στο Supabase.');
-        setSigningIn(false);
+        setMessage('Δεν ήταν δυνατή η σύνδεση. Έλεγξε τον κωδικό ή χρησιμοποίησε την επαναφορά κωδικού.');
+        setBusy(false);
         return;
       }
       setPassword('');
-      setSigningIn(false);
+      setBusy(false);
     } catch {
       setMessage('Παρουσιάστηκε σφάλμα σύνδεσης. Δοκίμασε ξανά.');
-      setSigningIn(false);
+      setBusy(false);
+    }
+  }
+
+  async function sendPasswordReset() {
+    if (busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const redirectTo = typeof window !== 'undefined'
+        ? `${window.location.origin}${pathname || '/admin'}?resetPassword=1`
+        : undefined;
+      const { error } = await supabase.auth.resetPasswordForEmail(ADMIN_EMAIL, { redirectTo });
+      setMessage(error
+        ? 'Δεν στάλθηκε email επαναφοράς. Έλεγξε τις ρυθμίσεις Supabase Auth.'
+        : `Στάλθηκε σύνδεσμος επαναφοράς στο ${ADMIN_EMAIL}. Άνοιξέ τον και όρισε νέο κωδικό.`);
+    } catch {
+      setMessage('Δεν στάλθηκε email επαναφοράς. Δοκίμασε ξανά.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updatePassword(event) {
+    event.preventDefault();
+    if (busy) return;
+    if (newPassword.length < 8) {
+      setMessage('Ο νέος κωδικός πρέπει να έχει τουλάχιστον 8 χαρακτήρες.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setMessage('Δεν έγινε αλλαγή κωδικού. Ο σύνδεσμος επαναφοράς μπορεί να έχει λήξει· ζήτησε νέο.');
+        setBusy(false);
+        return;
+      }
+      setNewPassword('');
+      setRecoveryFlow(false);
+      setMessage('Ο νέος κωδικός αποθηκεύτηκε. Έχεις συνδεθεί.');
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', pathname || '/admin');
+      }
+      setBusy(false);
+    } catch {
+      setMessage('Παρουσιάστηκε σφάλμα. Ζήτησε νέο σύνδεσμο επαναφοράς.');
+      setBusy(false);
     }
   }
 
@@ -112,6 +173,7 @@ export default function AuthGate({ children }) {
     } finally {
       setSession(null);
       setPassword('');
+      setNewPassword('');
     }
   }
 
@@ -119,6 +181,33 @@ export default function AuthGate({ children }) {
 
   if (loading) {
     return <div className="auth-card"><div className="eyebrow">Private Admin</div><h2>Έλεγχος πρόσβασης…</h2></div>;
+  }
+
+  if (recoveryFlow && session) {
+    return <main className="auth-wrap">
+      <div className="auth-card">
+        <div className="eyebrow">Password recovery</div>
+        <h1>Όρισε νέο κωδικό</h1>
+        <p className="sub">Ο σύνδεσμος επαλήθευσε τον λογαριασμό {ADMIN_EMAIL}. Διάλεξε έναν νέο κωδικό τουλάχιστον 8 χαρακτήρων.</p>
+        <form onSubmit={updatePassword} className="auth-form">
+          <input
+            className="search"
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            placeholder="Νέος κωδικός"
+            autoComplete="new-password"
+            minLength={8}
+            required
+            aria-label="Νέος κωδικός"
+          />
+          <button className="button" type="submit" disabled={busy || newPassword.length < 8}>
+            {busy ? 'Αποθήκευση…' : 'Αποθήκευση νέου κωδικού'}
+          </button>
+        </form>
+        {message && <p className="muted" role="alert">{message}</p>}
+      </div>
+    </main>;
   }
 
   if (!session) {
@@ -139,11 +228,13 @@ export default function AuthGate({ children }) {
             required
             aria-label="Κωδικός πρόσβασης"
           />
-          <button className="button" type="submit" disabled={signingIn || !password}>
-            {signingIn ? 'Σύνδεση…' : 'Σύνδεση'}
+          <button className="button" type="submit" disabled={busy || !password}>
+            {busy ? 'Σύνδεση…' : 'Σύνδεση'}
+          </button>
+          <button className="link-button" type="button" onClick={sendPasswordReset} disabled={busy}>
+            {busy ? 'Περίμενε…' : 'Ξέχασα τον κωδικό'}
           </button>
           <p className="muted">Επιτρέπεται μόνο ο λογαριασμός <strong>{ADMIN_EMAIL}</strong>.</p>
-          <button className="link-button" type="button" onClick={() => window.location.reload()}>Δοκίμασε ξανά</button>
         </form>
         {message && <p className="muted" role="alert">{message}</p>}
       </div>
