@@ -1,0 +1,119 @@
+name: AliExpress Gap Solver V2
+
+on:
+  workflow_dispatch:
+    inputs:
+      live_run:
+        description: Write evidence, source AliExpress and persist decisions
+        type: boolean
+        required: true
+        default: false
+      stage:
+        description: Pipeline stage (dry runs always assess only)
+        type: choice
+        required: true
+        default: all
+        options:
+          - assess
+          - source
+          - evaluate
+          - all
+      harvest_evidence:
+        description: Refresh deep-demand evidence before assess/all
+        type: boolean
+        required: true
+        default: true
+      run_id:
+        description: Existing V2 run UUID for source/evaluate
+        required: false
+        default: ''
+      topic_limit:
+        description: Maximum Greek problem clusters
+        required: false
+        default: '8'
+      query_limit:
+        description: Maximum validated AliExpress query plans
+        required: false
+        default: '32'
+      pages_per_query:
+        description: Pages per relevance/volume retrieval mode
+        required: false
+        default: '2'
+      candidate_limit:
+        description: Maximum problem-product pairs to evaluate
+        required: false
+        default: '500'
+
+permissions:
+  contents: read
+  id-token: write
+  models: read
+
+jobs:
+  validate-and-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      VMDB_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
+      SUPABASE_WORKER_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway
+      ALIEXPRESS_GATEWAY: https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/aliexpress-affiliate-gateway
+      SEARXNG_BASE_URL: http://127.0.0.1:8080
+      MARKET_CODE: GR
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bounded runtime dependencies
+        run: python -m pip install requests==2.34.2
+
+      - name: Verify deterministic gates and collector safety
+        run: |
+          PYTHONPATH=workers/agentic_backend python -m unittest -v workers/agentic_backend/test_gap_solver_scoring.py
+          PYTHONPATH=workers/demand_intelligence python -m unittest -v workers/demand_intelligence/test_deep_demand_gap_harvester_v2.py
+
+      - name: Start local SearXNG for approved live evidence harvest
+        if: ${{ inputs.live_run && inputs.harvest_evidence && (inputs.stage == 'assess' || inputs.stage == 'all') }}
+        run: |
+          docker run -d --name searxng -p 8080:8080 searxng/searxng:2026.9.5-c7f3080aa
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Harvest claim-level demand and gap evidence
+        if: ${{ inputs.live_run && inputs.harvest_evidence && (inputs.stage == 'assess' || inputs.stage == 'all') }}
+        run: |
+          python workers/demand_intelligence/deep_demand_gap_harvester_v2.py \
+            --topics "${{ inputs.topic_limit }}" \
+            --model-calls 4
+
+      - name: Run AliExpress-only gap solver
+        shell: bash
+        run: |
+          gap_mode="dry_run"
+          gap_stage="assess"
+          if [[ "${{ inputs.live_run }}" == "true" ]]; then
+            gap_mode="live"
+            gap_stage="${{ inputs.stage }}"
+          fi
+
+          gap_args=(
+            --mode "$gap_mode"
+            --stage "$gap_stage"
+            --topics "${{ inputs.topic_limit }}"
+            --query-limit "${{ inputs.query_limit }}"
+            --pages "${{ inputs.pages_per_query }}"
+            --candidate-limit "${{ inputs.candidate_limit }}"
+            --planner-calls 4
+          )
+          if [[ -n "${{ inputs.run_id }}" ]]; then
+            gap_args+=(--run-id "${{ inputs.run_id }}")
+          fi
+          python workers/agentic_backend/aliexpress_gap_solver_v2.py "${gap_args[@]}"

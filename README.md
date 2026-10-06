@@ -110,6 +110,13 @@ This separation prevents the Next build from incorrectly compiling Deno `npm:` /
 | [AI Greece Travel](https://github.com/vmoulakakis/travel_ai) | destination-first vertical decision intelligence |
 | [SocialScheduler](https://github.com/vmoulakakis/socialscheduler) | safety-first autonomous execution plane |
 
+## AliExpress problem-solver backend
+
+The additive [AliExpress Gap Solver V2](docs/ALIEXPRESS_GAP_SOLVER_V2.md)
+validates Greek demand and solution gaps before direct AliExpress sourcing. It
+keeps Linkwise outside this path and separates organic, paid-test and B2B
+decisions with deterministic evidence and unit-economics gates.
+
 ## Development
 
 ```bash

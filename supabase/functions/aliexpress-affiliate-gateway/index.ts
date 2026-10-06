@@ -116,7 +116,7 @@ Deno.serve(async req=>{
   if(req.method==='GET')return json({
     ok:true,
     service:'aliexpress-affiliate-gateway',
-    version:'3.0-direct',
+    version:'3.1-gap-solver-ready',
     direct:true,
     configured:Boolean(APP_KEY&&APP_SECRET),
     tracking_configured:Boolean(TRACKING_ID),
@@ -136,7 +136,10 @@ Deno.serve(async req=>{
         keywords,
         page_no:Number(b.page||1),
         page_size:Math.min(50,Number(b.page_size||20)),
-        sort:action==='hotproducts'?'LAST_VOLUME_DESC':String(b.sort||'LAST_VOLUME_DESC'),
+        // Omitting sort lets the AliExpress product query use its native
+        // relevance order. Callers can request LAST_VOLUME_DESC explicitly
+        // for an independent popularity retrieval pass.
+        sort:action==='hotproducts'?'LAST_VOLUME_DESC':(b.sort?String(b.sort):undefined),
         target_currency:String(b.currency||'EUR'),
         target_language:String(b.language||'EN'),
         tracking_id:TRACKING_ID||undefined,
