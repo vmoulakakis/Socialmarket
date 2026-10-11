@@ -1,0 +1,78 @@
+{
+  "version": "1.0",
+  "principles": [
+    "prefer_connected_tools",
+    "least_privilege",
+    "verify_after_write",
+    "cost_first",
+    "no_secret_in_prompt"
+  ],
+  "capabilities": [
+    {
+      "id": "web.search",
+      "mode": "read",
+      "default": "native",
+      "approval": "none"
+    },
+    {
+      "id": "browser.interactive",
+      "mode": "read_write",
+      "default": "work_cloud_browser",
+      "approval": "risk_based"
+    },
+    {
+      "id": "github.repo",
+      "mode": "read_write",
+      "default": "connected_github",
+      "approval": "material_writes"
+    },
+    {
+      "id": "vercel.deploy",
+      "mode": "write",
+      "default": "connected_vercel",
+      "approval": "production"
+    },
+    {
+      "id": "supabase.data",
+      "mode": "read_write",
+      "default": "connected_supabase",
+      "approval": "schema_or_destructive"
+    },
+    {
+      "id": "gmail",
+      "mode": "read_write",
+      "default": "connected_gmail",
+      "approval": "send"
+    },
+    {
+      "id": "drive",
+      "mode": "read_write",
+      "default": "connected_google_drive",
+      "approval": "share_or_overwrite"
+    },
+    {
+      "id": "image.generate",
+      "mode": "write",
+      "default": "native_image_generation",
+      "approval": "none"
+    },
+    {
+      "id": "seo.audit",
+      "mode": "read",
+      "default": "seo_black_belt_plus_connected_sources",
+      "approval": "none"
+    },
+    {
+      "id": "diagram.generate",
+      "mode": "write",
+      "default": "html_svg",
+      "approval": "none"
+    },
+    {
+      "id": "llm.inference",
+      "mode": "compute",
+      "default": "byok_server_side_router",
+      "approval": "budget_policy"
+    }
+  ]
+}
