@@ -22,7 +22,7 @@ const groups=[
  ]},
  {label:'System',items:[
   {href:'/admin',label:'Admin Control',code:'AD'},
-  {href:'/configuration',label:'Legacy Product Config',code:'CF'},
+  {href:'/configuration',label:'Product Policies',code:'CF'},
  ]},
 ];
 
@@ -51,12 +51,12 @@ export default function AppShell({children}){
    <nav className="smNav">
     {groups.map(group=><section key={group.label} className="smNavGroup"><small>{group.label}</small>{group.items.map(item=><Link key={item.href} href={item.href} className={activePath(pathname,item.href)?'active':''} title={collapsed?item.label:undefined}><span className="smNavCode">{item.code}</span><b>{item.label}</b></Link>)}</section>)}
    </nav>
-   <div className="smSideFoot"><span className="smLiveDot"/> <div><b>Production</b><small>Semantic agents · live executor</small></div></div>
+   <div className="smSideFoot"><span className="smLiveDot"/> <div><b>Production</b><small>Canonical data · pipeline status</small></div></div>
   </aside>
   <div className="smMain">
    <header className="smContextBar">
     <div className="smBreadcrumb"><span>SocialMarket</span><i>/</i><b>{context}</b><i>/</i><em>Greece</em></div>
-    <div className="smContextMeta"><a href="/marketplace" target="_blank" rel="noreferrer">Public SocialMarket ↗</a><span className="smStatusChip"><i/>LIVE</span><span>Social Curation Engine</span></div>
+    <div className="smContextMeta"><a href="/marketplace" target="_blank" rel="noreferrer">Public SocialMarket ↗</a><span className="smStatusChip"><i/>VMDB</span><span>Social Curation Engine</span></div>
    </header>
    <div className="smContent">{children}</div>
   </div>

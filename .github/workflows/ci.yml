@@ -20,11 +20,13 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: npm install
+      - run: npm ci
       - name: Install product worker test dependencies
         run: pip install -r workers/product_intelligence/requirements.txt
       - run: npm run test:design-v2
       - run: npm run test:demand-v3
+      - name: Validate canonical workspace wiring
+        run: node scripts/test-workspace.mjs
       - name: Validate Autonomous Commerce OS contracts
         run: npm run test:orchestrator
       - name: Compile intelligence workers
@@ -47,6 +49,7 @@ jobs:
         run: |
           deno check --node-modules-dir=auto supabase/functions/marketplace200-agent-gateway/index.ts
           deno check --node-modules-dir=auto supabase/functions/marketplace200-ai-gateway/index.ts
+          deno check --node-modules-dir=auto supabase/functions/socialmarket-ai/index.ts
           deno check --node-modules-dir=auto supabase/functions/marketplace-social-funnel-gateway/index.ts
           deno check --node-modules-dir=auto supabase/functions/aliexpress-affiliate-gateway/index.ts
       - run: npm run build

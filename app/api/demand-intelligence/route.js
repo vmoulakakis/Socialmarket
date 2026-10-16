@@ -2,24 +2,26 @@ import {NextResponse} from 'next/server';
 import {APPROVED_PUBLISHABLE_KEY,APPROVED_SUPABASE_URL} from '@/lib/supabase-config';
 import config from '@/config/demand-intelligence-v3.json';
 import {deriveDemandV3} from '@/lib/demand-v3';
-
 export const dynamic='force-dynamic';
-
-function authHeader(req){const auth=req.headers.get('authorization')||'';return auth.startsWith('Bearer ')?auth:null}
-async function parse(upstream){const text=await upstream.text();try{return text?JSON.parse(text):null}catch{return {error:text||`upstream_${upstream.status}`}}}
-
+export const maxDuration=60;
 export async function POST(req){
- const authorization=authHeader(req);if(!authorization)return NextResponse.json({error:'admin_session_required'},{status:401});
+ const authorization=req.headers.get('authorization')||'';
+ if(!authorization.startsWith('Bearer '))return NextResponse.json({error:'admin_session_required'},{status:401});
+ let body;try{body=await req.json();}catch{return NextResponse.json({error:'invalid_json'},{status:400});}
+ if(!body||!/^\w{8}-\w{4}-\w{4}-\w{4}-\w{12}$/.test(body.taxonomy_id||''))return NextResponse.json({error:'valid_taxonomy_id_required'},{status:400});
  try{
-  const body=await req.json(),taxonomyId=String(body.taxonomy_id||'');
-  if(!taxonomyId)return NextResponse.json({error:'taxonomy_id_required'},{status:400});
-  const contextRes=await fetch(`${APPROVED_SUPABASE_URL}/rest/v1/rpc/admin_demand_deep_context`,{method:'POST',headers:{apikey:APPROVED_PUBLISHABLE_KEY,authorization,'content-type':'application/json',accept:'application/json'},body:JSON.stringify({p_taxonomy_id:taxonomyId,p_query:body.query||null,p_limit:Math.max(10,Math.min(Number(body.limit||config.retrieval.max_evidence||50),120))}),cache:'no-store'});
-  const context=await parse(contextRes);if(!contextRes.ok||context?.error)return NextResponse.json({error:context?.error||`context_${contextRes.status}`,detail:context?.message||context?.detail||null},{status:contextRes.status||502});
-  const deterministic=deriveDemandV3(context,config);
-  if(body.action==='context')return NextResponse.json({ok:true,context,deterministic,config_version:config.version},{headers:{'cache-control':'no-store'}});
-  const aiRes=await fetch(`${APPROVED_SUPABASE_URL}/functions/v1/demand-intelligence-gateway`,{method:'POST',headers:{apikey:APPROVED_PUBLISHABLE_KEY,authorization,'content-type':'application/json',accept:'application/json'},body:JSON.stringify({context,deterministic}),cache:'no-store'});
-  const ai=await parse(aiRes);
-  if(!aiRes.ok||ai?.error)return NextResponse.json({ok:true,context,deterministic,analysis:null,ai_error:ai?.error||`ai_${aiRes.status}`,ai_detail:ai?.detail||null,config_version:config.version},{headers:{'cache-control':'no-store'}});
-  return NextResponse.json({ok:true,context,deterministic,analysis:ai.analysis||null,run_id:ai.run_id||null,model:ai.model||null,usage:ai.usage||null,persist_warning:ai.persist_warning||null,config_version:config.version},{headers:{'cache-control':'no-store'}});
- }catch(error){return NextResponse.json({error:'demand_intelligence_upstream_unreachable',detail:String(error?.message||error)},{status:502})}
+  const upstream=await fetch(`${APPROVED_SUPABASE_URL}/rest/v1/rpc/socialmarket_workspace`,{method:'POST',headers:{apikey:APPROVED_PUBLISHABLE_KEY,authorization,'content-type':'application/json'},body:JSON.stringify({p_section:'demand-context',p_id:body.taxonomy_id,p_limit:90}),cache:'no-store',signal:AbortSignal.timeout(15000)});
+  const payload=await upstream.json();
+  if(!upstream.ok)return NextResponse.json(payload,{status:upstream.status});
+  const context=payload.context;
+  if(!context?.market)return NextResponse.json({error:'problem_cluster_not_found'},{status:404});
+  let analysis=null,ai_error=null,model=null;
+  if(body.action!=='context'){
+   const aiRes=await fetch(`${APPROVED_SUPABASE_URL}/functions/v1/socialmarket-ai`,{method:'POST',headers:{apikey:APPROVED_PUBLISHABLE_KEY,authorization,'content-type':'application/json'},body:JSON.stringify({task:'demand',taxonomy_id:body.taxonomy_id,max_tokens:1200}),signal:AbortSignal.timeout(30000)});
+   const ai=await aiRes.json();
+   if(aiRes.ok){try{analysis=JSON.parse(ai.content);model=ai.model;}catch{ai_error='invalid_ai_response';}}
+   else ai_error=ai.detail||ai.error||'canonical_ai_unavailable';
+  }
+  return NextResponse.json({ok:true,context,deterministic:deriveDemandV3(context,config),analysis,ai_error,model,config_version:config.version},{headers:{'cache-control':'no-store'}});
+ }catch{return NextResponse.json({error:'demand_intelligence_upstream_unreachable'},{status:502});}
 }

@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useState} from 'react';
-import {supabase} from '@/lib/supabase';
+import {workspace} from '@/lib/workspace-client';
 
 const score=v=>v==null?'—':Number(v).toFixed(1);
 const confidence=v=>v==null?'—':`${Math.round(Number(v)<=1?Number(v)*100:Number(v))}%`;
@@ -8,10 +8,8 @@ const confidence=v=>v==null?'—':`${Math.round(Number(v)<=1?Number(v)*100:Numbe
 export default function Niches(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
  useEffect(()=>{(async()=>{
-   const {data,error}=await supabase.from('category_market_dashboard')
-     .select('id,taxonomy_id,category_name,subcategory_name,taxonomy_name,node_type,observed_at,demand_score,competition_score,pain_gap_score,satisfaction_score,opportunity_score,confidence,validated_pain_clusters,methodology_version')
-     .order('opportunity_score',{ascending:false,nullsFirst:false}).limit(500);
-   setRows(data||[]);setError(error?.message||'');setLoading(false);
+   try{const payload=await workspace('problems');setRows(payload.rows||[]);setError('');}catch(e){setError(e.message);}finally{setLoading(false);}
+
  })()},[]);
  return <main>
    <div className="hero"><div><div className="eyebrow">Semantic Category Market</div><h1>Market & Pain Intelligence</h1><p className="sub">Greek taxonomy-level demand, competition, pain-gap and opportunity signals. Forecasts are not shown as facts when the temporal model is withheld.</p></div></div>

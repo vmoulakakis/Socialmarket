@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useState} from 'react';
-import {supabase} from '@/lib/supabase';
+import {workspace} from '@/lib/workspace-client';
 
 const score=v=>v==null?'—':Number(v).toFixed(1);
 const confidence=v=>v==null?'—':`${Math.round(Number(v)<=1?Number(v)*100:Number(v))}%`;
@@ -8,10 +8,8 @@ const confidence=v=>v==null?'—':`${Math.round(Number(v)<=1?Number(v)*100:Numbe
 export default function Merchants(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
  useEffect(()=>{(async()=>{
-   const {data,error}=await supabase.from('merchant_dashboard')
-     .select('merchant_id,canonical_name,official_domain,primary_category,peer_group,trust_score,overall_opportunity_score,competition_intensity_score,greek_market_fit_score,deep_research_score,research_confidence,risk_flag,risk_reason,evidence_count,researched_at,global_rank,score_stage')
-     .order('global_rank',{ascending:true,nullsFirst:false}).limit(309);
-   setRows(data||[]);setError(error?.message||'');setLoading(false);
+   try{const payload=await workspace('merchants');setRows(payload.rows||[]);setError('');}catch(e){setError(e.message);}finally{setLoading(false);}
+
  })()},[]);
  return <main>
    <div className="hero"><div><div className="eyebrow">Evidence-first merchant selection</div><h1>Merchant Intelligence</h1><p className="sub">Canonical merchant research, trust, Greek-market fit, competition and opportunity. Missing metrics stay unknown instead of becoming fake zeros.</p></div></div>

@@ -45,19 +45,18 @@ export default function AuthGate({ children }) {
       setMessage((old) => old || 'Ο έλεγχος σύνδεσης καθυστέρησε. Δοκίμασε ξανά.');
     }, SESSION_TIMEOUT_MS);
 
-    const acceptSession = async (nextSession) => {
+    const acceptSession = (nextSession) => {
       if (!mounted) return;
       if (!nextSession) {
         setSession(null);
         setLoading(false);
+        clearTimeout(hardStop);
         return;
       }
 
       const email = String(nextSession.user?.email || '').toLowerCase();
       if (email !== ADMIN_EMAIL) {
-        try {
-          await Promise.race([supabase.auth.signOut({ scope: 'local' }), timeoutResult(3000, null)]);
-        } catch {}
+        setTimeout(() => { void supabase.auth.signOut({ scope: 'local' }).catch(() => {}); }, 0);
         if (mounted) {
           setSession(null);
           setMessage(`Ο λογαριασμός ${email || 'που επιλέχθηκε'} δεν έχει δικαίωμα πρόσβασης. Συνδέσου με ${ADMIN_EMAIL}.`);
@@ -70,6 +69,7 @@ export default function AuthGate({ children }) {
       setPassword('');
       setMessage('');
       setLoading(false);
+      clearTimeout(hardStop);
     };
 
     Promise.race([

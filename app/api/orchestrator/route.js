@@ -10,7 +10,7 @@ export const maxDuration=30;
 const MAX_PROMPT_CHARS=Number(process.env.ORCHESTRATOR_MAX_PROMPT_CHARS||6000);
 
 function staticConfig(){return {
-  databaseServiceRole:Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  databaseServiceRole:Boolean(process.env.VMDB_SUPABASE_SERVICE_ROLE_KEY || (process.env.SUPABASE_URL===APPROVED_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)),
   adminJwtSupported:true,
   llm:Boolean(process.env.DEEPSEEK_API_KEY||process.env.OPENROUTER_API_KEY),
   secretAuth:Boolean(process.env.ORCHESTRATOR_SECRET),
