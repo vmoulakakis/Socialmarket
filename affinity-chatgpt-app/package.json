@@ -1,0 +1,1 @@
+{"name":"affinity-chatgpt-app","version":"0.1.0","private":true,"type":"module","scripts":{"start":"node server.js"},"dependencies":{"@modelcontextprotocol/sdk":"latest","zod":"latest"},"engines":{"node":">=20"}}
