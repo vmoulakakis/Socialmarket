@@ -107,7 +107,7 @@ export default function AuthGate({ children }) {
         password,
       });
       if (error) {
-        setMessage('Δεν ήταν δυνατή η σύνδεση. Έλεγξε τον κωδικό ή χρησιμοποίησε την επαναφορά κωδικού.');
+        setMessage('Δεν ήταν δυνατή η σύνδεση με κωδικό. Αν δεν έχεις ορίσει password, χρησιμοποίησε τη Σύνδεση με email.');
         setBusy(false);
         return;
       }
@@ -115,6 +115,25 @@ export default function AuthGate({ children }) {
       setBusy(false);
     } catch {
       setMessage('Παρουσιάστηκε σφάλμα σύνδεσης. Δοκίμασε ξανά.');
+      setBusy(false);
+    }
+  }
+
+  async function signInWithEmail() {
+    if (busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const emailRedirectTo = `${window.location.origin}${pathname || '/'}`;
+      const {error} = await supabase.auth.signInWithOtp({email: ADMIN_EMAIL, options: {shouldCreateUser: false, emailRedirectTo}});
+      setMessage(error
+        ? error.status === 429
+          ? 'Έχει φτάσει το όριο αποστολής. Περίμενε πριν ζητήσεις νέο σύνδεσμο.'
+          : 'Δεν στάλθηκε σύνδεσμος σύνδεσης. Δοκίμασε ξανά αργότερα.'
+        : `Στάλθηκε ασφαλής σύνδεσμος στο ${ADMIN_EMAIL}. Άνοιξέ τον στον browser όπου θέλεις να χρησιμοποιήσεις το SocialMarket.`);
+    } catch {
+      setMessage('Δεν ήταν δυνατή η αποστολή συνδέσμου. Δοκίμασε ξανά.');
+    } finally {
       setBusy(false);
     }
   }
@@ -222,7 +241,9 @@ export default function AuthGate({ children }) {
       <div className="auth-card">
         <div className="eyebrow">Private Admin</div>
         <h1>SocialMarket AI</h1>
-        <p className="sub">Σύνδεση διαχειριστή με email και κωδικό.</p>
+        <p className="sub">Σύνδεση διαχειριστή με ασφαλή σύνδεσμο email ή με ήδη ορισμένο κωδικό.</p>
+        <button className="button" type="button" onClick={signInWithEmail} disabled={busy}>{busy ? 'Περίμενε…' : 'Σύνδεση με email'}</button>
+        <p className="muted">Δεν έχεις ορίσει κωδικό; Χρησιμοποίησε τον σύνδεσμο email. Αν έχεις ήδη κωδικό:</p>
         <form onSubmit={signIn} className="auth-form">
           <input className="search" type="email" value={ADMIN_EMAIL} readOnly autoComplete="username" aria-label="Email διαχειριστή" />
           <input

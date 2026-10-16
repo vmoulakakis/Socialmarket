@@ -17,7 +17,7 @@ The production UI queried legacy relations and RPCs removed during the move to V
 
 ## Validation
 
-Production build and existing design/demand/orchestrator contracts pass locally. SQL tests exercise every workspace section, disjoint pagination, empty search, invalid-section rejection, anon denial and non-admin denial. The new Edge deployment bundles successfully. Local Deno typechecking was blocked by registry network access; CI includes the check.
+Production build and existing design/demand/orchestrator contracts pass locally. HTTP smoke checks passed for all core pages and all cost-bearing private endpoints returned 401 without authentication. Production deployment dpl_7qmzsNUvcgDDo1shWb4d1ekvC8ap is READY. Browser confirmed the public catalog (100 products), Greek search (4 matches for κρεβάτι) and a real product detail. The external affiliate navigation was blocked by this browser with ERR_BLOCKED_BY_CLIENT. SQL tests exercise every workspace section, disjoint pagination, empty search, invalid-section rejection, anon denial and non-admin denial. The new Edge deployment bundles successfully. Local Deno typechecking was blocked by registry network access; CI includes the check.
 
 ## Remaining operational constraints
 
@@ -25,6 +25,6 @@ At inspection: 16 merchants, 11 assessed/ranked, 0 final eligible merchants, 41 
 
 Some legacy discovery/research workflows deliberately remain manual-only because their gateways used the deleted project. The canonical Merchant Demand Intelligence 360 workflow uses VMDB and remains weekly. Do not reactivate deleted gateways, invent approval/tracking evidence, or lower selection gates to fill the UI.
 
-A browser sign-in attempt was rejected by the site. Authenticated production UI/AI request verification therefore still requires a successful admin sign-in. No password was read or changed by the agent.
+A browser sign-in attempt was rejected by the site. Inspection confirmed that the existing verified account has no password set; an email-link sign-in path was added with account creation disabled. Authenticated production UI/AI request verification therefore still requires a successful admin sign-in. No password was read or changed by the agent.
 
 Rollback the application to commit ce46efa7ee6aa0019cfccc6186b2c939549446be if needed. The new read API is additive and does not change existing business records. Restoring the intended admin allowlist fixes the existing control-plane authorization.

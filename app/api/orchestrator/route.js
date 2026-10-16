@@ -13,6 +13,7 @@ function staticConfig(){return {
   databaseServiceRole:Boolean(process.env.VMDB_SUPABASE_SERVICE_ROLE_KEY || (process.env.SUPABASE_URL===APPROVED_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)),
   adminJwtSupported:true,
   llm:Boolean(process.env.DEEPSEEK_API_KEY||process.env.OPENROUTER_API_KEY),
+  remoteLlmGateway:true,
   secretAuth:Boolean(process.env.ORCHESTRATOR_SECRET),
   toolQueue:true,
   githubExecutor:true
@@ -37,7 +38,7 @@ export async function GET(req){
   if(!auth?.ok)return NextResponse.json({error:'authentication_required'},{status:401});
   try{const approved=(req.nextUrl.searchParams.get('approved')||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,20);const run=await resumeOrchestration({runId,approvedCapabilities:approved,accessToken:auth.accessToken});return NextResponse.json(run,{status:httpStatus(run)})}catch(e){return NextResponse.json({error:String(e)},{status:400})}
  }
- const config=staticConfig();const persistence=await persistenceHealth(auth?.accessToken||null);const supervisedReady=persistence.ok&&config.llm&&(config.secretAuth||auth?.mode==='admin-jwt');
+ const config=staticConfig();const persistence=await persistenceHealth(auth?.accessToken||null);const supervisedReady=persistence.ok&&(config.llm||config.remoteLlmGateway)&&(config.secretAuth||auth?.mode==='admin-jwt');
  return NextResponse.json({service:'SocialMarket Autonomous Commerce OS',status:supervisedReady?'supervised-agentic':'degraded',fullAutonomy:false,dependencies:{...config,persistence},limits:{maxPromptChars:MAX_PROMPT_CHARS,maxDurationSeconds:30},registry:getSiteRegistry()});
 }
 

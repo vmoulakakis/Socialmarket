@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { agentCompletion } from '@/lib/model-router';
 import {adminAuth} from '@/lib/admin-auth';
 
+export const maxDuration=60;
 export async function POST(req){
  const auth=await adminAuth(req);
  if(!auth)return NextResponse.json({error:'admin_session_required'},{status:401});
