@@ -1,0 +1,16 @@
+{
+  "as_of": "2026-10-21",
+  "source": "SocialMarket AI observed offer snapshot",
+  "signals": [
+    {
+      "id": "source-update-fotric-20261018",
+      "problem_key": "workshop_compressed_air_leaks",
+      "title": "Νεότερη καταγραφή προσφοράς για έλεγχο διαρροών αέρα",
+      "summary": "Στη βάση SocialMarket AI υπάρχει παρατήρηση της προσφοράς FOTRIC TD2e στις 18/10/2026. Η καταγραφή δεν επιβεβαιώνει σημερινή τιμή ή διαθεσιμότητα και δεν αποτελεί μέτρηση ζήτησης.",
+      "source_url": "https://www.aliexpress.com/item/1005013031603266.html?pdp_npi=6%40dis%21EUR%211006.82%21923.38%21%21%217375.98%216764.70%21%40213e040817923341145345662e0aab%2112000060123886011%21affd%21%21%21%211%210%21",
+      "observed_at": "2026-10-18T14:35:16.112033Z",
+      "expires_at": "2026-10-25T14:35:16.112033Z",
+      "signal_type": "source_update"
+    }
+  ]
+}
