@@ -1,0 +1,2 @@
+# Specification CHG-CARCARE-20261028
+Separate Next.js app apps/carcare, RLS-protected public carcare tables in shared vmdb project, server-side API reads, explicit monetization feature flag default OFF. Matching by width/profile/rim/season, max price, prioritization, 3 finalists. Affiliate redirects only to allowlisted Awin host and only for eligible offers. Secure secret-bearing feed import is deferred until authorized credentials/merchants.

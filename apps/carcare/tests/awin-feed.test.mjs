@@ -1,0 +1,6 @@
+import test from "node:test";import assert from "node:assert/strict";
+import {parseCsv,parseTire,prepareOffer} from "../lib/awin-feed.mjs";
+test("CSV handles multiline and quoted values",()=>{const rows=parseCsv('product_name,description,search_price\n"205/55 R16 summer","a,b\nc",100.00\n');assert.equal(rows[0].description,"a,b\nc");assert.equal(rows.length,1);});
+test("tire size parser",()=>assert.deepEqual(parseTire({product_name:"205/55 R16 summer tyre"}),{tire_width:205,tire_profile:55,rim_diameter:16}));
+test("no publish before approval",()=>{const row={product_name:"205/55 R16 summer",aw_product_id:"a",search_price:"200",aw_deep_link:"https://www.awin1.com/cread.php?x=1",in_stock:"true"};const o=prepareOffer(row,{advertiser_id:9837,membership_status:"notjoined",commission_rate:.1,publish_allowed:false});assert.equal(o.is_published,false);assert.equal(o.expected_commission_eur,20);});
+test("missing commission is unknown",()=>{const o=prepareOffer({product_name:"205/55 R16 summer",aw_product_id:"b",search_price:"220"},{advertiser_id:9837,membership_status:"joined",commission_rate:null,publish_allowed:true});assert.equal(o.expected_commission_eur,null);assert.equal(o.is_published,false);});
