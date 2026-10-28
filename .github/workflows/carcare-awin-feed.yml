@@ -1,0 +1,34 @@
+name: CarCare guarded Awin feed import
+on:
+  workflow_dispatch:
+    inputs:
+      advertiser_id:
+        description: Awin advertiser ID already stored in carcare_programmes
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: carcare-import-review
+    defaults:
+      run:
+        working-directory: apps/carcare
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9aaf683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Import authorized Awin feed as unpublished draft
+        run: node scripts/import-awin-feed.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.CARCARE_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.CARCARE_SUPABASE_SECRET_KEY }}
+          AWIN_DATAFEED_URL: ${{ secrets.CARCARE_AWIN_DATAFEED_URL }}
+          AWIN_ADVERTISER_ID: ${{ inputs.advertiser_id }}
+          CARCARE_PUBLISH_APPROVED: 'false'
