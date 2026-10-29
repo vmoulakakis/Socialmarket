@@ -1,8 +1,8 @@
 {
   "project": "Awin Publisher Autopilot",
   "publisherId": 3060863,
-  "checkedAt": "2026-10-28",
-  "source": "Verified Awin MCP: awin_list_programmes + awin_get_programme_details",
+  "checkedAt": "2026-10-29",
+  "source": "Verified Awin MCP: list_accounts, awin_list_programmes(joined,pending,rejected,suspended), awin_get_programme_details(107764)",
   "policy": {
     "minimumEstimatedCommissionEUR": 10,
     "applicationNoteMaxCharacters": 150,
@@ -30,18 +30,18 @@
     {
       "id": 107764,
       "name": "Water to Go Europe",
-      "status": "pending",
+      "status": "rejected",
       "epcEUR": null,
       "conversionRatePercent": null,
       "sector": "Reusable water-filter bottles",
       "reasonGreek": null,
       "priority": null,
-      "applicationState": "existing_application",
+      "applicationState": "rejected_by_advertiser",
       "publisherSiteVerified": false,
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-28"
+      "lastVerified": "2026-10-29"
     },
     {
       "id": 25829,
