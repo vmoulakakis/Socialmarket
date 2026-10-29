@@ -6,16 +6,16 @@ const snapshot=JSON.parse(readFileSync(new URL("../data/awin/application-queue.j
 const copy=x=>JSON.parse(JSON.stringify(x));
 test("correct Awin counts; Active programme != Joined",()=>{
  const result=summary(snapshot);
- assert.deepEqual(result.counts,{joined:0,pending:2,notjoined:12,rejected:0,suspended:0});
+ assert.deepEqual(result.counts,{joined:0,pending:1,notjoined:12,rejected:1,suspended:0});
  assert.equal(normalizeMembership("Not joined"),"notjoined");
  assert.equal(normalizeMembership("Active"),"unknown");
  assert.equal(normalizeMembership("Joined"),"joined");
 });
-test("never join an already pending programme",()=>{
+test("never join already pending or rejected programmes",()=>{
  const p=snapshot.programmes.find(p=>p.id===30859);
  assert.equal(applicationGate(p).reason,"already_pending");
  const w=snapshot.programmes.find(p=>p.id===107764);
- assert.equal(applicationGate(w).reason,"already_pending");
+ assert.equal(applicationGate(w).reason,"rejected_review_required");
 });
 test("all five prioritized applications require verified site and programme terms",()=>{
  const queue=rankQueue(snapshot);
