@@ -8,3 +8,6 @@ Read `skills/agentic-development-lifecycle/SKILL.md` before software, AI/agent, 
 
 ## Universal Creation Orchestrator
 For any creation, build, UI improvement, audit or release read `.agents/skills/universal-creation-orchestrator/SKILL.md` and this project's specialist contracts. Do not change unrelated code or override ADLC/security. Require real tests/evidence.
+
+## SocialMarket AI Architect & Hybrid GraphRAG (this application only)
+For the 334-program Linkwise merchant directory, ≥EUR10 verified commission admission, source-grounded deep Greek-market research, GraphRAG and evidence-based agent learning read `skills/socialmarket-ai-architect-orchestrator/SKILL.md`. This is a supporting SocialMarket adapter; obey ADLC review/approval rules and the canonical MyAgenticTeam agent-runtime, Greece demand and solution-first skills. Keep all unrelated VMDB schemas untouched; model output never grants merchant or tracking approval.
