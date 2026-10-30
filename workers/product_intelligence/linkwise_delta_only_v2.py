@@ -34,6 +34,7 @@ except ImportError:
     from full_feed_vmdb_v1 import parse_price, parse_expiry, stock_value, program_from_tracking
 
 SOURCE = "linkwise_cd104"
+FEED_SECRET_NAME = "socialmarket_linkwise_cd104_full_feed_url_v1"
 ROOTS = {"item", "products.item", "data.item"}
 DEFAULT_BATCH = 100
 MAX_RECORD_BYTES = 128 * 1024
@@ -111,13 +112,27 @@ def stream_records(stream, root: str):
         yield item
 
 
-def source_stream(args):
+def last_completed_etag(conn):
+    with conn.cursor() as cur:
+        cur.execute("""select checkpoint->>'etag' from sm_intel.feed_runs
+           where state='completed' and checkpoint->>'mode'='delta_new_only'
+           and checkpoint->>'etag' is not null order by finished_at desc limit 1""")
+        found=cur.fetchone()
+    return found[0] if found else None
+
+
+def source_stream(args, previous_etag=None):
     if args.file:
         f = args.file.open("rb")
-        return f,None,None,False
+        return f,None,None,False,None
     url = check_feed_url(args.feed_url or os.environ.get("LINKWISE_FULL_FEED_URL",""))
-    response = requests.get(url,stream=True,timeout=(35,180),
-        headers={"User-Agent":"SocialMarketAI-DeltaImport/2.0","Accept-Encoding":"gzip, deflate"})
+    headers={"User-Agent":"SocialMarketAI-DeltaImport/2.0","Accept-Encoding":"gzip, deflate"}
+    if previous_etag:
+        headers["If-None-Match"]=previous_etag
+    response = requests.get(url,stream=True,timeout=(35,180),headers=headers,allow_redirects=False)
+    if response.status_code==304 and previous_etag:
+        response.close()
+        return None,None,None,False,None
     response.raise_for_status()
     # Redirect is refused; no code should accidentally expose feed identity.
     if response.url != url:
@@ -125,7 +140,7 @@ def source_stream(args):
         raise ValueError("redirect_or_source_url_changed")
     response.raw.decode_content=True
     fp,strong = fingerprint(response.headers,url)
-    return response.raw,response,fp,strong
+    return response.raw,response,fp,strong,response.headers.get("ETag")
 
 
 def execute_delta_batch(conn,run_id,offset,rows,fp):
@@ -184,12 +199,15 @@ def run(args):
         raise ValueError("bounded_preview_cannot_commit")
     if args.resume_run_id and not args.commit:
         raise ValueError("resume_needs_commit")
+    if args.commit and not args.vault_source:
+        raise RuntimeError("production_import_requires_vault_source")
     if args.commit and not os.environ.get("SOCIALMARKET_DB_URL"):
         raise RuntimeError("database_secret_not_configured")
     if args.file and args.commit and os.environ.get("SOCIALMARKET_ALLOW_LOCAL_FILE_COMMIT")!="true":
         raise RuntimeError("local_file_commit_disabled_by_default")
     conn=None
     run_id=None
+    etag=None
     raw_stream=None
     response=None
     scanned=0
@@ -199,12 +217,25 @@ def run(args):
     unresolved=0
     oversized=0
     try:
-        if args.commit:
+        if args.commit or args.vault_source:
             import psycopg
             conn=psycopg.connect(os.environ["SOCIALMARKET_DB_URL"],sslmode="require",
                                  connect_timeout=10)
-            verify_preflight(conn)
-        raw_stream,response,fp,strong = source_stream(args)
+            if args.commit: verify_preflight(conn)
+        if args.vault_source:
+            with conn.cursor() as cur:
+                cur.execute("select decrypted_secret from vault.decrypted_secrets where name=%s limit 1",
+                            (FEED_SECRET_NAME,))
+                row=cur.fetchone()
+            if not row or not row[0]:
+                raise RuntimeError("approved_vault_feed_secret_missing")
+            args.feed_url=check_feed_url(row[0])
+        prev_etag=last_completed_etag(conn) if args.skip_unchanged and conn else None
+        raw_stream,response,fp,strong,etag = source_stream(args,prev_etag)
+        if raw_stream is None:
+            print(json.dumps({"ok":True,"mode":"unchanged_etag","scanned":0,"new_inserted":0,
+                              "existing_rows_updated":0}))
+            return 0
         if conn:
             run_id,skip=start_run(conn,fp,args,strong)
         else:
@@ -246,9 +277,9 @@ def run(args):
                 cur.execute("""update sm_intel.feed_runs
                     set state='completed',finished_at=now(),
                     checkpoint=jsonb_build_object('offset',%s,'mode','delta_new_only',
-                                    'source_fingerprint',%s,'source_complete',true)
+                                    'source_fingerprint',%s,'etag',%s,'source_complete',true)
                     where id=%s and state='running' and scanned=%s""",
-                    (scanned,fp,run_id,scanned))
+                    (scanned,fp,etag,run_id,scanned))
                 if cur.rowcount!=1:
                     raise RuntimeError("feed_completion_checkpoint_does_not_match")
             conn.commit()
@@ -290,15 +321,19 @@ def main():
     s=p.add_mutually_exclusive_group()
     s.add_argument("--file",type=Path)
     s.add_argument("--feed-url")
+    s.add_argument("--vault-source",action="store_true")
     p.add_argument("--commit",action="store_true")
+    p.add_argument("--skip-unchanged",action="store_true")
     p.add_argument("--resume-run-id")
     p.add_argument("--batch-size",type=int,default=DEFAULT_BATCH)
     p.add_argument("--max-records",type=int,default=0)
     p.add_argument("--root",choices=sorted(ROOTS),default="item")
     p.add_argument("--max-record-bytes",type=int,default=MAX_RECORD_BYTES)
     args=p.parse_args()
-    if not args.file and not (args.feed_url or os.getenv("LINKWISE_FULL_FEED_URL")):
+    if not args.file and not args.vault_source and not (args.feed_url or os.getenv("LINKWISE_FULL_FEED_URL")):
         p.error("feed_source_required")
+    if args.vault_source and not os.environ.get("SOCIALMARKET_DB_URL"):
+        p.error("vault_source_requires_database_secret")
     if not 4096<=args.max_record_bytes<=1024*1024:
         p.error("max_record_bytes_out_of_range")
     return run(args)
