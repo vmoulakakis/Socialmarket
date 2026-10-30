@@ -26,6 +26,12 @@ async function proxyRpc(accessToken,fn,body){
 export async function GET(req){
  const auth=await adminAuth(req);
  if(!auth)return NextResponse.json({ok:false,error:'admin_login_required'},{status:401,headers:HEADERS});
+ const query=new URL(req.url).searchParams.get('q');
+ if(query!==null){
+  if(query.trim().length<2||query.length>160)return NextResponse.json({error:'invalid_search'},{status:400,headers:HEADERS});
+  try{return await proxyRpc(auth.accessToken,'socialmarket_cockpit_search',{p_query:query,p_limit:12});}
+  catch{return NextResponse.json({error:'search_backend_unavailable'},{status:503,headers:HEADERS});}
+ }
  try{return await proxyRpc(auth.accessToken,'socialmarket_cockpit_snapshot',{});}
  catch{return NextResponse.json({ok:false,error:'cockpit_backend_timeout'},{status:503,headers:HEADERS});}
 }
