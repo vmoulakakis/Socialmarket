@@ -76,9 +76,16 @@ def transform_delta(p: dict) -> dict:
         reasons.append("currency_unverified")
     if price is None:
         reasons.append("price_invalid")
-    if (expiry := parse_expiry(p.get("valid_to"))) is not None:
-        if datetime.fromisoformat(expiry) <= datetime.now(timezone.utc):
-            reasons.append("offer_expired")
+    expiry = parse_expiry(p.get("valid_to"))
+    started = parse_expiry(p.get("valid_from"))
+    if p.get("valid_to") not in (None, "") and expiry is None:
+        reasons.append("invalid_valid_to")
+    if p.get("valid_from") not in (None, "") and started is None:
+        reasons.append("invalid_valid_from")
+    if expiry is not None and datetime.fromisoformat(expiry) <= datetime.now(timezone.utc):
+        reasons.append("offer_expired")
+    if started is not None and datetime.fromisoformat(started) > datetime.now(timezone.utc):
+        reasons.append("offer_not_yet_active")
     # URL/price/status remain exactly source-owned. Full raw JSON is kept only
     # when genuinely new; known records are never rewritten.
     raw_json = json.dumps(p, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
