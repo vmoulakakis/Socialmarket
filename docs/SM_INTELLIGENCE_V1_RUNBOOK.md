@@ -59,3 +59,36 @@ Buying intent uses coarse consensual, aggregate patterns, *not* personal inferre
 - Greek market `high_demand_low_supply` requires independently sourced demand metrics and observed local supply; keyword hypotheses are not measurements.
 - Record all user learning as verified opt-in outcomes, not inferred personal vulnerabilities.
 - No continuous background paid model runner exists solely because an Edge Function is active; use the daily automation as a monitored autonomous research pathway, and independently configure credentialed server worker if needed.
+
+## Streaming / delta-only feed release contract — 2026-10-31
+
+**Authoritative source:** user-supplied full `https://affiliate.linkwi.se/feeds/1.2/CD104/programs-all/.../feed.json`, verified by source metadata only. Encrypted Supabase Vault secret `socialmarket_linkwise_cd104_full_feed_url_v1` is present and has the expected URL path, columns prefix, category inclusion prefix and CD104 suffix. Never output the decrypted URL or send it in logs.
+
+**Explicit request: do NOT ingest the live feed now.** No live HTTP GET or product upload has been run. The feature is deployed in private VMDB as a migration and staged in GitHub (draft PR), but the production manual workflow has not been invoked.
+
+**Canonical forthcoming importer:**
+`workers/product_intelligence/linkwise_delta_only_v2.py` + `sm_intel.ingest_new_only_batch(uuid,bigint,jsonb,text)`.
+
+1. Stream full JSON using `ijson`, bounded 100-row batch and max 128 KiB per record (oversized records safely omitted and counted, not stored as truncated facts). Only one parsed product is held at once in addition to the batch, no 3.84 GB in-memory array.
+2. Source `program_id` from genuine `go.linkwi.se/z/{program}-.../CD104/` tracking URL, stable key `program_id|product_id`. Do not trust the converted uploaded spreadsheet deeplinks.
+3. Check `valid_from` and `valid_to` timestamps, positive EUR sale price, real source tracking link and verified current commission terms.
+4. **Hard gate:** conservatively computed commission >= EUR10. Other rows are counted as unqualified and are *not inserted by v2*. Source data remains accessible in the upstream feed.
+5. Insert **only new product identities**, using `ON CONFLICT DO NOTHING` and exact historical `program_id + source_product_id` lookups; never update existing JSON, price, stock, tracking, merchant, identity or seen timestamps.
+6. Batch commit is atomic and audit-ledger-backed. Explicit offset must match `feed_runs.scanned`; replay of the same batch hash is idempotent, but mismatched replay is blocked. High-level run completion requires the final scanned count to match the final checkpoint.
+7. Honor a strong ETag for snapshot-safe resume. On disconnect without strong ETag, begin a new full scan and skip existing products; never infer byte offsets in JSON. Conditional If-None-Match allows a 304 skip when a prior full run is unchanged.
+8. Expose the manual workflow only on main, with choices fixture_only, preview_1000, preview_10000, full_dry_run and separately selected delta_new_only_commit. No cron or background feed import is enabled by this change.
+9. A current production price/stock update is a **separate future** lightweight feed/offer-state reconciliation, because the present user-authorized delta policy is strictly insert-only. Consequently, old offers must remain fail-closed rather than pretending they are fresh.
+
+**Uploaded merchant files inspected but NOT imported**:
+- `programs_with_websites(1).csv`: 340 names, semicolon-separated, websites are unverified candidates (30 'High', 44 'High-Medium', 266 'Medium').
+- `programs_with_sites_and_deeplinks_converted(1).csv`: 315 names, 314 deeplinks all use `/z/12858-0/CD104/`, despite different merchant identities; do not use as valid tracking URLs. Example: 24home.gr belongs to source program `11532` while the file route is `12858`.
+- `programs_with_sites_and_deeplinks(1).xlsx`: same 315-program listing. These three attachments have NOT been committed or imported into VMDB.
+
+**Hugging Face model policy** (repo metadata inspected, no model inference benchmark performed):
+- **Tier 0 / always free of model tokens:** exact SQL identity, calculation, deduplication, fee/validity checks, source freshness and graph joins.
+- **Tier 1 / offline CPU embeddings:** [intfloat/multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small), 384 dimensions, multilingual Greek/English, MIT; existing private vector schema expects this exact model/dimension.
+- **Tier 2 / optional CPU local extraction:** [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B), 0.75B parameters, Apache 2.0, only candidate structured categorization after benchmark on Greek and Greeklish holdout; no presumed accuracy.
+- **Tier 3 / paid only complex unresolved claims:** existing bounded `socialmarket-ai` DeepSeek endpoint after 2+ independent verified cited sources, contradictions/uncertainty and explicit `use_ai:true`. Missing evidence causes zero token spend, not speculative research.
+- Benchmarks are needed before choosing a larger LLM, and server CPU/RAM cost is not the same as paid API token cost.
+
+**Verification evidence:** SQL transaction test on three fixtures: legacy row unchanged; new row with exactly EUR10 admissible under synthetic verified terms; 9.99 EUR row rejected. Batch replay correct with rollback. Deno typechecks and Python fixture tests in GitHub Actions; **no actual full-feed throughput benchmark or billing validation**.
