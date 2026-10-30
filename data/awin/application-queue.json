@@ -1,8 +1,8 @@
 {
   "project": "Awin Publisher Autopilot",
   "publisherId": 3060863,
-  "checkedAt": "2026-10-29",
-  "source": "Verified Awin MCP: list_accounts, awin_list_programmes(joined,pending,rejected,suspended), awin_get_programme_details(107764)",
+  "checkedAt": "2026-10-30",
+  "source": "Awin MCP live: list_accounts, list_programmes joined/pending/rejected/suspended; get_programme_details for 25829, 9837, 19725; advertiser performance 2026-10-01..2026-10-30 (UTC) returned []",
   "policy": {
     "minimumEstimatedCommissionEUR": 10,
     "applicationNoteMaxCharacters": 150,
@@ -25,7 +25,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-28"
+      "lastVerified": "2026-10-30"
     },
     {
       "id": 107764,
@@ -41,7 +41,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-29"
+      "lastVerified": "2026-10-30"
     },
     {
       "id": 25829,
@@ -57,7 +57,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-28"
+      "lastVerified": "2026-10-30"
     },
     {
       "id": 19725,
@@ -73,7 +73,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-28"
+      "lastVerified": "2026-10-30"
     },
     {
       "id": 9837,
@@ -89,7 +89,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-28"
+      "lastVerified": "2026-10-30"
     },
     {
       "id": 24675,
@@ -235,5 +235,34 @@
       "trackingVerified": false,
       "lastVerified": "2026-10-28"
     }
-  ]
+  ],
+  "lastRun": {
+    "date": "2026-10-30",
+    "publisherId": 3060863,
+    "membershipCounts": {
+      "joined": 0,
+      "pending": 1,
+      "rejected": 1,
+      "suspended": 0
+    },
+    "performance": {
+      "window": "2026-10-01/2026-10-30",
+      "timezone": "UTC",
+      "reportRows": 0,
+      "meaning": "no rows returned; do not infer earnings, conversion or validated commission"
+    },
+    "candidateIdsReviewed": [
+      25829,
+      9837,
+      19725
+    ],
+    "applicationSubmissions": 0,
+    "trackingLinksCreated": 0,
+    "socialPostsPublished": 0,
+    "paidServicesUsed": false,
+    "publicationState": "no joined advertiser",
+    "browser": "Connected Chrome extension unavailable in this non-originating automation runtime; TinyFish prohibited by user cost constraint",
+    "notification": "previously reported browser blocker; do not repeat",
+    "ci": "not run in this turn; PR remains draft"
+  }
 }
