@@ -116,9 +116,11 @@ Deno.serve(async(req:Request)=>{
     autonomous_publishing:false,background_ai_schedule:false});
   }
   const taskLimit=Math.min(3,Math.max(1,Math.floor(Number(body.max_tasks)||1)));
-  const useAI=body.use_ai!==false;
+  // Cheap by default. AI is permitted only when caller explicitly opts in AND
+  // deterministic routing detects a difficult evidence-grounded task.
+  const permitLLM=body.use_ai===true;
   const run=await sql`insert into sm_intel.agent_runs(objective_key,requested_by,runtime_mode,max_tasks,max_model_calls)
-    values(null,'authorized_socialmarket_admin',${useAI?"hybrid_ai":"deterministic"},${taskLimit},${useAI?taskLimit:0})
+    values(null,'authorized_socialmarket_admin',${permitLLM?"hybrid_ai":"deterministic"},${taskLimit},${permitLLM?taskLimit:0})
     returning id`;
   const runId=String(run[0].id);
   const worker="architect-"+runId;
@@ -131,8 +133,18 @@ Deno.serve(async(req:Request)=>{
     const ctx=await contextFor(sql,t);
     let findings:Row={kind:"deterministic_review_required",role:t.agent_role,
       next_action:"Collect fresh, authoritative independent sources; do not approve commercial claims."};
-    let aiStatus="not_requested";
-    if(useAI){
+    let aiStatus=permitLLM?"rules_preferred_or_evidence_insufficient":"local_deterministic_route";
+    // LLM is NOT a source of market facts. Only conflicting or complex
+    // independently verified evidence warrants synthesis; unknown merchant
+    // identity, missing program expiry, or stale products stay SQL-only.
+    const independentVerifiedSources=ctx.sources.filter(s=>
+      s.status==="verified" && Boolean(s.source_url)).length;
+    const eligibleForReasoning=permitLLM && (
+      (t.agent_role==="commercial_skeptic" || t.agent_role==="market_research")
+      && independentVerifiedSources>=2
+      || (t.agent_role==="ai_architect" && ctx.subject!==null)
+    );
+    if(eligibleForReasoning){
      const payload={role:t.agent_role,objective:t.objective_key,task_id:t.id,
        market:"Greece",current_date:new Date().toISOString().slice(0,10),
        subject:ctx.subject,sources:ctx.sources,related:ctx.related};
