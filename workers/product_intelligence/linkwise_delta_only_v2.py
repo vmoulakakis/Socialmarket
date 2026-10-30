@@ -76,7 +76,8 @@ def product_to_row(record: dict, max_bytes: int = MAX_RECORD_BYTES) -> tuple[dic
         slim = record
     source_product_id = str(record.get("product_id") or "").strip()
     tracking = str(record.get("tracking_url") or "").strip()
-    program = program_from_tracking(tracking)
+    # Only the official click host is accepted; other .linkwi.se subdomains are not proof.
+    program = program_from_tracking(tracking) if urlparse(tracking).hostname == "go.linkwi.se" else None
     key = (program or "unknown") + "|" + (source_product_id or hashlib.sha256(raw.encode()).hexdigest()[:20])
     currency = str(record.get("currency") or "").strip().upper()
     price = parse_price(record.get("price"))
@@ -89,6 +90,16 @@ def product_to_row(record: dict, max_bytes: int = MAX_RECORD_BYTES) -> tuple[dic
         errors.append("non_eur_currency")
     if price is None:
         errors.append("invalid_price")
+    starts=parse_expiry(record.get("valid_from"))
+    ends=parse_expiry(record.get("valid_to"))
+    if record.get("valid_from") not in (None,"") and starts is None:
+        errors.append("invalid_valid_from")
+    if record.get("valid_to") not in (None,"") and ends is None:
+        errors.append("invalid_valid_to")
+    if starts is not None and datetime.fromisoformat(starts)>datetime.now(timezone.utc):
+        errors.append("not_yet_valid")
+    if ends is not None and datetime.fromisoformat(ends)<=datetime.now(timezone.utc):
+        errors.append("expired")
     if too_large:
         errors.append("oversize_omitted")
     return {
