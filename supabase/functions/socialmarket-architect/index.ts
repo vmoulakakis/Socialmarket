@@ -116,10 +116,10 @@ Deno.serve(async(req:Request)=>{
     autonomous_publishing:false,background_ai_schedule:false});
   }
   const taskLimit=Math.min(3,Math.max(1,Math.floor(Number(body.max_tasks)||1)));
-  // AUTO by default: simple identity/commission/catalog tasks cost zero model
+  // Zero paid tokens by default: simple identity/commission/catalog tasks cost zero model
   // tokens; only hard, evidence-supported analysis escalates to the budgeted LLM.
   // 'use_ai:false' enforces deterministic mode for every task in the run.
-  const permitLLM=body.use_ai!==false;
+  const permitLLM=body.use_ai===true;
   const run=await sql`insert into sm_intel.agent_runs(objective_key,requested_by,runtime_mode,max_tasks,max_model_calls)
     values(null,'authorized_socialmarket_admin',${permitLLM?"hybrid_ai":"deterministic"},${taskLimit},${permitLLM?taskLimit:0})
     returning id`;
@@ -143,7 +143,7 @@ Deno.serve(async(req:Request)=>{
     const eligibleForReasoning=permitLLM && (
       (t.agent_role==="commercial_skeptic" || t.agent_role==="market_research")
       && independentVerifiedSources>=2
-      || (t.agent_role==="ai_architect" && ctx.subject!==null)
+      || (t.agent_role==="ai_architect" && ctx.subject!==null && independentVerifiedSources>=2)
     );
     if(eligibleForReasoning){
      const payload={role:t.agent_role,objective:t.objective_key,task_id:t.id,
