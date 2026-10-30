@@ -195,13 +195,13 @@ set search_path='' as $$
  lexical as (
   select d.id,row_number() over (
      order by ts_rank_cd(d.fts,p.qts) desc,
-              similarity(lower(d.title),p.qstr) desc,d.id) lex_rank
+              extensions.similarity(lower(d.title),p.qstr) desc,d.id) lex_rank
   from sm_intel.search_documents d cross join params p
   where d.tenant_key='socialmarket' and d.market_code='GR'
     and (p_entity_types is null or d.entity_type=any(p_entity_types))
     and (p_include_candidates or d.source_state='verified')
     and d.source_state not in ('removed','quarantined')
-    and (d.fts @@ p.qts or similarity(lower(d.title),p.qstr)>0.19
+    and (d.fts @@ p.qts or extensions.similarity(lower(d.title),p.qstr)>0.19
        or lower(d.title) like '%'||p.qstr||'%')
   order by lex_rank limit 80
  ),
