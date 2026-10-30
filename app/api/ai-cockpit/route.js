@@ -32,7 +32,16 @@ export async function GET(req){
   try{return await proxyRpc(auth.accessToken,'socialmarket_cockpit_search',{p_query:query,p_limit:12});}
   catch{return NextResponse.json({error:'search_backend_unavailable'},{status:503,headers:HEADERS});}
  }
- try{return await proxyRpc(auth.accessToken,'socialmarket_cockpit_snapshot',{});}
+ try{
+  const [snapshotResponse,runtimeResponse]=await Promise.all([
+   proxyRpc(auth.accessToken,'socialmarket_cockpit_snapshot',{}),
+   proxyRpc(auth.accessToken,'socialmarket_cockpit_runtime_health',{})
+  ]);
+  if(!snapshotResponse.ok)return snapshotResponse;
+  const snapshot=await snapshotResponse.json();
+  const runtime=runtimeResponse.ok?await runtimeResponse.json():{error:'runtime_health_unavailable'};
+  return NextResponse.json({...snapshot,runtime},{status:200,headers:HEADERS});
+ }
  catch{return NextResponse.json({ok:false,error:'cockpit_backend_timeout'},{status:503,headers:HEADERS});}
 }
 export async function POST(req){
