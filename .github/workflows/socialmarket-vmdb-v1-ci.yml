@@ -1,0 +1,26 @@
+name: SocialMarket VMDB v1 database and ingestion tests
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*sm_intel*"
+      - "supabase/migrations/*sm_intelligence*"
+      - "workers/product_intelligence/full_feed_vmdb_v1.py"
+      - "tests/test_full_feed_vmdb_v1.py"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-full-feed-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned parser and worker dependencies
+        run: python -m pip install "ijson==3.4.0" "requests==2.32.3" "psycopg[binary]==3.2.9"
+      - name: Compile ingestion script
+        run: python -m py_compile workers/product_intelligence/full_feed_vmdb_v1.py
+      - name: Verify full feed contract without network or production writes
+        run: python -m unittest discover -s tests -p "test_full_feed_vmdb_v1.py" -v
