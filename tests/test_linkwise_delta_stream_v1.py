@@ -22,6 +22,11 @@ class LinkwiseDeltaContract(unittest.TestCase):
         self.assertEqual(a["program_id"],"unknown")
         self.assertIn("unknown_linkwise_program",a["quarantine_reason"])
         self.assertIn("offer_expired",a["quarantine_reason"])
+    def test_invalid_or_future_validity(self):
+        malformed=transform_delta({**self.row,"valid_to":"bad-timestamp"})
+        self.assertIn("invalid_valid_to",malformed["quarantine_reason"])
+        future=transform_delta({**self.row,"valid_from":"2099-12-31T00:00:00Z"})
+        self.assertIn("offer_not_yet_active",future["quarantine_reason"])
     def test_data_fields_preserved(self):
         a=transform_delta({**self.row,"extra_images":["a","b"],"city":"Αθήνα","latitude":"37.98"})
         self.assertEqual(a["raw_json"]["extra_images"],["a","b"])
