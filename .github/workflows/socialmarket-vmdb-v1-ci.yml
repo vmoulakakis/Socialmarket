@@ -24,3 +24,12 @@ jobs:
         run: python -m py_compile workers/product_intelligence/full_feed_vmdb_v1.py
       - name: Verify full feed contract without network or production writes
         run: python -m unittest discover -s tests -p "test_full_feed_vmdb_v1.py" -v
+      - name: Run JSON stream fixture without database writes
+        run: |
+          python workers/product_intelligence/full_feed_vmdb_v1.py --file tests/fixtures/linkwise_full_v1_sample.json > /tmp/socialmarket-result.json
+          python - <<'PY'
+          import json
+          with open('/tmp/socialmarket-result.json') as f: r=json.load(f)
+          assert (r['scanned'],r['quarantined'],r['mode']) == (3,1,'dry_run'),r
+          PY
+
