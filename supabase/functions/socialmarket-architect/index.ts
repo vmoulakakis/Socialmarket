@@ -116,9 +116,10 @@ Deno.serve(async(req:Request)=>{
     autonomous_publishing:false,background_ai_schedule:false});
   }
   const taskLimit=Math.min(3,Math.max(1,Math.floor(Number(body.max_tasks)||1)));
-  // Cheap by default. AI is permitted only when caller explicitly opts in AND
-  // deterministic routing detects a difficult evidence-grounded task.
-  const permitLLM=body.use_ai===true;
+  // AUTO by default: simple identity/commission/catalog tasks cost zero model
+  // tokens; only hard, evidence-supported analysis escalates to the budgeted LLM.
+  // 'use_ai:false' enforces deterministic mode for every task in the run.
+  const permitLLM=body.use_ai!==false;
   const run=await sql`insert into sm_intel.agent_runs(objective_key,requested_by,runtime_mode,max_tasks,max_model_calls)
     values(null,'authorized_socialmarket_admin',${permitLLM?"hybrid_ai":"deterministic"},${taskLimit},${permitLLM?taskLimit:0})
     returning id`;
