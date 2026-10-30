@@ -1,11 +1,11 @@
 # Awin-only Application Autopilot — browser execution contract
 
-**Publisher:** 3060863. **Evidence date:** 28 October 2026. **State:** Prepared queue / NO automated Join submitted by this repository.
+**Publisher:** 3060863. **Latest evidence date:** 30 October 2026. **State:** Prepared queue / NO automated Join submitted by this repository.
 
 This module is deliberately independent of production website changes. Data under `data/awin/application-queue.json` contains verified Awin membership snapshots, observed advertiser-level EPC metrics and tailored Greek application notes of at most 150 Unicode characters. These KPIs are not the publisher's earnings, and unknown commissions must remain unknown.
 
 ## Baseline
-Joined 0; Pending: Back Market GR (30859), Water to Go Europe (107764). Not Joined: 12 programmes whose Greek primary region is GR. The Awin `status=Active` property indicates an advertiser programme is active, NOT that the publisher has Joined. Only actual membership / relationship qualifies.
+Joined **0**; Pending: **Back Market GR (30859)**; Rejected: **Water to Go Europe (107764)**. Do not retry the rejected programme. The prepared queue contains 12 Not Joined candidates; only selected candidates were refreshed on 2026-10-30, and the queue is not a complete live programme census. The Awin `status=Active` property indicates an advertiser programme is active, NOT that the publisher has Joined. Only actual membership / relationship qualifies.
 
 ## Explicit application priority
 1. Lambakaifotismos - GR (25829): task-based lighting / comparison, advertiser EPC €0.24 (historical aggregate). Commission unverified.
@@ -26,8 +26,8 @@ These are Awin-only pilots; they do not mean five currently ready-to-submit appl
 - Update queue status and source evidence via reviewed PR or approved persistence backend. Keep preflight evidence and images private; NEVER store Awin tokens or passwords in GitHub.
 - Respect rate limits and avoid batch applications to poorly matched brands. Use one application per programme with idempotent provider status checks.
 
-### Current hard blocker
-Chat-mode Awin MCP **has no join/apply tool**. Chat Browser plugin is read-only. The user has been offered TinyFish browser connector; the suggestion alone does **not** install it. Work mode also provides a cloud browser where available. Until an authenticated browser with action tools is connected, all five prioritized candidates are blocked at `publisher_site_unverified` and `advertiser_terms_unreviewed`; no application is submitted.
+### Current hard blocker (30 October 2026)
+Awin MCP **has no join/apply tool**. The Browser connector could not access Chrome tabs from this scheduled runtime because it requires the originating browser context. TinyFish is connected but the user explicitly disallowed its metered browser automation; do not invoke it. No alternate authenticated browser-write access was established. Until the authorized no-extra-cost browser is accessible, candidate applications remain blocked at `publisher_site_unverified` and `advertiser_terms_unreviewed`; **no new application was submitted**. This blocker has already been reported to the user; do not notify again unless the access situation materially changes.
 
 ## After merchant approval
 - Awin MCP `awin_create_links` can generate a tracked advertiser homepage or approved deep link **only after membership=Joined**. Never call it for non-Joined programmes or represent a standard clickThroughUrl displayed in the public programme directory as an approved tracking validation.
@@ -36,7 +36,7 @@ Chat-mode Awin MCP **has no join/apply tool**. Chat Browser plugin is read-only.
 - Persist a verified link record and read-only audit log. If approval status reverses, stop publication.
 
 ## Verification
-Run `node --test tests/awin-autopilot.test.mjs` and `node scripts/awin-autopilot.mjs`. GitHub CI checks that two Pending programmes are never re-applied, no joined claim is inferred from active programme status, no application passes without verified site + terms and no tracking can be considered eligible before Joined+commission+tracking verification.
+Run `node --test tests/awin-autopilot.test.mjs` and `node scripts/awin-autopilot.mjs`. GitHub CI checks that Pending and Rejected programmes are not re-applied, no joined claim is inferred from active programme status, no application passes without verified site + terms and no tracking can be considered eligible before Joined+commission+tracking verification. Re-check the latest CI after each queue change; do not claim a local test run if not executed.
 
 ## Evidence and research
 - Awin publisher programme join message, promotional type and terms: https://success.awin.com/articles/en_US/Knowledge/How-do-I-join-an-advertiser-programme
@@ -44,3 +44,12 @@ Run `node --test tests/awin-autopilot.test.mjs` and `node scripts/awin-autopilot
 - Awin Publisher API tools: https://help.awin.com/apidocs/for-publishers
 
 Change ID: CHG-AWIN-20261028. Plan → GitHub branch and tests → review → connect supported browser operator → explicit licensed Join → API confirmation → approval watch → feed/link gates.
+
+## 2026-10-30 operational review
+
+- Awin account verified: publisher **3060863**. Joined 0, Pending 1 (30859), Rejected 1 (107764), Suspended 0.
+- Awin publisher advertiser performance query for **2026-10-01 through 2026-10-30**, UTC, returned an empty list. This is **no report rows**, not a verified zero payout or a basis for EPC inference. `Europe/Athens` was rejected by the API, so the query was retried successfully with `UTC`.
+- Rechecked **Lambakaifotismos GR (25829)**, **Elastika-Online GR (9837)** and **Hawkers GR (19725)**: all **Not joined**. Merchant reported EPCs EUR 0.24, EUR 0.11 and EUR 0.11 respectively; these are advertiser-level KPIs, not publisher returns. All three `commissionRange` fields were empty; **actual payable commission and promotion terms are not verified**. Lambakaifotismos reported 50% conversion but no sample size; do not project from it.
+- Limit editorial work to two exploratory themes: **refurbished electronics** (Back Market Pending) and **tyre compatibility** (Elastika Not joined). Two existing Buffer HOLD ideas already cover them. No new drafts, tracked links, public posts, deployments or paid browser sessions this run. Do not repurpose unrelated personal Instagram/TikTok channels without eligibility verification; `Sales for All` Facebook is disconnected and `my deal` startPage is locked.
+- One experiment per funnel once approval and instrumentation exist. Primary KPI: **validated commission per qualified outbound click**; diagnose tracking and reversals before changing creative. Until then no statistically meaningful funnel experiment exists.
+- Persistence: `data/awin/application-queue.json` contains the latest membership and operational status. This is review-only PR data; not merged to production.
