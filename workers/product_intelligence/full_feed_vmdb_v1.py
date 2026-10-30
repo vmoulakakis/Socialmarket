@@ -88,7 +88,7 @@ def parse_expiry(v: object) -> str | None:
 
 
 def transform(p: dict) -> dict:
-    # ijson parses decimal numbers exactly. JSONB retains their values.
+    # Python JSON-compatible numeric values; prices are normalized with Decimal before admission.
     raw_string = json.dumps(p, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     sha = hashlib.sha256(raw_string.encode("utf-8")).hexdigest()
     product_id = str(p.get("product_id") or p.get("id") or "").strip()
@@ -129,7 +129,7 @@ def transform(p: dict) -> dict:
 
 
 def rows_from_stream(stream):
-    for row in ijson.items(stream, "item"):
+    for row in ijson.items(stream, "item", use_float=True):
         if not isinstance(row, dict):
             raise ValueError("feed_items_must_be_json_objects")
         yield row
