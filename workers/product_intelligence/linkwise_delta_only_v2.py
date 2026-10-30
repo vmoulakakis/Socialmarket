@@ -236,7 +236,7 @@ def run(args):
             print(json.dumps({"ok":True,"mode":"unchanged_etag","scanned":0,"new_inserted":0,
                               "existing_rows_updated":0}))
             return 0
-        if conn:
+        if args.commit:
             run_id,skip=start_run(conn,fp,args,strong)
         else:
             skip=0
@@ -254,7 +254,7 @@ def run(args):
             oversized+=int(is_oversize)
             rows.append(row)
             if len(rows)>=args.batch_size:
-                if conn:
+                if args.commit:
                     d=execute_delta_batch(conn,run_id,batch_start,rows,fp)
                     inserted+=d["new"]
                     existing+=d["existing"]
@@ -264,7 +264,7 @@ def run(args):
                 rows.clear()
             if args.max_records and scanned>=args.max_records:
                 break
-        if rows and conn:
+        if rows and args.commit:
             d=execute_delta_batch(conn,run_id,batch_start,rows,fp)
             inserted+=d["new"]
             existing+=d["existing"]
@@ -272,7 +272,7 @@ def run(args):
             unresolved+=d["unresolved"]
         if scanned==0:
             raise RuntimeError("empty_feed_no_commit")
-        if conn:
+        if args.commit:
             with conn.cursor() as cur:
                 cur.execute("""update sm_intel.feed_runs
                     set state='completed',finished_at=now(),
@@ -283,11 +283,11 @@ def run(args):
                 if cur.rowcount!=1:
                     raise RuntimeError("feed_completion_checkpoint_does_not_match")
             conn.commit()
-        summary={"ok":True,"mode":"delta_commit" if conn else "preview_only",
-            "scanned":scanned,"new_inserted":inserted if conn else None,
-            "existing_skipped":existing if conn else None,
-            "unqualified_skipped":unqualified if conn else None,
-            "unresolved_program_skipped":unresolved if conn else None,
+        summary={"ok":True,"mode":"delta_commit" if args.commit else "preview_only",
+            "scanned":scanned,"new_inserted":inserted if args.commit else None,
+            "existing_skipped":existing if args.commit else None,
+            "unqualified_skipped":unqualified if args.commit else None,
+            "unresolved_program_skipped":unresolved if args.commit else None,
             "oversize_skipped":oversized,"run_id":str(run_id) if run_id else None,
             "verified_min_commission_eur":10,
             "existing_rows_updated":0,"source_fingerprint_available":bool(fp),
