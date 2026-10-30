@@ -1,0 +1,58 @@
+name: SocialMarket Linkwise CD104 streaming delta — manual only
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "No live import by default; scan source only or explicitly insert unseen products"
+        type: choice
+        required: true
+        default: fixture_only
+        options:
+          - fixture_only
+          - preview_1000
+          - preview_10000
+          - full_dry_run
+          - delta_new_only_commit
+concurrency:
+  group: socialmarket-linkwise-cd104-delta
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  full-linkwise-delta:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SOCIALMARKET_DB_URL: ${{ secrets.SOCIALMARKET_DB_URL }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install bounded-stream and DB client dependencies
+        run: python -m pip install "ijson==3.4.0" "requests==2.32.3" "psycopg[binary]==3.2.9"
+      - name: Verify delta contract without source network access
+        run: |
+          python -m unittest discover -s tests -p "test_linkwise_delta_only_v2.py" -v
+          python workers/product_intelligence/linkwise_delta_only_v2.py --file tests/fixtures/linkwise_full_v1_sample.json --max-records 3
+      - name: Check only runtime DB config (never print secrets or source URL)
+        if: inputs.mode != 'fixture_only'
+        run: |
+          if [ -z "$SOCIALMARKET_DB_URL" ]; then
+            echo "Missing server-only SOCIALMARKET_DB_URL GitHub Actions secret."
+            exit 1
+          fi
+      - name: Preview 1,000 source records — no writes
+        if: inputs.mode == 'preview_1000'
+        run: python workers/product_intelligence/linkwise_delta_only_v2.py --vault-source --max-records 1000
+      - name: Preview 10,000 source records — no writes
+        if: inputs.mode == 'preview_10000'
+        run: python workers/product_intelligence/linkwise_delta_only_v2.py --vault-source --max-records 10000
+      - name: Complete HTTP streaming scan — no writes
+        if: inputs.mode == 'full_dry_run'
+        run: python workers/product_intelligence/linkwise_delta_only_v2.py --vault-source --skip-unchanged
+      - name: EXPLICIT production operation — add only unseen source products
+        if: inputs.mode == 'delta_new_only_commit'
+        run: python workers/product_intelligence/linkwise_delta_only_v2.py --vault-source --commit --skip-unchanged

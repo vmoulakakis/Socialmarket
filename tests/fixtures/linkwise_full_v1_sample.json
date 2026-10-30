@@ -1,0 +1,30 @@
+[
+  {
+    "product_id": "SKU-123",
+    "product_name": "Εργαλείο δοκιμής",
+    "category": "Tools",
+    "price": "135.00",
+    "currency": "EUR",
+    "tracking_url": "https://go.linkwi.se/z/23-0/CD104/?lnkurl=https%3A%2F%2Fmerchant.example",
+    "in_stock": "true",
+    "custom": {
+      "test": true
+    }
+  },
+  {
+    "product_id": "SKU-124",
+    "product_name": "Μη διαθέσιμο",
+    "price": "10.00",
+    "currency": "EUR",
+    "tracking_url": "https://go.linkwi.se/z/23-0/CD104/?lnkurl=https%3A%2F%2Fmerchant.example",
+    "in_stock": "false"
+  },
+  {
+    "product_id": "SKU-125",
+    "product_name": "Άγνωστο πρόγραμμα",
+    "price": "250.00",
+    "currency": "EUR",
+    "tracking_url": "https://unknown.example/abc",
+    "in_stock": null
+  }
+]

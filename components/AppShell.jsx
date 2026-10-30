@@ -21,6 +21,7 @@ const groups=[
   {href:'/optimization',label:'Optimization',code:'OP'},
  ]},
  {label:'System',items:[
+  {href:'/ai-cockpit',label:'AI Control Cockpit',code:'◈'},
   {href:'/admin',label:'Admin Control',code:'AD'},
   {href:'/configuration',label:'Product Policies',code:'CF'},
  ]},

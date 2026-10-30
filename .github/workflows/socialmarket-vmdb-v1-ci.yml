@@ -1,0 +1,78 @@
+name: SocialMarket VMDB v1 database and ingestion tests
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/*sm_intel*"
+      - "supabase/migrations/*sm_intelligence*"
+      - "workers/product_intelligence/full_feed_vmdb_v1.py"
+      - "workers/product_intelligence/linkwise_delta_only_v2.py"
+      - "workers/product_intelligence/socialmarket_model_router.py"
+      - "tests/test_linkwise_delta_only_v2.py"
+      - "tests/test_socialmarket_model_router.py"
+      - "tests/test_full_feed_vmdb_v1.py"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-full-feed-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned parser and worker dependencies
+        run: python -m pip install "ijson==3.4.0" "requests==2.32.3" "psycopg[binary]==3.2.9"
+      - name: Compile ingestion script
+        run: python -m py_compile workers/product_intelligence/full_feed_vmdb_v1.py
+      - name: Verify full feed contract without network or production writes
+        run: python -m unittest discover -s tests -p "test_full_feed_vmdb_v1.py" -v
+      - name: Verify multilingual-E5 embedder contracts using fake model
+        run: python -m unittest discover -s tests -p "test_graphrag_multilingual_e5.py" -v
+      - name: New delta v2 and token-free model policy unit tests
+        run: |
+          python -m unittest discover -s tests -p "test_linkwise_delta_only_v2.py" -v
+          python -m unittest discover -s tests -p "test_socialmarket_model_router.py" -v
+      - name: New delta v2 offline streaming preview (no remote feed, no DB)
+        run: |
+          python workers/product_intelligence/linkwise_delta_only_v2.py --file tests/fixtures/linkwise_full_v1_sample.json --max-records 3 > /tmp/sm-delta-v2.json
+          python - <<'PY'
+          import json
+          with open('/tmp/sm-delta-v2.json') as f: r=json.load(f)
+          assert r['scanned']==3 and r['mode']=='preview_only'
+          assert r['new_inserted'] is None and r['existing_rows_updated']==0
+          PY
+      - name: Delta new-only identity and validity regression suite
+        run: python -m unittest discover -s tests -p "test_linkwise_delta_stream_v1.py" -v
+      - name: Streaming delta fixture — no network, no writes
+        run: |
+          python workers/product_intelligence/linkwise_delta_stream_v1.py --file tests/fixtures/linkwise_full_v1_sample.json --max-records 3 > /tmp/delta-output.json
+          python - <<'PY'
+          import json
+          with open('/tmp/delta-output.json') as f: d=json.load(f)
+          assert d["mode"]=="read_only_stream_preview"
+          assert d["scanned"]==3
+          assert d["source_rows_with_identity"]==3
+          assert d["new_products"] is None
+          PY
+      - name: Run JSON stream fixture without database writes
+        run: |
+          python workers/product_intelligence/full_feed_vmdb_v1.py --file tests/fixtures/linkwise_full_v1_sample.json > /tmp/socialmarket-result.json
+          python - <<'PY'
+          import json
+          with open('/tmp/socialmarket-result.json') as f: r=json.load(f)
+          assert (r['scanned'],r['quarantined'],r['mode']) == (3,1,'dry_run'),r
+          PY
+
+
+  typecheck-socialmarket-edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck authenticated AI Architect + GraphRAG endpoints
+        run: deno check --node-modules-dir=auto supabase/functions/socialmarket-architect/index.ts supabase/functions/socialmarket-graphrag/index.ts
