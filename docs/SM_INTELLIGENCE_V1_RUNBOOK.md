@@ -34,3 +34,28 @@ Buying intent uses coarse consensual, aggregate patterns, *not* personal inferre
 - Zero cross-project rows, zero consumer PII in graph and zero client schema grants.
 - Hard gate and trigger tested with verified fixture; commission boundary below/exactly/above EUR10.
 - End-to-end 3.84GB full scan is **NOT VERIFIED** without actual worker execution and source coverage comparison.
+
+## AI Architect Orchestrator — implemented 2026-10-30
+
+**Database facts (verified on VMDB, dated snapshot):**
+- `public.linkwise_program_commissions`: **334 distinct source program names**, **17 nonempty program IDs**, **317 missing IDs**; source import was 2026-09-17.
+- `public.merchant_profiles`: **16 enriched merchant profiles**; this is NOT the total Linkwise program population. Neither program approvals nor tracking verified flags are established from the 16 profiles.
+- `sm_intel.merchant_program_directory`: **334 source program rows** preserved; no program was dropped based on absent ID. **334 terms_valid_to unknown**, approvals not assumed.
+- `sm_intel.graph_nodes`: **4,694** including 334 program nodes.
+- `sm_intel.graph_edges`: **5,140** source-labeled candidate edges; 0 independently verified. Product→program links: 2,379 based solely on exact CD104 source program IDs (not current approval).
+- `sm_intel.search_documents`: **4,360** searchable docs, 0 real E5 vectors at this snapshot. SQL/FTS/RRF works, but no genuine multilingual vector retrieval until external E5 worker produces embeddings.
+- `sm_intel.agent_tasks`: **4,713 queued** (3,921 product analyst + 334 identity + 334 commission verification + 41 Greek demand research + 41 skeptical QA + 41 graph librarian + 1 architect).
+- `public.commerce_performance_events`: zero observed conversion events. Outcome-based learning has no verified training feedback yet.
+
+**Deployed production endpoints**: `socialmarket-graphrag` and `socialmarket-architect` (active Supabase Edge Functions), both manually validate authenticated admin JWT. Existing `socialmarket-ai` is the model gateway with budget reservations; the orchestrator's agent outputs are explicitly candidate-only. These functions are LIVE code endpoints, but external full-feed ingestion, query-vector service and successful paid model requests are not yet verified end-to-end.
+
+**Recurring ChatGPT AI Architect automation**: daily scoped audit/research task created; this is separate from app runtime and does not grant blanket production modification rights. Check actual runs before claiming outputs have landed in DB.
+
+**Risk gates**:
+- Program `active_since` is not `valid_to`, and a CSV ID is not publisher approval.
+- Backfill merchant mappings only with verified official source and preserve URL provenance.
+- Model cannot auto-approve merchants, change affiliate payout rate, invent stock, fabricate demand or alter advertising.
+- Follow actual DeepSeek budgets and max 3 specialist tasks per invocation.
+- Greek market `high_demand_low_supply` requires independently sourced demand metrics and observed local supply; keyword hypotheses are not measurements.
+- Record all user learning as verified opt-in outcomes, not inferred personal vulnerabilities.
+- No continuous background paid model runner exists solely because an Edge Function is active; use the daily automation as a monitored autonomous research pathway, and independently configure credentialed server worker if needed.
