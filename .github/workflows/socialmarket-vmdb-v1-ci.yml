@@ -24,6 +24,8 @@ jobs:
         run: python -m py_compile workers/product_intelligence/full_feed_vmdb_v1.py
       - name: Verify full feed contract without network or production writes
         run: python -m unittest discover -s tests -p "test_full_feed_vmdb_v1.py" -v
+      - name: Verify multilingual-E5 embedder contracts using fake model
+        run: python -m unittest discover -s tests -p "test_graphrag_multilingual_e5.py" -v
       - name: Run JSON stream fixture without database writes
         run: |
           python workers/product_intelligence/full_feed_vmdb_v1.py --file tests/fixtures/linkwise_full_v1_sample.json > /tmp/socialmarket-result.json
@@ -33,3 +35,14 @@ jobs:
           assert (r['scanned'],r['quarantined'],r['mode']) == (3,1,'dry_run'),r
           PY
 
+
+  typecheck-socialmarket-edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck authenticated AI Architect + GraphRAG endpoints
+        run: deno check supabase/functions/socialmarket-architect/index.ts supabase/functions/socialmarket-graphrag/index.ts
