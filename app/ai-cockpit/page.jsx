@@ -211,6 +211,18 @@ export default function SocialMarketCockpit(){
       {agentRuns.map(r=><tr key={r.id}><td>{dt(r.started_at)}</td><td>{short(r.runtime_mode)}</td><td><Pill tone={scoreColor(r.state)}>{r.state}</Pill></td><td>{nf(r.processed_tasks)}</td><td>{nf(r.model_calls)}</td></tr>)}</tbody></table>
       {agentRuns.length===0&&<Empty text="Δεν υπάρχει τεκμηριωμένη παραγωγική εκτέλεση agent."/ >}</div>
      </Panel>
+     <Panel label="RUNTIME WATCHDOG" title="Live health / παλιά jobs">
+      {data.runtime?.error?<Empty text="Το runtime watchdog δεν είναι διαθέσιμο."/>:
+      <div className={styles.runtimeGrid}>
+       <div><span>LEGACY CRON</span><strong>{(data.runtime?.legacy_linkwise_cron||[]).some(x=>x.active)?'Active':'Inactive'}</strong></div>
+       <div><span>STUCK LEGACY RUNS</span><strong>{nf(data.runtime?.legacy_stuck_running)}</strong></div>
+       <div><span>DELTA BATCHES</span><strong>{nf(data.runtime?.private_delta_batches)}</strong></div>
+       <div><span>PENDING VECTORS</span><strong>{nf(data.runtime?.vectors_pending)}</strong></div>
+       <div><span>STALLED AGENTS</span><strong>{nf(data.runtime?.agents_stalled)}</strong></div>
+       <div><span>AI CALLS / 24H</span><strong>{nf(data.runtime?.paid_ai_calls_24h)}</strong></div>
+      </div>}
+      <small className={styles.note}>Το active cron δεν αποδεικνύει υγιή ingestion. Οι μετρήσεις έρχονται από πραγματικό VMDB snapshot.</small>
+     </Panel>
      <Panel label="AUDIT TRAIL" title="Καταγεγραμμένες ενέργειες">
       <div className={styles.auditList}>{(data.audit||[]).map(x=><div key={x.id}><span>{dt(x.created_at)}</span><b>{short(x.action)}</b><small>{x.target||'system'}</small></div>)}
       {(data.audit||[]).length===0&&<Empty text="Καμία ενέργεια από το νέο cockpit."/ >}</div>
