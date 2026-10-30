@@ -1,0 +1,54 @@
+name: SocialMarket Full Linkwise JSON refresh (manual release gate)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preview_1000 / preview_10000 / full_dry_run / full_commit"
+        type: choice
+        required: true
+        default: preview_1000
+        options:
+          - preview_1000
+          - preview_10000
+          - full_dry_run
+          - full_commit
+concurrency:
+  group: socialmarket-full-linkwise-vmdb
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  full-linkwise-import:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SOCIALMARKET_DB_URL: ${{ secrets.SOCIALMARKET_DB_URL }}
+      LINKWISE_FULL_FEED_URL: ${{ secrets.LINKWISE_FULL_FEED_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned ingestion dependencies
+        run: python -m pip install "ijson==3.4.0" "requests==2.32.3" "psycopg[binary]==3.2.9"
+      - name: Verify stream parser offline before using the network
+        run: |
+          python -m unittest discover -s tests -p "test_full_feed_vmdb_v1.py" -v
+          python workers/product_intelligence/full_feed_vmdb_v1.py --file tests/fixtures/linkwise_full_v1_sample.json
+      - name: Validate server-only configuration
+        run: |
+          if [ -z "$LINKWISE_FULL_FEED_URL" ]; then echo "ERROR: missing LINKWISE_FULL_FEED_URL secret"; exit 1; fi
+          if [ "${{ inputs.mode }}" = "full_commit" ] && [ -z "$SOCIALMARKET_DB_URL" ]; then echo "ERROR: missing SOCIALMARKET_DB_URL secret"; exit 1; fi
+      - name: Read-only preview first 1,000 rows
+        if: inputs.mode == 'preview_1000'
+        run: python workers/product_intelligence/full_feed_vmdb_v1.py --feed-url "$LINKWISE_FULL_FEED_URL" --max-records 1000
+      - name: Read-only preview first 10,000 rows
+        if: inputs.mode == 'preview_10000'
+        run: python workers/product_intelligence/full_feed_vmdb_v1.py --feed-url "$LINKWISE_FULL_FEED_URL" --max-records 10000
+      - name: Read-only full catalog scan
+        if: inputs.mode == 'full_dry_run'
+        run: python workers/product_intelligence/full_feed_vmdb_v1.py --feed-url "$LINKWISE_FULL_FEED_URL"
+      - name: Full production ingestion - manual commit only
+        if: inputs.mode == 'full_commit'
+        run: python workers/product_intelligence/full_feed_vmdb_v1.py --feed-url "$LINKWISE_FULL_FEED_URL" --commit
