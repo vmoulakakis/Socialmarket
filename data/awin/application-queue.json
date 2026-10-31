@@ -1,8 +1,8 @@
 {
   "project": "Awin Publisher Autopilot",
   "publisherId": 3060863,
-  "checkedAt": "2026-10-30",
-  "source": "Awin MCP live: list_accounts, list_programmes joined/pending/rejected/suspended; get_programme_details for 25829, 9837, 19725; advertiser performance 2026-10-01..2026-10-30 (UTC) returned []",
+  "checkedAt": "2026-10-31",
+  "source": "Awin MCP 2026-10-31: awin_list_accounts, joined/pending/rejected/suspended relationships, awin_get_programme_details for 25829/9837/19725; no Join submission",
   "policy": {
     "minimumEstimatedCommissionEUR": 10,
     "applicationNoteMaxCharacters": 150,
@@ -25,7 +25,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-30"
+      "lastVerified": "2026-10-31"
     },
     {
       "id": 107764,
@@ -41,7 +41,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-30"
+      "lastVerified": "2026-10-31"
     },
     {
       "id": 25829,
@@ -57,7 +57,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-30"
+      "lastVerified": "2026-10-31"
     },
     {
       "id": 19725,
@@ -73,7 +73,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-30"
+      "lastVerified": "2026-10-31"
     },
     {
       "id": 9837,
@@ -89,7 +89,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-10-30"
+      "lastVerified": "2026-10-31"
     },
     {
       "id": 24675,
