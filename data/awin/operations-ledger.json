@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "publisherId": 3060863,
+  "idempotency": {
+    "runKeyFormat": "awin:<publisherId>:<YYYY-MM-DD>",
+    "campaignKeyFormat": "awin:<publisherId>:<merchantId>:<theme>:<creativeVersion>",
+    "uniqueOn": [
+      "runKey",
+      "campaignKey"
+    ],
+    "note": "Campaign keys are internal editorial identifiers, NOT Awin clickrefs. No Awin clickref or tracking URL exists until Joined + terms/commission verification."
+  },
+  "runs": [
+    {
+      "runKey": "awin:3060863:2026-10-31",
+      "checkedAt": "2026-10-31",
+      "source": "Awin publisher MCP + GitHub PR #98 + Buffer channels/ideas; authenticated browser write unavailable",
+      "membership": {
+        "joined": [],
+        "pending": [
+          30859
+        ],
+        "rejected": [
+          107764
+        ],
+        "suspended": []
+      },
+      "candidateChecks": [
+        {
+          "advertiserId": 25829,
+          "name": "Lambakaifotismos - GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Home & Garden",
+          "advertiserEpcEUR": 0.24,
+          "advertiserConversionRatePercent": 50,
+          "advertiserApprovalPercent": 100,
+          "validationDays": 121,
+          "commissionRange": [],
+          "commissionPerSaleEUR": null,
+          "merchantTermsVerified": false,
+          "actualGreekDemandEvidence": null,
+          "seasonalityHypothesis": "Shorter daylight in autumn/winter may support lighting interest; not measured",
+          "competitionAssessment": "Unknown; no current Greek SERP/price study",
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 9837,
+          "name": "Elastika-Online GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Automotive",
+          "advertiserEpcEUR": 0.11,
+          "advertiserConversionRatePercent": 2.33,
+          "advertiserApprovalPercent": 75,
+          "validationDays": 22,
+          "commissionRange": [],
+          "commissionPerSaleEUR": null,
+          "merchantTermsVerified": false,
+          "actualGreekDemandEvidence": null,
+          "seasonalityHypothesis": "Wet/cold season may raise tyre safety research; no quantified demand",
+          "competitionAssessment": "Unknown; no current Greek SERP/price study",
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 19725,
+          "name": "Hawkers GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Clothing Accessories",
+          "advertiserEpcEUR": 0.11,
+          "advertiserConversionRatePercent": 1.83,
+          "advertiserApprovalPercent": 87.35,
+          "validationDays": 24,
+          "commissionRange": [],
+          "commissionPerSaleEUR": null,
+          "merchantTermsVerified": false,
+          "actualGreekDemandEvidence": null,
+          "seasonalityHypothesis": "Sunglasses demand may be more seasonal in spring/summer; unverified",
+          "competitionAssessment": "Unknown; no current Greek SERP/price study",
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        }
+      ],
+      "report": {
+        "periodStart": "2026-10-01",
+        "periodEnd": "2026-10-30",
+        "timezone": "UTC",
+        "queryStatus": "success",
+        "rowCount": 0,
+        "pendingCommissionEUR": null,
+        "approvedCommissionEUR": null,
+        "reversedCommissionEUR": null,
+        "qualifiedOutboundClicks": null,
+        "merchantCVR": null,
+        "epcPublisherEUR": null,
+        "interpretation": "Empty advertiser report; absence of rows does not establish zero payout."
+      },
+      "campaigns": [
+        {
+          "campaignKey": "awin:3060863:30859:refurbished-electronics:editorial-v1",
+          "merchantId": 30859,
+          "theme": "refurbished-electronics",
+          "state": "editorial_hold",
+          "bufferIdeaId": "6ae2fae84574572cab66f235",
+          "pageId": null,
+          "productIds": [],
+          "postIds": [],
+          "clickrefs": [],
+          "trackingLinks": [],
+          "merchantApproved": false,
+          "primaryKpi": "approved commission / qualified outbound click",
+          "experimentState": "not_started"
+        },
+        {
+          "campaignKey": "awin:3060863:9837:tyre-compatibility:editorial-v1",
+          "merchantId": 9837,
+          "theme": "tyre-compatibility",
+          "state": "editorial_hold",
+          "bufferIdeaId": "6ae2faea86828dc765d02378",
+          "pageId": null,
+          "productIds": [],
+          "postIds": [],
+          "clickrefs": [],
+          "trackingLinks": [],
+          "merchantApproved": false,
+          "primaryKpi": "approved commission / qualified outbound click",
+          "experimentState": "not_started"
+        }
+      ],
+      "socialChannels": [
+        {
+          "channelId": "6a991dcadfa176941c041b3d",
+          "name": "my deal",
+          "service": "startPage",
+          "connected": true,
+          "locked": true,
+          "eligible": false
+        },
+        {
+          "channelId": "6a7c20eab2d9d57743615efa",
+          "name": "billmtiktoker_ai",
+          "service": "tiktok",
+          "connected": true,
+          "locked": false,
+          "eligible": null
+        },
+        {
+          "channelId": "6a7c1fa2b2d9d57743615a1c",
+          "name": "Sales for All",
+          "service": "facebook",
+          "connected": false,
+          "locked": false,
+          "eligible": false
+        },
+        {
+          "channelId": "68a864cf8e37dc1a589afa8b",
+          "name": "vassilis1969",
+          "service": "instagram",
+          "connected": true,
+          "locked": false,
+          "eligible": null
+        }
+      ],
+      "browser": {
+        "provider": "connected Chrome",
+        "status": "originating_browser_context_required",
+        "writeAccess": false,
+        "blockerPreviouslyReported": true,
+        "paidTinyFishUsed": false
+      },
+      "actions": {
+        "applicationsSubmitted": [],
+        "trackingLinksCreated": [],
+        "sitesDeployed": [],
+        "postsPublished": [],
+        "paidActions": [],
+        "queueUpdated": true
+      },
+      "notification": {
+        "userActionRequired": "Use originating Chrome browser context / ChatGPT Work for authenticated Join",
+        "previouslyReported": true,
+        "notifyAgain": false
+      }
+    }
+  ]
+}
