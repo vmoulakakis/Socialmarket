@@ -42,3 +42,30 @@ test("Unicode note limit and duplicate advertiser IDs enforced",()=>{
  const cloned=copy(snapshot);cloned.programmes.push(copy(cloned.programmes[0]));
  assert.throws(()=>rankQueue(cloned),/duplicate programme/);
 });
+
+const operationsLedger=JSON.parse(readFileSync(new URL("../data/awin/operations-ledger.json",import.meta.url),"utf8"));
+test("operational ledger is idempotent, attributable, and fail-closed",()=>{
+ assert.equal(operationsLedger.publisherId,3060863);
+ const runKeys=operationsLedger.runs.map(x=>x.runKey);
+ const campaignKeys=operationsLedger.campaigns.map(x=>x.campaignKey);
+ assert.equal(new Set(runKeys).size,runKeys.length,"duplicate daily run");
+ assert.equal(new Set(campaignKeys).size,campaignKeys.length,"duplicate campaign");
+ for(const run of operationsLedger.runs){
+  assert.ok(run.runKey.startsWith("awin:3060863:"));
+  assert.ok(run.campaignKeys.every(k=>campaignKeys.includes(k)),"orphan campaign reference");
+  assert.deepEqual(run.actions.paidActions,[],"no paid operations");
+  if(run.report.rowCount===0){
+   assert.equal(run.report.approvedCommissionEUR,null,"empty report must not imply zero earnings");
+   assert.equal(run.report.pendingCommissionEUR,null);
+   assert.equal(run.report.reversedCommissionEUR,null);
+  }
+ }
+ for(const c of operationsLedger.campaigns){
+  assert.ok(c.campaignKey.startsWith("awin:3060863:"));
+  if(!c.merchantApproved){
+   assert.deepEqual(c.clickrefs,[],"clickref before merchant approval");
+   assert.deepEqual(c.trackingLinks,[],"tracking before merchant approval");
+   assert.deepEqual(c.postIds,[],"post before merchant approval");
+  }
+ }
+});
