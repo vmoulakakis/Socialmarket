@@ -5,10 +5,10 @@
     "runKeyFormat": "awin:<publisherId>:<YYYY-MM-DD>",
     "campaignKeyFormat": "awin:<publisherId>:<merchantId>:<theme>:<creativeVersion>",
     "uniqueOn": [
-      "runKey",
-      "campaignKey"
+      "runs.runKey",
+      "campaigns.campaignKey"
     ],
-    "note": "Campaign keys are internal editorial identifiers, NOT Awin clickrefs. No Awin clickref or tracking URL exists until Joined + terms/commission verification."
+    "note": "Campaign keys are unique in top-level campaigns; runs reference them by key. Keys are editorial identifiers, NOT Awin clickrefs. Never create clickrefs/tracking links before Joined and verified terms/commission."
   },
   "runs": [
     {
@@ -98,38 +98,6 @@
         "epcPublisherEUR": null,
         "interpretation": "Empty advertiser report; absence of rows does not establish zero payout."
       },
-      "campaigns": [
-        {
-          "campaignKey": "awin:3060863:30859:refurbished-electronics:editorial-v1",
-          "merchantId": 30859,
-          "theme": "refurbished-electronics",
-          "state": "editorial_hold",
-          "bufferIdeaId": "6ae2fae84574572cab66f235",
-          "pageId": null,
-          "productIds": [],
-          "postIds": [],
-          "clickrefs": [],
-          "trackingLinks": [],
-          "merchantApproved": false,
-          "primaryKpi": "approved commission / qualified outbound click",
-          "experimentState": "not_started"
-        },
-        {
-          "campaignKey": "awin:3060863:9837:tyre-compatibility:editorial-v1",
-          "merchantId": 9837,
-          "theme": "tyre-compatibility",
-          "state": "editorial_hold",
-          "bufferIdeaId": "6ae2faea86828dc765d02378",
-          "pageId": null,
-          "productIds": [],
-          "postIds": [],
-          "clickrefs": [],
-          "trackingLinks": [],
-          "merchantApproved": false,
-          "primaryKpi": "approved commission / qualified outbound click",
-          "experimentState": "not_started"
-        }
-      ],
       "socialChannels": [
         {
           "channelId": "6a991dcadfa176941c041b3d",
@@ -183,7 +151,43 @@
         "userActionRequired": "Use originating Chrome browser context / ChatGPT Work for authenticated Join",
         "previouslyReported": true,
         "notifyAgain": false
-      }
+      },
+      "campaignKeys": [
+        "awin:3060863:30859:refurbished-electronics:editorial-v1",
+        "awin:3060863:9837:tyre-compatibility:editorial-v1"
+      ]
+    }
+  ],
+  "campaigns": [
+    {
+      "campaignKey": "awin:3060863:30859:refurbished-electronics:editorial-v1",
+      "merchantId": 30859,
+      "theme": "refurbished-electronics",
+      "state": "editorial_hold",
+      "bufferIdeaId": "6ae2fae84574572cab66f235",
+      "pageId": null,
+      "productIds": [],
+      "postIds": [],
+      "clickrefs": [],
+      "trackingLinks": [],
+      "merchantApproved": false,
+      "primaryKpi": "approved commission / qualified outbound click",
+      "experimentState": "not_started"
+    },
+    {
+      "campaignKey": "awin:3060863:9837:tyre-compatibility:editorial-v1",
+      "merchantId": 9837,
+      "theme": "tyre-compatibility",
+      "state": "editorial_hold",
+      "bufferIdeaId": "6ae2faea86828dc765d02378",
+      "pageId": null,
+      "productIds": [],
+      "postIds": [],
+      "clickrefs": [],
+      "trackingLinks": [],
+      "merchantApproved": false,
+      "primaryKpi": "approved commission / qualified outbound click",
+      "experimentState": "not_started"
     }
   ]
 }
