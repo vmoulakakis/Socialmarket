@@ -1,6 +1,6 @@
 # Awin-only Application Autopilot — browser execution contract
 
-**Publisher:** 3060863. **Latest evidence date:** 30 October 2026. **State:** Prepared queue / NO automated Join submitted by this repository.
+**Publisher:** 3060863. **Latest evidence date:** 31 October 2026. **State:** Prepared queue / NO automated Join submitted by this repository.
 
 This module is deliberately independent of production website changes. Data under `data/awin/application-queue.json` contains verified Awin membership snapshots, observed advertiser-level EPC metrics and tailored Greek application notes of at most 150 Unicode characters. These KPIs are not the publisher's earnings, and unknown commissions must remain unknown.
 
@@ -53,3 +53,15 @@ Change ID: CHG-AWIN-20261028. Plan → GitHub branch and tests → review → co
 - Limit editorial work to two exploratory themes: **refurbished electronics** (Back Market Pending) and **tyre compatibility** (Elastika Not joined). Two existing Buffer HOLD ideas already cover them. No new drafts, tracked links, public posts, deployments or paid browser sessions this run. Do not repurpose unrelated personal Instagram/TikTok channels without eligibility verification; `Sales for All` Facebook is disconnected and `my deal` startPage is locked.
 - One experiment per funnel once approval and instrumentation exist. Primary KPI: **validated commission per qualified outbound click**; diagnose tracking and reversals before changing creative. Until then no statistically meaningful funnel experiment exists.
 - Persistence: `data/awin/application-queue.json` contains the latest membership and operational status. This is review-only PR data; not merged to production.
+
+
+## 2026-10-31 operational review
+
+- Reconfirmed via Awin MCP account 3060863: **Joined 0**, **Pending Back Market GR (30859)**, **Rejected Water to Go Europe (107764)**, **Suspended 0**. Advertiser programme `status=Active` is not publisher membership.
+- Rechecked three Greece-region candidates via `awin_get_programme_details`: **Lambakaifotismos - GR (25829)**, **Elastika-Online GR (9837)**, **Hawkers GR (19725)**. All remain **Not joined**. Their current advertiser-level EPCs are EUR **0.24**, **0.11**, **0.11** respectively; commissionRange is empty for all three. Do not estimate publisher earnings, demand, margin or commission from these figures.
+- Awin advertiser performance for **2026-10-01 through 2026-10-30**, queried successfully using **UTC**, returned **0 rows**; pending/approved/reversed commissions remain **unknown**, not zero. `Europe/Athens` was rejected by the API; no more retries needed.
+- Buffer channel check: **Sales for All** Facebook disconnected, **my deal** startPage locked; TikTok `billmtiktoker_ai` and Instagram `vassilis1969` connected but **affiliate relevance/merchant permissions not verified**. Existing two HOLD ideas were verified by ID; no publication.
+- Authenticated Chrome connector in this scheduled runtime returned `originating_browser_context_required`. This is the **same previously reported browser blocker**, not a new incident. No paid TinyFish call, Join attempt, affiliate link, public post, deployment or paid advertising.
+- Added `data/awin/operations-ledger.json` as **review-branch-only evidence**, with unique daily run key and two unique internal editorial campaign keys. These keys are **not Awin clickrefs**. A regression test now enforces duplicate-free run/campaign keys, no paid actions, no unapproved tracking/posts and null commissions when the report is empty. No public runtime/persistence is claimed.
+- Limited exploratory themes to **refurbished electronics** (merchant Pending) and **tyre compatibility** (merchant Not joined). Lighting and sunglasses remain candidates, not active funnels. Seasonality and competitive hypotheses are **unverified**; there is no measured Greek keyword demand or price-comparison study yet.
+- Next decision gate: browser operator with authenticated publisher site + advertiser terms review. Do not resubmit existing Pending/Rejected programmes. Only after verified Joined and product-level eligibility may tracking, live pages and organic affiliate posting proceed.
