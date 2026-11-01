@@ -107,3 +107,28 @@ One architect dispatches at most 3 bounded tasks per invocation; independent ske
 ## Source-of-truth design rule
 
 Do not conflate `source_imported`, `identified`, `verified_evidence`, `estimated_demand`, `merchant_joined`, `commission_eligible`, `product_fit`, `promotion_ready`, `revenue_observed`. Each requires separate dated proof and auditability.
+
+## 2026-11-01 23:15 Athens — Neural activation & reliability gates
+
+**Validated live changes:**
+
+1. DB function `sm_intel.opportunity_brief_v3` now excludes `relevance_review='rejected'`. Verified 2 affected Greek problems expose 0 candidates and report 4 rejected records excluded each. All 8 historically rejected product matches are hidden; no candidate is falsely represented as commercially eligible.
+2. `sm_intel.market_evidence_coverage_v3` now counts a verified source only when its provenance is independently identifiable, observation is <=90 days old, not future-dated, and source expiry is still valid. Real check: 41 problems, 37 total signals, 0 verified demand, 0 verified supply, 0 review-ready. This intentionally reports honest incompleteness.
+3. Added `.github/workflows/socialmarket-e5-protected-backfill.yml` for a **manual-only, CPU, E5, max 16/32/64/128 document batch** with concurrency lock, protected `socialmarket-intelligence` GitHub environment, exact main SHA, dedicated `SOCIALMARKET_DB_URL` secret, URL project-ref preflight and post-write model checks. There is no push or cron trigger.
+4. No production E5 vectors have been written. GitHub workflow dispatch requires its reviewed commit present on main, a manually approved environment and explicit `SM_INTEL_E5_APPROVED=true` environment variable. This PR is still draft; do not bypass the gates.
+5. Existing SocialMarket AI Architect automation was **run-now requested** once to continue original independent GR market research; do not infer completion or evidence import before the automation actually reports an outcome.
+6. Supabase 384-d vector storage and HNSW schema already exist and match the E5 model contract. The private `socialmarket-graphrag` function remains lexical-only until (a) production documents have real E5 embeddings, and (b) a secured E5 query encoding endpoint is deployed and configured. Never claim vector retrieval active merely because CI synthetic benchmark passed.
+
+**Release checklist for model activation**:
+- [x] Error/relevance false-positive guard blocks all 8 rejected pairs at the opportunity brief API.
+- [x] Market evidence freshness and source-independence check enforced in live coverage.
+- [x] 4,360 pending vectors / 0 ready verified before worker release.
+- [x] CPU E5 model executed successfully on synthetic Greek cases in GitHub Actions; its recorded model evaluation is still **pending** on realistic merchant catalog test labels.
+- [ ] Independent PR code/security review and protected environment approval.
+- [ ] Confirm GitHub protected environment `socialmarket-intelligence` has active required reviewers, `SM_INTEL_E5_APPROVED=true` and `SOCIALMARKET_DB_URL` secret, with strictly scoped database account (not cross-project superuser).
+- [ ] Merge audited revision and manually dispatch one bounded **16-doc** run. Check actual `embedding_status=ready`, model provenance, error/lease counts and Greek retrieval evidence before scaling.
+- [ ] Repeat only if live correctness and resource metrics meet thresholds; do not perform full backfill automatically.
+- [ ] Deploy a secure CPU E5 query encoder (same embedding model and pooling) on authorized server such as existing private Oracle node, and configure server-only TLS URL and random access token. Never expose the decoder or DB credentials to browser clients.
+- [ ] Separately complete human-labeled GR retrieval benchmark and merchant commission verification before any end-user recommendations.
+
+**Safety:** no new Linkwise full-feed download, no public promotion, no paid API model calls, no artificial product/demand scoring from pending labels.
