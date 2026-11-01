@@ -53,6 +53,9 @@ jobs:
       - name: Complete HTTP streaming scan — no writes
         if: inputs.mode == 'full_dry_run'
         run: python workers/product_intelligence/linkwise_delta_only_v2.py --vault-source --skip-unchanged
-      - name: EXPLICIT production operation — add only unseen source products
+      - name: First reconcile existing dated products with verified commission > EUR10
+        if: inputs.mode == 'delta_new_only_commit'
+        run: python workers/product_intelligence/linkwise_delta_only_v2.py --reconcile-existing-only --commit
+      - name: EXPLICIT production operation — stream full source and add only new eligible dated products
         if: inputs.mode == 'delta_new_only_commit'
         run: python workers/product_intelligence/linkwise_delta_only_v2.py --vault-source --commit --skip-unchanged
