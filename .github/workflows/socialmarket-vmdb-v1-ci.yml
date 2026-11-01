@@ -4,6 +4,10 @@ on:
     paths:
       - "supabase/migrations/*sm_intel*"
       - "supabase/migrations/*sm_intelligence*"
+      - "supabase/migrations/*neural_market*"
+      - "workers/product_intelligence/market_brain_v3.py"
+      - "tests/test_market_brain_v3.py"
+      - "tests/fixtures/market_brain_v3.json"
       - "workers/product_intelligence/full_feed_vmdb_v1.py"
       - "workers/product_intelligence/linkwise_delta_only_v2.py"
       - "workers/product_intelligence/socialmarket_model_router.py"
@@ -24,6 +28,17 @@ jobs:
           python-version: "3.12"
       - name: Install pinned parser and worker dependencies
         run: python -m pip install "ijson==3.4.0" "requests==2.32.3" "psycopg[binary]==3.2.9"
+      - name: Verify conservative Greek market brain and false-match regression
+        run: |
+          python -m unittest discover -s tests -p "test_market_brain_v3.py" -v
+          python workers/product_intelligence/market_brain_v3.py --fixture tests/fixtures/market_brain_v3.json --top-k 4 > /tmp/market-brain-v3.json
+          python - <<'PY'
+          import json
+          with open('/tmp/market-brain-v3.json') as f: d=json.load(f)
+          assert d["review_status"]=="needs_evidence"
+          assert all(row["status"]=="needs_evidence" for row in d["matches"])
+          assert not any("σκουλαρίκια" in row["title"].lower() for row in d["matches"])
+          PY
       - name: Compile ingestion script
         run: python -m py_compile workers/product_intelligence/full_feed_vmdb_v1.py
       - name: Verify full feed contract without network or production writes
