@@ -1,0 +1,43 @@
+name: SocialMarket AI 3.0 — bounded E5 vector backfill (manual only)
+on:
+  workflow_dispatch:
+    inputs:
+      max_docs:
+        description: "Maximum existing search documents to embed; no Linkwise download"
+        type: choice
+        required: true
+        default: '32'
+        options: ['32','128','512']
+concurrency:
+  group: socialmarket-e5-backfill-exclusive
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  backfill-existing-index:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SOCIALMARKET_DB_URL: ${{ secrets.SOCIALMARKET_DB_URL }}
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      CUDA_VISIBLE_DEVICES: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify dedicated private database connection is configured
+        run: |
+          if [ -z "$SOCIALMARKET_DB_URL" ]; then
+            echo 'Missing server-only SOCIALMARKET_DB_URL secret: aborting before model download'
+            exit 1
+          fi
+      - name: Install pinned CPU model and postgres client
+        run: python -m pip install "sentence-transformers==5.1.2" "psycopg[binary]==3.2.9"
+      - name: Run local offline format tests
+        run: python -m unittest discover -s tests -p "test_graphrag_multilingual_e5.py" -v
+      - name: Lease and embed bounded existing documents
+        run: |
+          python workers/product_intelligence/graphrag_multilingual_e5.py backfill --limit "${{ inputs.max_docs }}"
