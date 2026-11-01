@@ -6,6 +6,9 @@ on:
       - "supabase/migrations/*sm_intelligence*"
       - "supabase/migrations/*neural_market*"
       - "workers/product_intelligence/market_brain_v3.py"
+      - "workers/product_intelligence/graphrag_multilingual_e5.py"
+      - "deploy/oracle-e5/**"
+      - ".github/workflows/socialmarket-e5-protected-backfill.yml"
       - "tests/test_market_brain_v3.py"
       - "tests/fixtures/market_brain_v3.json"
       - "benchmarks/greek_e5_retrieval_v3.py"
@@ -44,6 +47,23 @@ jobs:
           assert d["review_status"]=="needs_evidence"
           assert all(row["status"]=="needs_evidence" for row in d["matches"])
           assert not any("σκουλαρίκια" in row["title"].lower() for row in d["matches"])
+          PY
+      - name: Validate ARM64 E5 deployment manifest YAML
+        run: |
+          python -m pip install "PyYAML==6.0.2"
+          python - <<'PY'
+          import yaml
+          with open("deploy/oracle-e5/compose.yaml") as f: manifest=yaml.safe_load(f)
+          svc=manifest["services"]["e5-query"]
+          assert svc["ports"]==["127.0.0.1:8091:8091"]
+          assert svc["read_only"] is True and svc["mem_limit"]=="8g"
+          assert "ALL" in svc["cap_drop"]
+          with open(".github/workflows/socialmarket-e5-protected-backfill.yml") as f:
+              job=yaml.safe_load(f)
+          assert list(job["on"] if "on" in job else job[True]).count("workflow_dispatch") == 1
+          assert "push" not in (job.get("on") or job.get(True) or {})
+          assert "pull_request" not in (job.get("on") or job.get(True) or {})
+          print("E5 manifests: manual-only trigger, loopback-only port, read-only runtime")
           PY
       - name: Compile ingestion script
         run: python -m py_compile workers/product_intelligence/full_feed_vmdb_v1.py
