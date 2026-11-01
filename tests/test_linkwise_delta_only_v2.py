@@ -57,6 +57,27 @@ class NewOnlyStreamingTest(unittest.TestCase):
         records=list(stream_records(io.BytesIO(raw),"item"))
         self.assertEqual(len(records),2)
         self.assertEqual(records[0]["product_id"],"a")
+    def test_expiry_is_mandatory_not_default_open_ended(self):
+        nowbase={"product_id":"X001","product_name":"Current offer","currency":"EUR",
+                 "price":"250","tracking_url":TRACK}
+        missing,_=product_to_row(nowbase)
+        self.assertIn("valid_to_missing",missing["quarantine_reason"])
+        expired,_=product_to_row({**nowbase,"valid_to":"2026-10-01T12:00:00Z"})
+        self.assertIn("expired",expired["quarantine_reason"])
+        active,_=product_to_row({**nowbase,"valid_to":"2027-01-01T23:59:59+00:00"})
+        self.assertIsNone(active["quarantine_reason"])
+    def test_valid_to_garbage_never_open_ended(self):
+        base={"product_id":"X002","product_name":"Unknown end date","currency":"EUR",
+              "price":"220","tracking_url":TRACK}
+        bad,_=product_to_row({**base,"valid_to":"unknown"})
+        self.assertIn("invalid_valid_to",bad["quarantine_reason"])
+    def test_record_key_stable_at_price_changes(self):
+        base={"product_id":"X003","product_name":"Chair","currency":"EUR",
+              "tracking_url":TRACK,"valid_to":"2027-03-15T00:00:00Z"}
+        a,_=product_to_row({**base,"price":"200"})
+        b,_=product_to_row({**base,"price":"250"})
+        self.assertEqual(a["record_key"],b["record_key"])
+        self.assertNotEqual(a["content_sha256"],b["content_sha256"])
     def test_hard_batch_limit(self):
         self.assertLessEqual(DEFAULT_BATCH,250)
         self.assertLessEqual(MAX_RECORD_BYTES,128*1024)
