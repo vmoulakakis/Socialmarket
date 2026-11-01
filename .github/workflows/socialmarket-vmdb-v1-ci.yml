@@ -9,6 +9,8 @@ on:
       - "tests/test_market_brain_v3.py"
       - "tests/fixtures/market_brain_v3.json"
       - "benchmarks/greek_e5_retrieval_v3.py"
+      - "models/neural_solution_matcher_v3.py"
+      - "tests/test_neural_solution_matcher_v3.py"
       - "workers/product_intelligence/full_feed_vmdb_v1.py"
       - "workers/product_intelligence/linkwise_delta_only_v2.py"
       - "workers/product_intelligence/socialmarket_model_router.py"
@@ -103,6 +105,8 @@ jobs:
           python-version: "3.12"
       - name: Install CPU multilingual neural retrieval benchmark
         run: python -m pip install "sentence-transformers==5.1.2" "numpy==2.2.6"
+      - name: Validate trainable two-tower neural architecture and zero-fake-training gate
+        run: python -m unittest discover -s tests -p "test_neural_solution_matcher_v3.py" -v
       - name: Run actual E5 Greek retrieval with hard negatives, zero API tokens
         run: python benchmarks/greek_e5_retrieval_v3.py | tee /tmp/greek-neural-eval.json
       - uses: actions/upload-artifact@v4
