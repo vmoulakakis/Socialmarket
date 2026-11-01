@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Full Linkwise CD104 streaming scan; import ONLY new, verified >=EUR10 offers.
+"""Full Linkwise CD104 streaming scan; import ONLY new, verified >EUR10 offers with future valid_to.
 
 SAFE DEFAULT: dry-run; never fetches feed unless explicitly executed.
 - O(1) memory w.r.t total rows: ijson stream + bounded 100-record batches.
@@ -94,7 +94,9 @@ def product_to_row(record: dict, max_bytes: int = MAX_RECORD_BYTES) -> tuple[dic
     ends=parse_expiry(record.get("valid_to"))
     if record.get("valid_from") not in (None,"") and starts is None:
         errors.append("invalid_valid_from")
-    if record.get("valid_to") not in (None,"") and ends is None:
+    if record.get("valid_to") in (None,""):
+        errors.append("valid_to_missing")
+    elif ends is None:
         errors.append("invalid_valid_to")
     if starts is not None and datetime.fromisoformat(starts)>datetime.now(timezone.utc):
         errors.append("not_yet_valid")
@@ -226,6 +228,10 @@ def run(args):
     existing=0
     unqualified=0
     unresolved=0
+    rejected_missing_expiry=0
+    rejected_expired=0
+    rejected_unverified_terms=0
+    rejected_low_commission=0
     oversized=0
     try:
         if args.commit or args.vault_source:
@@ -271,6 +277,10 @@ def run(args):
                     existing+=d["existing"]
                     unqualified+=d["unqualified"]
                     unresolved+=d["unresolved"]
+                    rejected_missing_expiry+=d["missing_valid_to"]
+                    rejected_expired+=d["expired_valid_to"]
+                    rejected_unverified_terms+=d["unverified_terms"]
+                    rejected_low_commission+=d["commission_not_over_10"]
                 batch_start=scanned
                 rows.clear()
             if args.max_records and scanned>=args.max_records:
@@ -281,6 +291,10 @@ def run(args):
             existing+=d["existing"]
             unqualified+=d["unqualified"]
             unresolved+=d["unresolved"]
+            rejected_missing_expiry+=d["missing_valid_to"]
+            rejected_expired+=d["expired_valid_to"]
+            rejected_unverified_terms+=d["unverified_terms"]
+            rejected_low_commission+=d["commission_not_over_10"]
         if scanned==0:
             raise RuntimeError("empty_feed_no_commit")
         if args.commit:
@@ -299,8 +313,13 @@ def run(args):
             "existing_skipped":existing if args.commit else None,
             "unqualified_skipped":unqualified if args.commit else None,
             "unresolved_program_skipped":unresolved if args.commit else None,
+            "missing_valid_to":rejected_missing_expiry if args.commit else None,
+            "expired_valid_to":rejected_expired if args.commit else None,
+            "unverified_terms":rejected_unverified_terms if args.commit else None,
+            "commission_not_above_10":rejected_low_commission if args.commit else None,
             "oversize_skipped":oversized,"run_id":str(run_id) if run_id else None,
-            "verified_min_commission_eur":10,
+            "verified_min_commission_eur_exclusive":10,
+            "future_valid_to_required":True,
             "existing_rows_updated":0,"source_fingerprint_available":bool(fp),
             "source_resume_safe":strong}
         print(json.dumps(summary,ensure_ascii=False))
