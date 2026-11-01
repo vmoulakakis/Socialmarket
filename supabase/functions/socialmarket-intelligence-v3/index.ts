@@ -27,11 +27,13 @@ Deno.serve(async(req:Request)=>{
  let body:Record<string,unknown>;
  try{body=JSON.parse(raw)}catch{return reply({error:"invalid_json"},400)}
  const action=body.action==="brief"?"brief":body.action==="diagnostic"?"diagnostic":"overview";
- if(action==="brief" && (typeof body.problem_id!=="string"||!UUID.test(body.problem_id)))return reply({error:"invalid_problem_id"},400);
+ const problemId=body.problem_id;
+ if(action==="brief" && (typeof problemId!=="string"||!UUID.test(problemId)))return reply({error:"invalid_problem_id"},400);
  const sql=postgres(dbUrl,{max:1,prepare:false,connect_timeout:5,ssl:"require",idle_timeout:5});
  try{
   if(action==="brief"){
-   const out=await sql`select sm_intel.opportunity_brief_v3(${body.problem_id}::uuid) as value`;
+   if(typeof problemId!=="string")return reply({error:"invalid_problem_id"},400);
+   const out=await sql`select sm_intel.opportunity_brief_v3(${problemId}::uuid) as value`;
    if(!out[0]?.value)return reply({error:"problem_not_found"},404);
    return reply({ok:true,contract:"sm_intel_opportunity_v3",brief:out[0].value,
      validation:"evidence_candidate_only",commercial_actions_permitted:false});
