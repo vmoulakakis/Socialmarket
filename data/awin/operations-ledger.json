@@ -156,6 +156,187 @@
         "awin:3060863:30859:refurbished-electronics:editorial-v1",
         "awin:3060863:9837:tyre-compatibility:editorial-v1"
       ]
+    },
+    {
+      "runKey": "awin:3060863:2026-11-01",
+      "checkedAt": "2026-11-01",
+      "source": "Awin publisher MCP, public Awin programme profiles, Greek public supply samples, GitHub PR #98, Buffer channel/idea snapshot",
+      "membership": {
+        "joined": [],
+        "pending": [
+          30859
+        ],
+        "rejected": [
+          107764
+        ],
+        "suspended": []
+      },
+      "candidateChecks": [
+        {
+          "advertiserId": 25829,
+          "name": "Lambakaifotismos - GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Home & Garden",
+          "advertiserEpcEUR": 0.24,
+          "advertiserConversionRatePercent": 50,
+          "advertiserApprovalPercent": 100,
+          "validationDays": 121,
+          "publicCommission": {
+            "standardPercent": 9,
+            "voucherPercent": 5,
+            "topNegotiatedPercent": 12,
+            "cookieDays": 7,
+            "source": "https://ui.awin.com/merchant-profile/25829/commission-groups",
+            "checkedAt": "2026-11-01",
+            "publisherRateVerified": false,
+            "eligibleCommissionBaseVerified": false
+          },
+          "illustrativeEligibleNetSaleForEUR10Commission": {
+            "atStandardPercent": 9,
+            "minimumEUR": 111.12
+          },
+          "merchantTermsVerified": false,
+          "actualGreekDemandEvidence": null,
+          "seasonalityHypothesis": "Winter lighting interest plausible, unquantified",
+          "competitionAssessment": "Observed Greek competitors Ledmania, LED7, Leroy Merlin; no keyword-volume or rank evidence",
+          "competitionSources": [
+            "https://ledmania.gr/",
+            "https://led7.gr/οροφής/",
+            "https://www.leroymerlin.gr/gr/fotistika/toihou-orofis/"
+          ],
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 9837,
+          "name": "Elastika-Online GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Automotive",
+          "advertiserEpcEUR": 0.11,
+          "advertiserConversionRatePercent": 2.33,
+          "advertiserApprovalPercent": 75,
+          "validationDays": 22,
+          "publicCommission": {
+            "standardPercent": 3,
+            "cookieDays": 60,
+            "source": "https://ui.awin.com/merchant-profile/9837",
+            "checkedAt": "2026-11-01",
+            "publisherRateVerified": false,
+            "eligibleCommissionBaseVerified": false,
+            "merchantPublicNotes": "Coupon restrictions and delayed validation; merchant-specific terms still unreviewed"
+          },
+          "illustrativeEligibleNetSaleForEUR10Commission": {
+            "atStandardPercent": 3,
+            "minimumEUR": 333.34
+          },
+          "merchantTermsVerified": false,
+          "actualGreekDemandEvidence": null,
+          "seasonalityHypothesis": "Wet-road safety may be salient in autumn, no measured uplift",
+          "competitionAssessment": "Observed ProTires and ElastikaLeader fitment/dimension tools; no Greek search-volume evidence",
+          "competitionSources": [
+            "https://protires.gr/gr/elastika-gia-autokinita/2026",
+            "https://cars.elastikaleader.gr/elastiko/jeep/compass/compass-5206/42808"
+          ],
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 19725,
+          "name": "Hawkers GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Clothing Accessories",
+          "advertiserEpcEUR": 0.11,
+          "advertiserConversionRatePercent": 1.83,
+          "advertiserApprovalPercent": 87.35,
+          "validationDays": 24,
+          "publicCommission": null,
+          "merchantTermsVerified": false,
+          "actualGreekDemandEvidence": null,
+          "seasonalityHypothesis": "Spring/summer may be stronger than November; unmeasured",
+          "competitionAssessment": "Not researched enough to rank; hold",
+          "competitionSources": [],
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        }
+      ],
+      "report": {
+        "periodStart": "2026-10-02",
+        "periodEnd": "2026-11-01",
+        "timezone": "UTC",
+        "queryStatus": "success",
+        "rowCount": 0,
+        "pendingCommissionEUR": null,
+        "approvedCommissionEUR": null,
+        "reversedCommissionEUR": null,
+        "qualifiedOutboundClicks": null,
+        "merchantCVR": null,
+        "epcPublisherEUR": null,
+        "interpretation": "Empty advertiser report, no commission-status breakdown; unavailable is not zero."
+      },
+      "socialChannels": [
+        {
+          "channelId": "6a991dcadfa176941c041b3d",
+          "name": "my deal",
+          "service": "startPage",
+          "connected": true,
+          "locked": true,
+          "eligible": false
+        },
+        {
+          "channelId": "6a7c20eab2d9d57743615efa",
+          "name": "billmtiktoker_ai",
+          "service": "tiktok",
+          "connected": true,
+          "locked": false,
+          "eligible": null
+        },
+        {
+          "channelId": "6a7c1fa2b2d9d57743615a1c",
+          "name": "Sales for All",
+          "service": "facebook",
+          "connected": false,
+          "locked": false,
+          "eligible": false
+        },
+        {
+          "channelId": "68a864cf8e37dc1a589afa8b",
+          "name": "vassilis1969",
+          "service": "instagram",
+          "connected": true,
+          "locked": false,
+          "eligible": null
+        }
+      ],
+      "browser": {
+        "provider": "connected Chrome",
+        "status": "originating_browser_context_required",
+        "writeAccess": false,
+        "blockerPreviouslyReported": true,
+        "paidTinyFishUsed": false
+      },
+      "actions": {
+        "applicationsSubmitted": [],
+        "trackingLinksCreated": [],
+        "sitesDeployed": [],
+        "postsPublished": [],
+        "paidActions": [],
+        "queueUpdated": true,
+        "editorialDraftsCreated": [
+          "docs/awin/EDITORIAL_TYRE_GUIDE_GR.md"
+        ]
+      },
+      "notification": {
+        "userActionRequired": "Use originating Chrome browser context / ChatGPT Work for authenticated Join",
+        "previouslyReported": true,
+        "notifyAgain": false
+      },
+      "campaignKeys": [
+        "awin:3060863:30859:refurbished-electronics:editorial-v1",
+        "awin:3060863:9837:tyre-compatibility:editorial-v1"
+      ]
     }
   ],
   "campaigns": [
@@ -187,7 +368,9 @@
       "trackingLinks": [],
       "merchantApproved": false,
       "primaryKpi": "approved commission / qualified outbound click",
-      "experimentState": "not_started"
+      "experimentState": "not_started",
+      "editorialDraftPath": "docs/awin/EDITORIAL_TYRE_GUIDE_GR.md",
+      "editorialDraftCreatedAt": "2026-11-01"
     }
   ]
 }
