@@ -45,48 +45,80 @@ def build_model():
     return SentenceTransformer(MODEL_ID, device="cpu", trust_remote_code=False)
 
 def run_backfill(model, max_docs):
+    """Lease, encode, and acknowledge in independent short transactions.
+
+    At most 3 claims per document are allowed by the DB; stale leases are
+    recoverable. A failure on one row cannot undo successful ACKs for others.
+    """
     import psycopg
     url = os.getenv("SOCIALMARKET_DB_URL")
     if not url:
         raise RuntimeError("missing_database_connection")
+    if not isinstance(max_docs, int) or max_docs < 1:
+        raise ValueError("invalid_max_docs")
     name = "sm-e5-" + uuid.uuid4().hex[:12]
     completed = 0
-    errors = 0
-    with psycopg.connect(url, sslmode="require", autocommit=False) as conn:
-        while completed + errors < max_docs:
-            n = min(MAX_BATCH, max_docs - completed - errors)
-            with conn.cursor() as cur:
-                cur.execute("select doc_id, doc_text, doc_hash from sm_intel.claim_embeddings(%s,%s)", (name, n))
-                jobs = cur.fetchall()
-            conn.commit()
+    failed = 0
+    conflicted = 0
+    with psycopg.connect(url, sslmode="require", autocommit=True) as conn:
+        while completed + failed + conflicted < max_docs:
+            size = min(MAX_BATCH, max_docs-completed-failed-conflicted)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "select doc_id,doc_text,doc_hash from sm_intel.claim_embeddings(%s,%s)",
+                        (name,size),
+                    )
+                    jobs = cur.fetchall()
             if not jobs:
                 break
             try:
-                vectors = encode_passages(model, [j[1] for j in jobs])
+                vectors = encode_passages(model,[row[1] for row in jobs])
             except Exception as exc:
-                # A model failure cannot leave leased documents stuck forever.
-                with conn.cursor() as cur:
-                    for j in jobs:
-                        cur.execute("select sm_intel.ack_embedding(%s,%s,%s,null,%s)",
-                                    (j[0],name,j[2],type(exc).__name__))
-                conn.commit()
-                errors += len(jobs)
+                for doc_id,_,content_hash in jobs:
+                    with conn.transaction():
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                "select sm_intel.ack_embedding(%s,%s,%s,null,%s)",
+                                (doc_id,name,content_hash,type(exc).__name__),
+                            )
+                            cur.fetchone()
+                    failed += 1
                 continue
-            with conn.cursor() as cur:
-                for (doc_id, _, doc_hash), vec in zip(jobs,vectors):
+            for (doc_id,_,content_hash),vector in zip(jobs,vectors):
+                try:
+                    with conn.transaction():
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                "select sm_intel.ack_embedding(%s,%s,%s,%s,null)",
+                                (doc_id,name,content_hash,json.dumps(vector)),
+                            )
+                            accepted = bool(cur.fetchone()[0])
+                    if accepted:
+                        completed += 1
+                    else:
+                        conflicted += 1
+                except Exception as exc:
+                    failed += 1
+                    # Any failed write can safely be retried only if the
+                    # DB lease/content hash remains current. Never pretend
+                    # that a vector was saved.
                     try:
-                        cur.execute("select sm_intel.ack_embedding(%s,%s,%s,%s,null)",
-                                    (doc_id,name,doc_hash,json.dumps(vec)))
-                        if cur.fetchone()[0]:
-                            completed += 1
-                        else:
-                            errors += 1
+                        with conn.transaction():
+                            with conn.cursor() as cur:
+                                cur.execute(
+                                    "select sm_intel.ack_embedding(%s,%s,%s,null,%s)",
+                                    (doc_id,name,content_hash,type(exc).__name__),
+                                )
                     except Exception:
-                        conn.rollback()
-                        errors += 1
-            conn.commit()
-    print(json.dumps({"model": MODEL_ID,"completed":completed,"errors":errors,"max_docs":max_docs}))
-    return 0 if errors==0 else 2
+                        pass
+    print(json.dumps({
+        "model": MODEL_ID,"completed":completed,
+        "failed":failed,"lease_conflicts":conflicted,
+        "max_docs":max_docs,"real_embeddings_written":completed,
+    }))
+    return 0 if failed==0 and conflicted==0 else 2
+
 
 def run_query_service(model):
     token = os.environ.get("SOCIALMARKET_EMBED_QUERY_TOKEN","")
