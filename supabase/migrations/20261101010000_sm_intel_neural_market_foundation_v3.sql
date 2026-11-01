@@ -254,16 +254,6 @@ begin
  return jsonb_build_object('inserted_feature_snapshots',inserted_count,'model_version','p3.0');
 end $$;
 
--- Registration is informational: no pretend-ready embeddings or untested neural models.
-insert into sm_intel.model_registry_v3(model_key,purpose,provider,model_id,embedding_dim,runtime_class,risk_level,evaluation_thresholds)
-values
- ('e5small_384','greek/english dense embeddings','huggingface','intfloat/multilingual-e5-small',384,'cpu','low','{"recall_at_20":0.85,"ndcg_at_10":0.70}'::jsonb),
- ('bgem3_candidate','multilingual candidate retrieval benchmark','huggingface','BAAI/bge-m3',1024,'cpu','medium','{"must_beat_baseline":true}'::jsonb),
- ('qwen_reranker_candidate','neural cross-encoder rerank','huggingface','Qwen/Qwen3-Reranker-0.6B',null,'cpu','medium','{"must_beat_baseline":true}'::jsonb),
- ('market_forecaster_candidate','uncertainty-calibrated demand regression','local','gradient_boosting_baseline',null,'cpu','high','{"holdout_required":true}'::jsonb),
- ('graph_nn_candidate','heterogeneous graph recommendation','local','heterogeneous_gnn',null,'gpu','high','{"sufficient_verified_edges_required":true}'::jsonb)
-on conflict(model_key) do nothing;
-
 do $$
 declare t text;
 begin
@@ -280,3 +270,14 @@ grant select,insert,update on sm_intel.market_signals_v3,sm_intel.product_featur
  sm_intel.model_registry_v3,sm_intel.model_evaluations_v3,sm_intel.market_assessments_v3 to service_role;
 grant select on sm_intel.market_evidence_coverage_v3,sm_intel.market_brain_health_v3 to service_role;
 grant execute on function sm_intel.refresh_product_features_v3(integer) to service_role;
+
+-- Registration is informational: no pretend-ready embeddings or untested neural models.
+insert into sm_intel.model_registry_v3(model_key,purpose,provider,model_id,embedding_dim,runtime_class,risk_level,evaluation_thresholds)
+values
+ ('e5small_384','greek/english dense embeddings','huggingface','intfloat/multilingual-e5-small',384,'cpu','low','{"recall_at_20":0.85,"ndcg_at_10":0.70}'::jsonb),
+ ('bgem3_candidate','multilingual candidate retrieval benchmark','huggingface','BAAI/bge-m3',1024,'cpu','medium','{"must_beat_baseline":true}'::jsonb),
+ ('qwen_reranker_candidate','neural cross-encoder rerank','huggingface','Qwen/Qwen3-Reranker-0.6B',null,'cpu','medium','{"must_beat_baseline":true}'::jsonb),
+ ('market_forecaster_candidate','uncertainty-calibrated demand regression','local','gradient_boosting_baseline',null,'cpu','high','{"holdout_required":true}'::jsonb),
+ ('graph_nn_candidate','heterogeneous graph recommendation','local','heterogeneous_gnn',null,'gpu','high','{"sufficient_verified_edges_required":true}'::jsonb)
+on conflict(model_key) do nothing;
+
