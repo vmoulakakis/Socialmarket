@@ -31,7 +31,7 @@ concurrency:
 jobs:
   embed:
     # Explicit two-key approval: main ref + environment configuration.
-    if: ${{ github.ref == 'refs/heads/main' && vars.SM_INTEL_E5_APPROVED == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment: socialmarket-intelligence
     timeout-minutes: 25
@@ -42,6 +42,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Require protected environment opt-in
+        env:
+          APPROVED: ${{ vars.SM_INTEL_E5_APPROVED }}
+        run: |
+          test "$APPROVED" = "true" || { echo "protected_environment_not_approved"; exit 1; }
       - name: Validate exact audited revision and bounded request
         env:
           EXPECTED_SHA: ${{ inputs.approved_sha }}
