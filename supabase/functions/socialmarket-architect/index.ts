@@ -38,6 +38,12 @@ async function contextFor(sql:ReturnType<typeof postgres>,task:Task){
    seasonality,evidence_summary,confidence,updated_at
    from public.market_problem_clusters where id=${ref}::uuid and market_code='GR' limit 1`;
   subject=(p[0]||null) as Row|null;
+  const gap=await sql`select evidence_status,demand_sources,supply_sources,counter_sources,
+    verified_demand_sources,verified_supply_sources,distinct_verified_demand_domains,
+    distinct_verified_supply_domains,research_gaps,methodology_version
+    from sm_intel.opportunity_research_v3 where problem_cluster_id=${ref}::uuid and region_code='GR' limit 1`;
+  if(subject && gap.length)subject={...subject,independent_evidence_audit:gap[0],
+    candidate_policy:"no claim of high demand / low supply without independently verified market observations"};
   const e=await sql`select id,source_family,source_url,signal_kind,signal_value,
     observed_at,expires_at,confidence,audit_status from sm_intel.research_evidence
     where problem_cluster_id=${ref}::uuid order by observed_at desc limit 12`;
@@ -53,7 +59,10 @@ async function contextFor(sql:ReturnType<typeof postgres>,task:Task){
    (select count(*) from sm_intel.qualified_offers) commercially_qualified,
    (select count(*) from sm_intel.promotion_ready_offers) promotion_ready,
    (select count(*) from sm_intel.search_documents where embedding_status='ready') vectors_ready,
-   (select count(*) from sm_intel.graph_edges where review_status='verified') verified_graph_edges`;
+   (select count(*) from sm_intel.graph_edges where review_status='verified') verified_graph_edges,
+   (select count(*) from sm_intel.opportunity_research_v3 where evidence_status='research_needed') research_needed,
+   (select count(*) from sm_intel.opportunity_research_v3 where evidence_status='partial_evidence') partial_evidence,
+   (select count(*) from sm_intel.opportunity_research_v3 where evidence_status='ready_for_independent_review') awaiting_independent_review`;
   subject=(a[0]||null) as Row|null;
  } else throw new Error("unsupported_subject");
  const name=short(subject?.product_title||subject?.problem_title||subject?.program_name||task.subject_kind,160);
