@@ -1,0 +1,39 @@
+name: SocialMarket AI 3.0 — one-time multilingual E5 CPU proof
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/sm-neural-e5-smoke.yml"
+      - "workers/product_intelligence/neural_retrieval_eval_v3.py"
+      - "tests/test_neural_retrieval_eval_v3.py"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  multilingual-e5-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install local CPU sentence-transformers only
+        run: python -m pip install "sentence-transformers==5.1.2"
+      - name: Contract tests — do not touch production
+        run: python -m unittest discover -s tests -p "test_neural_retrieval_eval_v3.py" -v
+      - name: E5 Greek Greeklish English neural inference smoke
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TOKENIZERS_PARALLELISM: 'false'
+          CUDA_VISIBLE_DEVICES: ''
+        run: |
+          python workers/product_intelligence/neural_retrieval_eval_v3.py --run-model | tee /tmp/socialmarket-e5-smoke.json
+          python - <<'PY'
+          import json
+          with open('/tmp/socialmarket-e5-smoke.json') as f: data=json.load(f)
+          assert data['model']=='intfloat/multilingual-e5-small'
+          assert data['cases']==5
+          assert data['evaluation_type']=='synthetic_smoke_only'
+          assert data['not_production_quality_proof'] is True
+          print('Real E5 executed; benchmark is only a smoke, not commercial validation.')
+          PY
