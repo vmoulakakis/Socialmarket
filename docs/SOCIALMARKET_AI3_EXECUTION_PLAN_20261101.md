@@ -77,3 +77,10 @@ Deliver a full-lifecycle, evidence-based Greek Commerce Intelligence Engine that
 - New migrations are additive and auditable; generated v3 candidates can be marked rejected or rebuilt without modifying underlying raw products or evidence.
 - No public merge/production UI update without independent CI and verified authenticated browser QA.
 - Status reporting MUST distinguish `MIGRATED`, `CODED`, `DEPLOYED`, `TESTED`, `PRODUCTION INFERENCE VERIFIED`.
+
+## Neural proof / production validation addendum (2026-11-01)
+- **Executed real CPU E5 smoke:** GitHub Actions [run 41347702932](https://github.com/vmoulakakis/Socialmarket/actions/runs/41347702932), completed success. Model output: **4/5 positive-vs-negative labeled synthetic pairs correct** (`pair_recall_at_1=0.8`, `average_positive_margin=0.0481`). The Greeklish query `pos na metrao ygrasia xwrafiou` failed (margin -0.02478); this is a concrete multilingual weakness, NOT a general accuracy estimate. No Supabase vectors were written and no paid language-model inference was called.
+- **Regression discovered by CI:** first v3 Edge API typecheck failed on interpolating `unknown` UUID, subsequently fixed in commit `bb393fcc` and Edge Function deployed as v2. Await latest PR CI to confirm all gates.
+- **Opportunity evidence:** actual `refresh_opportunity_research_v3(100)` assessed all 41 problems. 21 partial evidence, 20 research needed, 0 independently review-ready. Eight travel-related lexical matches were **rejected** (not deleted, not published) to respect non-travel SocialMarket scope.
+- **Production neural backlog:** `embedding_health_v3()` reports 4,360 documents pending and **0 ready**. The lease-based worker is coded but needs a secure CPU runner and database credentials; a smoke test against synthetic examples is NOT a production indexing run.
+- **P0 SQL acceptance:** `opportunity_brief_v3` returns only research candidate facts, zero commercial promotion, and the new private tables deny anon access. No source data, programs, commission terms, prices, or legacy ingestion jobs were altered.
