@@ -346,6 +346,24 @@ def run(args):
             conn.close()
 
 
+def run_existing_reconciliation(max_rows: int) -> int:
+    """Admit already-stored rows ONLY under verified live commission and expiry rules."""
+    if not 1 <= max_rows <= 10000:
+        raise ValueError("invalid_reconciliation_limit")
+    url=os.environ.get("SOCIALMARKET_DB_URL")
+    if not url:
+        raise RuntimeError("server_only_database_secret_required")
+    import psycopg
+    with psycopg.connect(url,sslmode="require",connect_timeout=10) as conn:
+        verify_preflight(conn)
+        with conn.cursor() as cur:
+            cur.execute("select sm_intel.reconcile_existing_eligible_offers_v4(%s)",(max_rows,))
+            outcome=cur.fetchone()[0]
+        conn.commit()
+    print(json.dumps(outcome,ensure_ascii=False))
+    return 0
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     s=p.add_mutually_exclusive_group()
@@ -353,6 +371,7 @@ def main():
     s.add_argument("--feed-url")
     s.add_argument("--vault-source",action="store_true")
     p.add_argument("--commit",action="store_true")
+    p.add_argument("--reconcile-existing-only",action="store_true")
     p.add_argument("--skip-unchanged",action="store_true")
     p.add_argument("--resume-run-id")
     p.add_argument("--batch-size",type=int,default=DEFAULT_BATCH)
@@ -360,6 +379,10 @@ def main():
     p.add_argument("--root",choices=sorted(ROOTS),default="item")
     p.add_argument("--max-record-bytes",type=int,default=MAX_RECORD_BYTES)
     args=p.parse_args()
+    if args.reconcile_existing_only:
+        if not args.commit or args.file or args.feed_url or args.vault_source:
+            p.error("reconcile_requires_commit_and_no_feed_source")
+        return run_existing_reconciliation(5000)
     if not args.file and not args.vault_source and not (args.feed_url or os.getenv("LINKWISE_FULL_FEED_URL")):
         p.error("feed_source_required")
     if args.vault_source and not os.environ.get("SOCIALMARKET_DB_URL"):
