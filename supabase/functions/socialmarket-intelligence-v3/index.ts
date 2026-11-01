@@ -55,6 +55,14 @@ Deno.serve(async(req:Request)=>{
    return reply({ok:true,contract:"sm_intel_opportunity_v3",status:summary,
      neural:neural[0]?.value,models,gaps:alerts,alerts_are_evidence_gaps:true});
   }
+  const [brainState,affiliateNetworks,verifiedCoverage]=await Promise.all([
+    sql`select * from sm_intel.market_brain_health_v3`,
+    sql`select * from sm_intel.affiliate_network_coverage_v3`,
+    sql`select problem_cluster_id,problem_title,category,intelligence_state,
+      verified_demand_sources,verified_supply_sources,independent_verified_sources,
+      unreviewed_product_matches,rejected_product_matches
+      from sm_intel.intelligence_convergence_v3 order by problem_title limit 50`
+  ]);
   const problems=await sql`select r.problem_cluster_id,p.problem_title,p.category,
    r.evidence_status,r.demand_sources,r.supply_sources,r.counter_sources,
    r.verified_demand_sources,r.verified_supply_sources,
@@ -69,6 +77,8 @@ Deno.serve(async(req:Request)=>{
      r.demand_sources+r.supply_sources+r.counter_sources desc,p.problem_title
    limit 50`;
   return reply({ok:true,contract:"sm_intel_opportunity_v3",scope:"Greece",status:summary,
+    market_brain:brainState[0]||{},network_programs:affiliateNetworks,
+    verified_evidence_contract:verifiedCoverage,
     neural:neural[0]?.value,models,opportunities:problems,
     research_status:"no_verified_high_demand_low_supply_claim_without_independent_evidence",
     commercial_actions_permitted:false,
