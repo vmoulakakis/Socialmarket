@@ -1,0 +1,121 @@
+name: SocialMarket E5 — protected one-shot VMDB vector backfill
+
+# DISABLED BY DEFAULT. No cron, no push or pull_request triggers.
+# After independent review and merge to main, a maintainer can explicitly
+# dispatch it against the approved main SHA with protected environment approval.
+on:
+  workflow_dispatch:
+    inputs:
+      max_docs:
+        description: "Maximum documents to embed in this ONE run (1–128)"
+        required: true
+        type: choice
+        options:
+          - "16"
+          - "32"
+          - "64"
+          - "128"
+        default: "32"
+      approved_sha:
+        description: "Full 40-character SHA from approved main commit"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: socialmarket-e5-prod-backfill
+  cancel-in-progress: false
+
+jobs:
+  embed:
+    # Explicit two-key approval: main ref + environment configuration.
+    if: ${{ github.ref == 'refs/heads/main' && vars.SM_INTEL_E5_APPROVED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: socialmarket-intelligence
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate exact audited revision and bounded request
+        env:
+          EXPECTED_SHA: ${{ inputs.approved_sha }}
+          LIMIT: ${{ inputs.max_docs }}
+        run: |
+          python - <<'PY'
+          import os,re
+          sha=os.getenv("EXPECTED_SHA","")
+          if not re.fullmatch("[0-9a-f]{40}",sha) or sha!=os.getenv("GITHUB_SHA"):
+              raise SystemExit("approved_sha_mismatch")
+          if os.getenv("LIMIT") not in {"16","32","64","128"}:
+              raise SystemExit("out_of_bounds")
+          print("revision_and_budget_gate_passed")
+          PY
+      - name: Install pinned Python CPU worker
+        run: |
+          python -m pip install --disable-pip-version-check \
+            "psycopg[binary]==3.2.9" "sentence-transformers==5.1.2" "numpy==2.2.6"
+      - name: Validate actual private VMDB scope — never log URL
+        env:
+          SOCIALMARKET_DB_URL: ${{ secrets.SOCIALMARKET_DB_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse,unquote
+          import psycopg
+          raw=os.environ.get("SOCIALMARKET_DB_URL","")
+          if not raw or len(raw)<40: raise SystemExit("missing_approved_db_secret")
+          u=urlparse(raw)
+          if u.scheme not in ("postgres","postgresql"):
+              raise SystemExit("unsupported_db_protocol")
+          ref="gqpbskssrvpfjtujwezc"
+          if ref not in ((u.hostname or "")+" "+unquote(u.username or "")):
+              raise SystemExit("wrong_vmdb_project_ref_or_nonstandard_dsn")
+          with psycopg.connect(raw,sslmode="require",connect_timeout=8) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""select to_regclass('sm_intel.search_documents') is not null,
+                     to_regclass('sm_intel.market_brain_health_v3') is not null,
+                     (select count(*) from sm_intel.search_documents
+                       where embedding_status='pending') as remaining""")
+                  a,b,n=cur.fetchone()
+          if not (a and b): raise SystemExit("missing_private_schema")
+          print("private_vmdb_scope_confirmed;pending_count="+str(n))
+          PY
+      - name: Run CPU-only real E5 on bounded existing private documents
+        env:
+          SOCIALMARKET_DB_URL: ${{ secrets.SOCIALMARKET_DB_URL }}
+          HF_HUB_DISABLE_TELEMETRY: "1"
+          TOKENIZERS_PARALLELISM: "false"
+          MAX_DOCS: ${{ inputs.max_docs }}
+        run: |
+          python workers/product_intelligence/graphrag_multilingual_e5.py \
+             backfill --limit "$MAX_DOCS" > /tmp/socialmarket-e5-run.json
+          python - <<'PY'
+          import json
+          with open("/tmp/socialmarket-e5-run.json") as f: j=json.load(f)
+          assert j["real_embeddings_written"]<=j["max_docs"]
+          assert j["failed"]==0 and j["lease_conflicts"]==0
+          print(json.dumps(j))
+          PY
+      - name: Verify stored ready vectors and dimensional consistency
+        env:
+          SOCIALMARKET_DB_URL: ${{ secrets.SOCIALMARKET_DB_URL }}
+        run: |
+          python - <<'PY'
+          import os,psycopg
+          with psycopg.connect(os.environ["SOCIALMARKET_DB_URL"],sslmode="require",connect_timeout=8) as c:
+              with c.cursor() as t:
+                  t.execute("""select count(*) filter(where embedding_status='ready') as ready,
+                    count(*) filter(where embedding_status='ready' and
+                      embedding_model<>'intfloat/multilingual-e5-small') wrong_model,
+                    count(*) filter(where embedding_status='processing') running
+                    from sm_intel.search_documents""")
+                  ready,wrong,running=t.fetchone()
+          assert ready>0 and wrong==0,"stored_model_provenance_inconsistent"
+          print(f"ready_vectors={ready};wrong_models={wrong};active_leases={running}")
+          PY
