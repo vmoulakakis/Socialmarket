@@ -1,0 +1,109 @@
+# SocialMarket AI 3.0 — Execution Blueprint and Release Evidence
+
+**Owner:** SocialMarket AI Architect · **Scope:** `vmoulakakis/Socialmarket`, private `sm_intel` only inside VMDB `gqpbskssrvpfjtujwezc`  
+**Version:** 3.0, authored 2026-11-01. **Status:** Implementation in staged PR #99 + additive private database migrations; production release is NOT approved.
+
+## Mission
+
+Build a verifiable, economics-aware, Greece-first Neural Commerce Intelligence system. Discover genuine customer problems with independently supported demand and gaps in *suitable* Greek supply. Match high-fit products and merchants with true affiliate authorization and conservative calculated commission **≥ EUR10**; learn from independently observed outcomes without deceptive buyer psychology or self-reinforcing model guesses.
+
+**Hard truth:** A 100% intelligent / 100% correct AI system is not possible. Operate with confidence calibration and abstain when data is missing.
+
+## Existing baseline (verified from VMDB on 2026-11-01)
+- 3,921 historical raw product rows from **only 3 distinct program IDs**; 773 lack source description. Merchant source directory 334 rows, 317 missing authoritative program ID; 16 enriched merchant profiles ≠ 334 approved.
+- 41 GR problem clusters, 386 historical market evidence rows, only 34 linked to a pain cluster; none independently verified.
+- 4,360 semantic-search documents with **0 real multilingual E5 vectors**; 5,140 graph edges with **0 independently verified edges**.
+- 0 qualified/promotable offers under current verified affiliate gate; 0 commerce conversion events.
+- Existing model, scraper and marketing workflow generations in the repository and retired DB references must be treated as noncanonical until migration review.
+
+## Architecture: evidence before inference
+
+`official sources + first-party data`
+→ `streamed source audit + versioned catalog / network merchant and commission contracts`
+→ `structured GR market signals (demand, supply, competitor, intent, time, geography) and uncertainty`
+→ `market and product feature stores`
+→ `multilingual E5 + SQL lexical + temporal provenance graph + neural reranker`
+→ `two-tower problem/product fit and calibrated business model`
+→ `commercial eligibility + independent skeptical review`
+→ `attribution + held-out learning loop`.
+
+A paid LLM never approves merchant terms or substitutes for externally observed demand data.
+
+## P0 — Canonical identity and reliability
+
+**Built:** `sm_intel.raw_products`, `merchant_program_directory`, `affiliate_network_programs_v3`, `commission_terms`, `qualified_offers`; delta-only streaming worker with bounded memory, ETag/resume and hard >=EUR10 verification. Awin joins are a SEPARATE network, not Linkwise merchant ID aliases.
+
+**Now verified:** official Awin publisher 3060863: Back Market GR (program 30859) **pending**, not joined. Stored accurately as a network relationship with `active_for_publisher=false`. Zero Awin approved GR programs in read-only query. Do not invent affiliate links.
+
+**Release gate:** source snapshot coverage and provenance, identity uniqueness, current category/publisher contract rate and expiry, truthful stock. Existing Linkwise legacy cron remains untouched until explicit safety review. The user previously instructed NOT to download/import the full Linkwise JSON at this stage.
+
+## P1 — Market Evidence Engine
+
+**Built:** `market_signals_v3` source-family/ID dedup, temporal expiry, region and original source attribution; `market_evidence_coverage_v3`; `market_assessments_v3` with trigger preventing verified assessments without fresh, independent demand and supply proof. 34 historical linked signals backfilled as *candidate only*.
+
+**External source connectors to implement/validate:** Greece search interest (Google Trends is a relative index, NOT absolute volume), own GSC if access authorized, official marketplace/product search, reliable Greek retail comparisons, historical weather/holidays where causal, product availability, first-party opt-in outcomes. No market research score fabricated from a product feed count.
+
+**Gate:** at least 2 independent current source groups, one demand and one observed suitable supply, clear metric definitions and counterevidence before declaring verified market gaps. Missing data yields research task, not a number.
+
+## P2 — Hybrid Neural GraphRAG
+
+**Built:** 384D `search_documents` schema, E5-aware HNSW index and bounded private claim/ack embedding queue, SQL lexical retrieval + RRF, private 1–2 hop evidence graph, and authentic admin-only GraphRAG API. `model_registry_v3` holds candidate model choices with evaluation requirements. Real offline CPU E5 evaluation pipeline added to GitHub CI. Current production E5 vectors still 0 until worker is connected to secure database credentials and executed.
+
+**Candidate model selection:** 
+- E5 multilingual-small 384D initial lightweight embedder.
+- BGE-M3 as multilingual dense/sparse alternative and Qwen3 Reranker 0.6B as re-ranker benchmark.
+- Two-tower PyTorch contrastive product/problem matcher only trained on **≥100 independently verified positive pairs**, ≥10 problem groups, ≥50 products, ≥3 independent evidence sources. Current 0 verified pairs: training is explicitly blocked.
+- Heterogeneous GNN is an **evaluation candidate** after sufficient verified graph structure, not a declaration of production readiness.
+- Strong paid LLM limited to complex ambiguous evidence and independent review, no automatic tokens.
+
+**Gate:** Greek/Greeklish hard-negative retrieval eval (Recall@20, nDCG@10, false-positive rate), model/version labels, quality-vs-latency benchmark, zero fabricated citations, human review. Newer/larger model only if it beats baseline and fits CPU/GPU envelope.
+
+## P3 — Opportunity and buyer decision intelligence
+
+**Built:** versioned `product_feature_snapshots_v3` from real source fields (3,921 snapshots); `product_problem_hypotheses_v3` with explicit `needs_evidence` and separate verification; conservative lexical baseline and hard-negative fixtures; `market_brain_health_v3`.
+
+**Policy:** Customer-value fit and commercial viability scored separately. Avoid arbitrary single weighted LLM score. Buyer psychology is limited to stated job-to-be-done, perceived risk, compatibility, trust, price-value, friction, local timing; no sensitive personalization, coercion, fake scarcity or hidden inferred vulnerabilities.
+
+**Gate:** no candidate promoted without independently verified suitability, authentic tracking and current program approval. No expected sales predictions before actual attribution.
+
+## P4 — Observed outcome and learning
+
+**Built contracts:** agent outcomes, change proposals, learning observations, model registry and evaluations.
+**Absent source:** actual sales/postbacks, returns and approved commissions; current `commerce_performance_events` empty.
+
+**Future operational steps:** store privacy-preserving funnel events, reconcile affiliate sales and refunds, train calibrated learning-to-rank with temporal held-out data and negative examples. Gate changes on improved approval-adjusted revenue per 1,000 qualified visitors *and* no decline in consumer solution utility. Bayesian bandits only after traffic exists.
+
+## P5 — Orchestration and operations
+
+**Existing:** private `socialmarket-architect`, `socialmarket-graphrag` Edge Functions; specialist agent task table and private admin cockpit. Model calls require explicit, evidence-backed escalation; no autonomous publishing.
+**New:** persisted source quality and model lineage tables; actual v3 readiness metrics and robust abstention.
+
+One architect dispatches at most 3 bounded tasks per invocation; independent skeptical verifier reviews claims. Source strings are untrusted tool data. Only publish/recommend with reviewed advertiser/publisher terms and affiliate link validity.
+
+## Production release gates
+
+| Gate | Required evidence | Current |
+|---|---|---|
+| Catalog coverage | Full CD104 and Awin join proof, current identity and safe delta | **Blocked** by user-authorized no-import and terms verification |
+| Demand-supply truth | Independent dated GR demand/supply evidence | **Blocked**: 0 verified signals |
+| Embeddings | Real stored 384D E5 vectors + 5-query hard-negative benchmark | **CI benchmark staged**, DB 0 vectors |
+| Graph facts | Independently provenance-reviewed relationships | **Blocked**: 0 verified edges |
+| Neural learning | Holdout data + minimum 100 verified pairs | **Blocked**: 0 verified pairs |
+| Commercial activation | publisher approval + current terms + >=EUR10 calculated minimum | **Blocked**: 0 current verified terms |
+| User analytics | consented attributable events, sales/returns reports | **Blocked**: 0 events |
+| Safe deployment | green CI, security review, protected preview QA | Draft PR only; do not merge into production without independent review |
+
+## What has been ACTUALLY done in this execution (do not overclaim)
+
+1. Added and applied additive versioned `sm_intel_neural_market_foundation_v3` migration and `sm_intel_affiliate_network_truth_v3` migration.
+2. Generated 3,921 real versioned product-feature snapshots.
+3. Backfilled 34 historical problem-linked evidence rows as **candidate** research signals, never as verified demand.
+4. Implemented and tested safety guard: verified opportunity requires >=2 independent, current demand/supply sources. Synthetic fixtures rolled back.
+5. Registered five cost-aware model candidates as **candidate**, none falsely marked ready.
+6. Added local zero-token Greek lexical baseline and hard-negative regression, real Hugging Face E5 CPU benchmark and trainable PyTorch two-tower with a hard zero-label training block.
+7. Queried official connected Awin programme membership and persisted Back Market GR program **pending**, no active joined programme.
+8. Did NOT fetch the full CD104 JSON, insert new bulk products, spend paid AI model tokens, create public recommendation pages, or release unreviewed code to production.
+
+## Source-of-truth design rule
+
+Do not conflate `source_imported`, `identified`, `verified_evidence`, `estimated_demand`, `merchant_joined`, `commission_eligible`, `product_fit`, `promotion_ready`, `revenue_observed`. Each requires separate dated proof and auditability.
