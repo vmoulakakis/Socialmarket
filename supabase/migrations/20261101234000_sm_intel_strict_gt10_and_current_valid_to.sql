@@ -119,7 +119,12 @@ begin
   select
    (select count(*)::int from commercial) new_n,
    (select count(*)::int from classified c where c.already_exists) existing_n,
-   (select count(*)::int from classified c where c.program_id is null or c.program_id !~ '^[0-9]+
+   (select count(*)::int from classified c where c.program_id is null or c.program_id !~ '^[0-9]+$') unknown_n,
+   (select count(*)::int from classified c where c.valid_to is null and not c.already_exists) missing_expiry_n,
+   (select count(*)::int from classified c where c.valid_to<=now() and not c.already_exists) expired_n,
+   (select count(*)::int from classified c where c.terms_id is null and not c.already_exists and c.structurally_valid) no_terms_n,
+   (select count(*)::int from classified c where c.terms_id is not null and c.commission<=10
+      and not c.already_exists and c.structurally_valid) low_commission_n
  )
  select c.new_n,c.existing_n,c.unknown_n,c.missing_expiry_n,c.expired_n,c.no_terms_n,c.low_commission_n
  into inserted_n,existing_n,unresolved_n,missing_expiry_n,expired_n,unverified_terms_n,low_commission_n
@@ -143,30 +148,7 @@ begin
   'unverified_terms',unverified_terms_n,'commission_not_over_10',low_commission_n,
   'replayed',false);
 end $function$
-) unknown_n,
-   (select count(*)::int from classified c where c.valid_to is null and not c.already_exists) missing_expiry_n,
-   (select count(*)::int from classified c where c.valid_to<=now() and not c.already_exists) expired_n,
-   (select count(*)::int from classified c where c.terms_id is null and not c.already_exists and c.structurally_valid) no_terms_n,
-   (select count(*)::int from classified c where c.terms_id is not null and c.commission<=10
-      and not c.already_exists and c.structurally_valid) low_commission_n
- )
- select c.new_n,c.existing_n,c.unknown_n into inserted_n,existing_n,unresolved_n from counts c;
-
- unqualified_n:=n-inserted_n-existing_n;
- if unqualified_n<0 then raise exception 'bad_ingest_delta_counts'; end if;
- insert into sm_intel.delta_feed_batches(run_id,batch_offset,batch_size,batch_hash,
-   inserted_new,existing_skipped,unresolved_skipped,unqualified_skipped)
- values(p_run_id,p_batch_offset,n,payload_hash,inserted_n,existing_n,unresolved_n,unqualified_n);
- update sm_intel.feed_runs
- set scanned=p_batch_offset+n,stored=stored+inserted_n,admitted=admitted+inserted_n,
-  rejected=rejected+unqualified_n,
-  checkpoint=jsonb_build_object('offset',p_batch_offset+n,'mode','insert_new_only','source_fingerprint',p_source_fingerprint)
- where id=p_run_id;
- return jsonb_build_object('scanned',n,'new',inserted_n,'existing',existing_n,
-  'unqualified',unqualified_n,'unresolved',unresolved_n,'replayed',false);
-end $function$
 ;
-
 create or replace view sm_intel.product_expiry_commission_audit_v4
 with (security_invoker=true) as
 select r.id,r.program_id,r.source_product_id,r.product_title,r.price,
