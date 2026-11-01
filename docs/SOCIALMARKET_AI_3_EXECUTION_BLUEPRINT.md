@@ -132,3 +132,32 @@ Do not conflate `source_imported`, `identified`, `verified_evidence`, `estimated
 - [ ] Separately complete human-labeled GR retrieval benchmark and merchant commission verification before any end-user recommendations.
 
 **Safety:** no new Linkwise full-feed download, no public promotion, no paid API model calls, no artificial product/demand scoring from pending labels.
+
+## 2026-11-01 — CD104 full-feed product admission, strict > EUR10 + valid_to from today
+
+User authorized full import (supersedes earlier no-full-scan instruction). This authorization **does not** authorize inventing publisher commissions or treating an unapproved advertiser as joined.
+
+### Canonical qualification
+
+- Input: the user's long CD104 `programs-all` feed URL, already stored only in encrypted VMDB Vault `socialmarket_linkwise_cd104_full_feed_url_v1`. Do not display or commit decrypted URL.
+- Scan all feed records via bounded `ijson`; `program_id|product_id` is the stable product identity. Stream insert-only delta for new records; reconcile existing raw items separately.
+- **STRICT** calculated minimum commission `> 10.00 EUR` (exact `10.00` is rejected). Price is not commission; use reviewed current publisher CD104 programme-specific terms, conservative rate type and verified effective validity.
+- **MANDATORY** product `valid_to` (not null) strictly later than processing timestamp (and on/after local Europe/Athens today). Missing, malformed, expired, not yet valid, non-EUR, invalid tracking identity or unresolved terms remain excluded from admitted catalog.
+- Existing raw rows are not overwritten. Additional `sm_intel.reconcile_existing_eligible_offers_v4(5000)` admits old valid products only once a verified contract becomes effective; new imported rows through `sm_intel.ingest_new_only_batch`.
+- `sm_intel.delta_feed_batches` now audits missing expiry, expired, missing terms, and commission not above EUR10 per bounded committed batch; `sm_intel.product_expiry_commission_audit_v4` and `linkwise_program_readiness_v4` expose read-only operator diagnostics.
+- Formal publisher approval, current stock and tracking readiness remain independent promotion gates. Product admission alone does not permit public promotion.
+- The manual GitHub workflow `.github/workflows/socialmarket-vmdb-full-refresh-manual.yml` now runs existing reconciliation before full source commit; requires main branch, runtime DB credential and explicit workflow_dispatch. This PR remains DRAFT / unmerged, so a full live import **has not been run**.
+
+### Observed live baseline — 2026-11-01 around 23:36 Europe/Athens
+
+- 3,921 historical raw products across 3 program IDs: `23` (2,036; no `valid_to`), `unknown` (1,542; 1,507 no `valid_to`, 35 expired), `205` (343; 339 future valid, 4 expired).
+- Total: 3,543 missing `valid_to`, 39 expired, 339 future-dated but lacking verified commission terms.
+- `sm_intel.commission_terms`: 16 historical CD104 records (14 percent-min, 2 flat-min), **0 verified** and no current independent terms expiry. A Linkwise CD104 feed provides product prices, not full current commission contracts for all programs. Source evidence is required from the official publisher network before eligibility can be computed.
+- `sm_intel.qualified_offers` remains 0. `sm_intel.feed_runs` and `delta_feed_batches` remain 0 for new streaming worker. Reconciliation ran safely and admitted 0 from the current real data. Never misstate this as a successful all-products import.
+- Real PostgreSQL transaction rollback acceptance: synthetic verified percent-min term and exact expiry boundary; one offer with EUR10.001 commission admitted, exact EUR10 rejected, null and expired dates rejected, unknown terms blocked; batch replay idempotent. Separate synthetic old-row reconciliation checks one correct admission and no overwrites. All fixture rows rolled back.
+
+### Remaining activation blockers
+
+1. Current source-authentic, publisher-specific Linkwise commission terms and account/program approval, including effective dates and category/exception rules; do not promote imported CSV into verified terms by assumption.
+2. Approved main-branch GitHub Actions environment with a scoped `SOCIALMARKET_DB_URL` credential for a long-running (potential multi-GB) full-feed scan. Supabase Edge Functions have short wall-clock/memory limits and are not a safe replacement for full 3.84GB streaming.
+3. Latest exact-commit CI and independent review, then explicitly dispatch the main-branch one-shot `delta_new_only_commit` and inspect count/failures. Do not add a silent daily cron or bypass user/account secrets.
