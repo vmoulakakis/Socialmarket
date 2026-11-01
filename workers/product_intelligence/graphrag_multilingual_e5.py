@@ -12,6 +12,7 @@ import math
 import os
 import sys
 import uuid
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL_ID = "intfloat/multilingual-e5-small"
@@ -125,7 +126,20 @@ def run_query_service(model):
     if len(token) < 32:
         raise RuntimeError("missing_server_query_token")
     port = int(os.getenv("PORT", "8091"))
+    # Bounded inference on a 2-OCPU ARM worker: avoid unbounded concurrent model calls.
+    inference_slots = threading.BoundedSemaphore(value=2)
     class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path != "/health":
+                self.send_error(404)
+                return
+            payload = json.dumps({"ok":True,"model":MODEL_ID,"dimensions":DIMS}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type","application/json")
+            self.send_header("Cache-Control","no-store")
+            self.send_header("Content-Length",str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
         def do_POST(self):
             import hmac
             if self.path != "/embed" or not hmac.compare_digest(self.headers.get("Authorization",""),"Bearer "+token):
@@ -135,22 +149,33 @@ def run_query_service(model):
             if size<1 or size>4096:
                 self.send_error(413)
                 return
+            if not inference_slots.acquire(blocking=False):
+                self.send_error(503,"inference_capacity_exceeded")
+                return
             try:
                 data = json.loads(self.rfile.read(size))
+                if not isinstance(data,dict):
+                    raise ValueError("request_must_be_json_object")
                 vec = encode_query(model,data.get("query"))
                 reply = json.dumps({"model":MODEL_ID,"dimensions":DIMS,"embedding":vec}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type","application/json")
+                self.send_header("Cache-Control","no-store")
                 self.send_header("Content-Length",str(len(reply)))
                 self.end_headers()
                 self.wfile.write(reply)
             except (ValueError,TypeError,KeyError):
                 self.send_error(400)
+            finally:
+                inference_slots.release()
         def log_message(self, *_):
             return
     # Bind loopback by default; expose only behind an authenticated reverse proxy/TLS.
     host = os.getenv("SOCIALMARKET_EMBED_BIND","127.0.0.1")
-    ThreadingHTTPServer((host,port),Handler).serve_forever()
+    class LimitedHTTPServer(ThreadingHTTPServer):
+        request_queue_size = 8
+        daemon_threads = True
+    LimitedHTTPServer((host,port),Handler).serve_forever()
 
 def main():
     p = argparse.ArgumentParser()
