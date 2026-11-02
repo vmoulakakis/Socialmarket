@@ -1,8 +1,8 @@
 {
   "project": "Awin Publisher Autopilot",
   "publisherId": 3060863,
-  "checkedAt": "2026-11-01",
-  "source": "Awin MCP 2026-11-01: list_accounts, joined/pending/rejected/suspended, programme details 25829/9837/19725; official public Awin merchant programme pages for indicative rates; no Join submission",
+  "checkedAt": "2026-11-02",
+  "source": "Awin MCP 2026-11-02 list_accounts, joined/pending/rejected/suspended and 3 advertiser programme details; Awin public profiles 25829/9837, no authenticated Join",
   "policy": {
     "minimumEstimatedCommissionEUR": 10,
     "applicationNoteMaxCharacters": 150,
@@ -25,7 +25,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-01"
+      "lastVerified": "2026-11-02"
     },
     {
       "id": 107764,
@@ -41,14 +41,14 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-01"
+      "lastVerified": "2026-11-02"
     },
     {
       "id": 25829,
       "name": "Lambakaifotismos - GR",
       "status": "notjoined",
-      "epcEUR": 0.24,
-      "conversionRatePercent": 50,
+      "epcEUR": 0.08,
+      "conversionRatePercent": 16.67,
       "sector": "Home & Garden",
       "reasonGreek": "Αναπτύσσουμε ελληνικό οδηγό φωτισμού με επιλογή βάσει χώρου, χρήσης, τεχνικών χαρακτηριστικών και προϋπολογισμού.",
       "priority": 1,
@@ -57,24 +57,26 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-01",
+      "lastVerified": "2026-11-02",
       "publicAdvertisedCommission": {
         "standardPercent": 9,
         "voucherPercent": 5,
         "topNegotiatedPercent": 12,
         "cookieDays": 7,
         "source": "https://ui.awin.com/merchant-profile/25829/commission-groups",
-        "checkedAt": "2026-11-01",
+        "checkedAt": "2026-11-02",
         "publisherSpecificRateVerified": false,
         "eligibleCommissionBaseVerified": false
-      }
+      },
+      "approvalPercent": 100,
+      "validationDays": 118
     },
     {
       "id": 19725,
       "name": "Hawkers GR",
       "status": "notjoined",
-      "epcEUR": 0.11,
-      "conversionRatePercent": 1.83,
+      "epcEUR": 0.1,
+      "conversionRatePercent": 1.42,
       "sector": "Accessories",
       "reasonGreek": "Ετοιμάζουμε ελληνικούς οδηγούς επιλογής γυαλιών ηλίου ανά χρήση, UV προστασία, στυλ και budget, με συγκρίσεις προϊόντων.",
       "priority": 2,
@@ -83,14 +85,16 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-01"
+      "lastVerified": "2026-11-02",
+      "approvalPercent": 78.3,
+      "validationDays": 29
     },
     {
       "id": 9837,
       "name": "Elastika-Online GR",
       "status": "notjoined",
-      "epcEUR": 0.11,
-      "conversionRatePercent": 2.33,
+      "epcEUR": 0.01,
+      "conversionRatePercent": 0.42,
       "sector": "Automotive",
       "reasonGreek": "Ετοιμάζουμε ελληνικό οδηγό επιλογής ελαστικών με έλεγχο διαστάσεων, χρήσης και χαρακτηριστικών, πριν την αγορά.",
       "priority": 3,
@@ -99,15 +103,17 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-01",
+      "lastVerified": "2026-11-02",
       "publicAdvertisedCommission": {
         "standardPercent": 3,
         "cookieDays": 60,
         "source": "https://ui.awin.com/merchant-profile/9837",
-        "checkedAt": "2026-11-01",
+        "checkedAt": "2026-11-02",
         "publisherSpecificRateVerified": false,
         "eligibleCommissionBaseVerified": false
-      }
+      },
+      "approvalPercent": 60,
+      "validationDays": 22
     },
     {
       "id": 24675,
@@ -255,7 +261,7 @@
     }
   ],
   "lastRun": {
-    "date": "2026-11-01",
+    "date": "2026-11-02",
     "publisherId": 3060863,
     "membershipCounts": {
       "joined": 0,
@@ -264,10 +270,10 @@
       "suspended": 0
     },
     "performance": {
-      "window": "2026-10-02/2026-11-01",
+      "window": "2026-10-03/2026-11-02",
       "timezone": "UTC",
       "reportRows": 0,
-      "meaning": "no report rows returned; pending/approved/reversed commission unavailable, not zero"
+      "meaning": "Awin advertiser performance API returned an empty list. No pending/approved/reversed amounts available; not evidence of zero payout."
     },
     "candidateIdsReviewed": [
       25829,
@@ -278,10 +284,10 @@
     "trackingLinksCreated": 0,
     "socialPostsPublished": 0,
     "paidServicesUsed": false,
-    "publicationState": "no joined advertiser",
-    "browser": "Connected Chrome requires originating browser context in scheduled runtime; paid TinyFish forbidden",
-    "notification": "existing browser blocker previously reported; do not repeat",
+    "publicationState": "No Joined advertiser; existing two editorial campaigns remain HOLD",
+    "browser": "Chrome browser requires originating browser context; paid TinyFish explicitly forbidden",
+    "notification": "Existing Chrome blocker already reported; do not repeat.",
     "editorialDraft": "docs/awin/EDITORIAL_TYRE_GUIDE_GR.md",
-    "ci": "pending current branch CI; no local tests or production build run"
+    "ci": "pending branch CI; no local build or browser QA executed"
   }
 }
