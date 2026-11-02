@@ -337,6 +337,211 @@
         "awin:3060863:30859:refurbished-electronics:editorial-v1",
         "awin:3060863:9837:tyre-compatibility:editorial-v1"
       ]
+    },
+    {
+      "runKey": "awin:3060863:2026-11-02",
+      "checkedAt": "2026-11-02",
+      "source": "Awin publisher MCP; official public Awin merchant programme profiles; EU Commission tyre-label reference; GitHub PR #98; Buffer live channel list; Chrome connector access attempt",
+      "membership": {
+        "joined": [],
+        "pending": [
+          30859
+        ],
+        "rejected": [
+          107764
+        ],
+        "suspended": []
+      },
+      "candidateChecks": [
+        {
+          "advertiserId": 25829,
+          "name": "Lambakaifotismos - GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Home & Garden",
+          "advertiserEpcEUR": 0.08,
+          "advertiserConversionRatePercent": 16.67,
+          "advertiserApprovalPercent": 100,
+          "validationDays": 118,
+          "previousEpcEUR": 0.24,
+          "previousConversionRatePercent": 50,
+          "commissionRange": [],
+          "publicCommission": {
+            "standardPercent": 9,
+            "voucherPercent": 5,
+            "topNegotiatedPercent": 12,
+            "cookieDays": 7,
+            "source": "https://ui.awin.com/merchant-profile/25829/commission-groups",
+            "checkedAt": "2026-11-02",
+            "publisherRateVerified": false,
+            "eligibleCommissionBaseVerified": false
+          },
+          "illustrativeEligibleNetSaleForEUR10Commission": {
+            "atStandardPercent": 9,
+            "minimumEUR": 111.12
+          },
+          "targetAudienceProblem": "Greek homeowners choosing task/ambient/desk lighting by dimensions and usage",
+          "seasonalityHypothesis": "Autumn/winter shorter daylight, not quantified",
+          "competitionAssessment": "Greek lighting category has incumbent specialist and DIY retailers; keyword volumes and ranking unmeasured",
+          "competitionSources": [
+            "https://ledmania.gr/",
+            "https://www.leroymerlin.gr/gr/fotistika/toihou-orofis/"
+          ],
+          "actualGreekDemandEvidence": null,
+          "merchantTermsVerified": false,
+          "merchantAllowedSocialDomainsVerified": false,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 9837,
+          "name": "Elastika-Online GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Automotive",
+          "advertiserEpcEUR": 0.01,
+          "advertiserConversionRatePercent": 0.42,
+          "advertiserApprovalPercent": 60,
+          "validationDays": 22,
+          "previousEpcEUR": 0.11,
+          "previousConversionRatePercent": 2.33,
+          "commissionRange": [],
+          "publicCommission": {
+            "standardPercent": 3,
+            "cookieDays": 60,
+            "source": "https://ui.awin.com/merchant-profile/9837",
+            "checkedAt": "2026-11-02",
+            "publisherRateVerified": false,
+            "eligibleCommissionBaseVerified": false,
+            "publicCouponExclusion": true
+          },
+          "illustrativeEligibleNetSaleForEUR10Commission": {
+            "atStandardPercent": 3,
+            "minimumEUR": 333.34
+          },
+          "targetAudienceProblem": "Greek drivers verifying tyre fitment, EU labels and installation costs before purchase",
+          "seasonalityHypothesis": "Wet-road checks may matter in autumn/winter, no measured uplift",
+          "competitionAssessment": "Existing Greek tyre-fitment tools; no keyword volume or ranking evidence",
+          "competitionSources": [
+            "https://protires.gr/gr/elastika-gia-autokinita/2026",
+            "https://cars.elastikaleader.gr/elastiko/jeep/compass/compass-5206/42808"
+          ],
+          "actualGreekDemandEvidence": null,
+          "merchantTermsVerified": false,
+          "merchantAllowedSocialDomainsVerified": false,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 19725,
+          "name": "Hawkers GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "sector": "Clothing Accessories",
+          "advertiserEpcEUR": 0.1,
+          "advertiserConversionRatePercent": 1.42,
+          "advertiserApprovalPercent": 78.3,
+          "validationDays": 29,
+          "previousEpcEUR": 0.11,
+          "previousConversionRatePercent": 1.83,
+          "commissionRange": [],
+          "publicCommission": null,
+          "targetAudienceProblem": "Greek drivers choosing UV-protection sunglasses by fit and intended use",
+          "seasonalityHypothesis": "Spring/summer plausibly stronger; Black Friday may be relevant, not measured for Greece",
+          "competitionAssessment": "Not enough Greek SERP evidence to rank",
+          "competitionSources": [],
+          "actualGreekDemandEvidence": null,
+          "merchantTermsVerified": false,
+          "merchantAllowedSocialDomainsVerified": false,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        }
+      ],
+      "report": {
+        "periodStart": "2026-10-03",
+        "periodEnd": "2026-11-02",
+        "timezone": "UTC",
+        "queryStatus": "success",
+        "rowCount": 0,
+        "pendingCommissionEUR": null,
+        "approvedCommissionEUR": null,
+        "reversedCommissionEUR": null,
+        "qualifiedOutboundClicks": null,
+        "merchantCVR": null,
+        "epcPublisherEUR": null,
+        "interpretation": "Awin advertiser report returned []; no transaction-level statuses or payout values available. No evidence of zero commission."
+      },
+      "socialChannels": [
+        {
+          "channelId": "6a991dcadfa176941c041b3d",
+          "name": "my deal",
+          "service": "startPage",
+          "connected": true,
+          "locked": true,
+          "eligible": false,
+          "checkedAt": "2026-11-02"
+        },
+        {
+          "channelId": "6a7c20eab2d9d57743615efa",
+          "name": "billmtiktoker_ai",
+          "service": "tiktok",
+          "connected": true,
+          "locked": false,
+          "eligible": null,
+          "checkedAt": "2026-11-02"
+        },
+        {
+          "channelId": "6a7c1fa2b2d9d57743615a1c",
+          "name": "Sales for All",
+          "service": "facebook",
+          "connected": false,
+          "locked": false,
+          "eligible": false,
+          "checkedAt": "2026-11-02"
+        },
+        {
+          "channelId": "68a864cf8e37dc1a589afa8b",
+          "name": "vassilis1969",
+          "service": "instagram",
+          "connected": true,
+          "locked": false,
+          "eligible": null,
+          "checkedAt": "2026-11-02"
+        }
+      ],
+      "browser": {
+        "provider": "connected Chrome",
+        "status": "originating_browser_context_required",
+        "writeAccess": false,
+        "blockerPreviouslyReported": true,
+        "paidTinyFishUsed": false
+      },
+      "actions": {
+        "applicationsSubmitted": [],
+        "trackingLinksCreated": [],
+        "sitesDeployed": [],
+        "postsPublished": [],
+        "paidActions": [],
+        "queueUpdated": true,
+        "editorialDraftsUpdated": [
+          "docs/awin/EDITORIAL_TYRE_GUIDE_GR.md"
+        ]
+      },
+      "notification": {
+        "userActionRequired": "Use originating Chrome browser context / ChatGPT Work for authenticated Join",
+        "previouslyReported": true,
+        "notifyAgain": false
+      },
+      "campaignKeys": [
+        "awin:3060863:30859:refurbished-electronics:editorial-v1",
+        "awin:3060863:9837:tyre-compatibility:editorial-v1"
+      ],
+      "analysis": {
+        "evidenceQuality": "LOW: Google Ads keyword history unavailable, no joined merchant and no publisher conversion sample",
+        "merchantKpiNote": "Advertiser-wide EPC/CVR snapshots moved materially vs 2026-11-01, without sample size. Not publisher performance, not reliable winners.",
+        "experiment": "None activated; keep existing two editorial-only campaigns on hold.",
+        "nextStep": "Review terms and genuine publisher site in authorized no-fee browser; only then consider Join, never paid TinyFish."
+      }
     }
   ],
   "campaigns": [
