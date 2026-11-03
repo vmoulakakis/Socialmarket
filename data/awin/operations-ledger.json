@@ -542,6 +542,98 @@
         "experiment": "None activated; keep existing two editorial-only campaigns on hold.",
         "nextStep": "Review terms and genuine publisher site in authorized no-fee browser; only then consider Join, never paid TinyFish."
       }
+    },
+    {
+      "runKey": "awin:3060863:2026-11-03",
+      "checkedAt": "2026-11-03",
+      "source": "Awin MCP; GitHub PR #98; Chrome connector attempt",
+      "membership": {
+        "joined": [],
+        "pending": [
+          30859
+        ],
+        "rejected": [
+          107764
+        ],
+        "suspended": []
+      },
+      "candidateChecks": [
+        {
+          "advertiserId": 25829,
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.08,
+          "advertiserConversionRatePercent": 16.67,
+          "advertiserApprovalPercent": 100,
+          "validationDays": 118,
+          "merchantTermsVerified": false,
+          "publisherSpecificCommissionVerified": false,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 9837,
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.01,
+          "advertiserConversionRatePercent": 0.42,
+          "advertiserApprovalPercent": 60,
+          "validationDays": 22,
+          "merchantTermsVerified": false,
+          "publisherSpecificCommissionVerified": false,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 19725,
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.1,
+          "advertiserConversionRatePercent": 1.42,
+          "advertiserApprovalPercent": 78.3,
+          "validationDays": 29,
+          "merchantTermsVerified": false,
+          "publisherSpecificCommissionVerified": false,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false
+        }
+      ],
+      "report": {
+        "periodStart": "2026-10-04",
+        "periodEnd": "2026-11-03",
+        "queryStatus": "success",
+        "rowCount": 0,
+        "pendingCommissionEUR": null,
+        "approvedCommissionEUR": null,
+        "reversedCommissionEUR": null,
+        "qualifiedOutboundClicks": null,
+        "merchantCVR": null,
+        "epcPublisherEUR": null,
+        "interpretation": "Empty advertiser performance report, not proof of zero commission"
+      },
+      "browser": {
+        "provider": "connected Chrome",
+        "status": "originating_browser_context_required",
+        "writeAccess": false,
+        "blockerPreviouslyReported": true,
+        "paidTinyFishUsed": false
+      },
+      "actions": {
+        "applicationsSubmitted": [],
+        "trackingLinksCreated": [],
+        "sitesDeployed": [],
+        "postsPublished": [],
+        "paidActions": [],
+        "queueUpdated": true
+      },
+      "notification": {
+        "previouslyReported": true,
+        "notifyAgain": false
+      },
+      "campaignKeys": [
+        "awin:3060863:30859:refurbished-electronics:editorial-v1",
+        "awin:3060863:9837:tyre-compatibility:editorial-v1"
+      ]
     }
   ],
   "campaigns": [
