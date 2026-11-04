@@ -1,8 +1,8 @@
 {
   "project": "Awin Publisher Autopilot",
   "publisherId": 3060863,
-  "checkedAt": "2026-11-03",
-  "source": "Awin MCP 2026-11-03 account 3060863; joined/pending/rejected/suspended; programme details 25829/9837/19725; Chrome origin blocked; no paid browser",
+  "checkedAt": "2026-11-04",
+  "source": "Awin MCP 2026-11-04 account verified; joined/pending/rejected/suspended; programme details 25829/9837/19725; Chrome origin blocked; no paid browser",
   "policy": {
     "minimumEstimatedCommissionEUR": 10,
     "applicationNoteMaxCharacters": 150,
@@ -25,7 +25,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-03"
+      "lastVerified": "2026-11-04"
     },
     {
       "id": 107764,
@@ -41,7 +41,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-03"
+      "lastVerified": "2026-11-04"
     },
     {
       "id": 25829,
@@ -57,7 +57,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-03",
+      "lastVerified": "2026-11-04",
       "publicAdvertisedCommission": {
         "standardPercent": 9,
         "voucherPercent": 5,
@@ -85,7 +85,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-03",
+      "lastVerified": "2026-11-04",
       "approvalPercent": 78.3,
       "validationDays": 29
     },
@@ -103,7 +103,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-03",
+      "lastVerified": "2026-11-04",
       "publicAdvertisedCommission": {
         "standardPercent": 3,
         "cookieDays": 60,
