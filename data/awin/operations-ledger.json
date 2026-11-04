@@ -634,6 +634,113 @@
         "awin:3060863:30859:refurbished-electronics:editorial-v1",
         "awin:3060863:9837:tyre-compatibility:editorial-v1"
       ]
+    },
+    {
+      "runKey": "awin:3060863:2026-11-04",
+      "checkedAt": "2026-11-04",
+      "source": "Awin publisher MCP 2026-11-04; GitHub PR #98; connected Chrome read blocked by originating context",
+      "membership": {
+        "joined": [],
+        "pending": [
+          30859
+        ],
+        "rejected": [
+          107764
+        ],
+        "suspended": []
+      },
+      "candidateChecks": [
+        {
+          "advertiserId": 25829,
+          "name": "Lambakaifotismos - GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.08,
+          "advertiserConversionRatePercent": 16.67,
+          "advertiserApprovalPercent": 100,
+          "validationDays": 118,
+          "commissionRange": [],
+          "publisherCommissionVerified": false,
+          "merchantTermsVerified": false,
+          "productPriceStockVerified": false,
+          "actualGreekDemandEvidence": null,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false,
+          "decision": "hold until verified publisher site and authenticated authorized Join"
+        },
+        {
+          "advertiserId": 9837,
+          "name": "Elastika-Online GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.01,
+          "advertiserConversionRatePercent": 0.42,
+          "advertiserApprovalPercent": 60,
+          "validationDays": 22,
+          "commissionRange": [],
+          "publisherCommissionVerified": false,
+          "merchantTermsVerified": false,
+          "productPriceStockVerified": false,
+          "actualGreekDemandEvidence": null,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false,
+          "decision": "hold until verified publisher site and authenticated authorized Join"
+        },
+        {
+          "advertiserId": 19725,
+          "name": "Hawkers GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.1,
+          "advertiserConversionRatePercent": 1.42,
+          "advertiserApprovalPercent": 78.3,
+          "validationDays": 29,
+          "commissionRange": [],
+          "publisherCommissionVerified": false,
+          "merchantTermsVerified": false,
+          "productPriceStockVerified": false,
+          "actualGreekDemandEvidence": null,
+          "expectedCommissionEUR": null,
+          "applicationSubmitted": false,
+          "decision": "hold until verified publisher site and authenticated authorized Join"
+        }
+      ],
+      "report": {
+        "periodStart": "2026-10-05",
+        "periodEnd": "2026-11-04",
+        "queryStatus": "success",
+        "rowCount": 0,
+        "pendingCommissionEUR": null,
+        "approvedCommissionEUR": null,
+        "reversedCommissionEUR": null,
+        "qualifiedOutboundClicks": null,
+        "merchantCVR": null,
+        "epcPublisherEUR": null,
+        "interpretation": "Empty advertiser report; no advertiser rows, payout status unavailable."
+      },
+      "browser": {
+        "provider": "connected Chrome",
+        "status": "originating_browser_context_required",
+        "writeAccess": false,
+        "blockerPreviouslyReported": true,
+        "paidTinyFishUsed": false
+      },
+      "actions": {
+        "applicationsSubmitted": [],
+        "trackingLinksCreated": [],
+        "sitesDeployed": [],
+        "postsPublished": [],
+        "paidActions": [],
+        "queueUpdated": true
+      },
+      "notification": {
+        "previouslyReported": true,
+        "notifyAgain": false
+      },
+      "campaignKeys": [
+        "awin:3060863:30859:refurbished-electronics:editorial-v1",
+        "awin:3060863:9837:tyre-compatibility:editorial-v1"
+      ]
     }
   ],
   "campaigns": [
