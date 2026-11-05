@@ -1,0 +1,25 @@
+name: Awin Autopilot preflight CI
+on:
+  pull_request:
+    paths:
+      - 'data/awin/**'
+      - 'scripts/awin-autopilot.mjs'
+      - 'tests/awin-autopilot.test.mjs'
+      - '.github/workflows/awin-autopilot-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Node and Awin gate tests
+        run: |
+          node --version
+          node --test tests/awin-autopilot.test.mjs
+      - name: Emit verified application queue summary
+        run: node scripts/awin-autopilot.mjs
