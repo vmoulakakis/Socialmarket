@@ -741,6 +741,139 @@
         "awin:3060863:30859:refurbished-electronics:editorial-v1",
         "awin:3060863:9837:tyre-compatibility:editorial-v1"
       ]
+    },
+    {
+      "runKey": "awin:3060863:2026-11-05",
+      "checkedAt": "2026-11-05",
+      "source": "Awin MCP live publisher membership and advertiser details, UTC performance, GitHub PR #98, Buffer, read-only Chrome availability",
+      "membership": {
+        "joined": [],
+        "pending": [
+          30859
+        ],
+        "rejected": [
+          107764
+        ],
+        "suspended": []
+      },
+      "candidateChecks": [
+        {
+          "advertiserId": 25829,
+          "name": "Lambakaifotismos - GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.08,
+          "advertiserConversionRatePercent": 16.67,
+          "advertiserApprovalPercent": 100,
+          "validationDays": 118,
+          "commissionRange": [],
+          "publisherSpecificCommissionEUR": null,
+          "merchantTermsVerified": false,
+          "publisherSiteVerified": false,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 9837,
+          "name": "Elastika-Online GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.01,
+          "advertiserConversionRatePercent": 0.42,
+          "advertiserApprovalPercent": 60,
+          "validationDays": 22,
+          "commissionRange": [],
+          "publisherSpecificCommissionEUR": null,
+          "merchantTermsVerified": false,
+          "publisherSiteVerified": false,
+          "applicationSubmitted": false
+        },
+        {
+          "advertiserId": 19725,
+          "name": "Hawkers GR",
+          "membership": "notjoined",
+          "primaryRegion": "GR",
+          "advertiserEpcEUR": 0.1,
+          "advertiserConversionRatePercent": 1.42,
+          "advertiserApprovalPercent": 78.3,
+          "validationDays": 29,
+          "commissionRange": [],
+          "publisherSpecificCommissionEUR": null,
+          "merchantTermsVerified": false,
+          "publisherSiteVerified": false,
+          "applicationSubmitted": false
+        }
+      ],
+      "report": {
+        "periodStart": "2026-10-06",
+        "periodEnd": "2026-11-05",
+        "timezone": "UTC",
+        "queryStatus": "success",
+        "rowCount": 0,
+        "pendingCommissionEUR": null,
+        "approvedCommissionEUR": null,
+        "reversedCommissionEUR": null,
+        "qualifiedOutboundClicks": null,
+        "merchantCVR": null,
+        "epcPublisherEUR": null,
+        "interpretation": "Empty advertiser report; unavailable payout states are not zero."
+      },
+      "socialChannels": [
+        {
+          "channelId": "6a991dcadfa176941c041b3d",
+          "name": "my deal",
+          "service": "startPage",
+          "connected": true,
+          "locked": true,
+          "eligible": false
+        },
+        {
+          "channelId": "6a7c20eab2d9d57743615efa",
+          "name": "billmtiktoker_ai",
+          "service": "tiktok",
+          "connected": true,
+          "locked": false,
+          "eligible": null
+        },
+        {
+          "channelId": "6a7c1fa2b2d9d57743615a1c",
+          "name": "Sales for All",
+          "service": "facebook",
+          "connected": false,
+          "locked": false,
+          "eligible": false
+        },
+        {
+          "channelId": "68a864cf8e37dc1a589afa8b",
+          "name": "vassilis1969",
+          "service": "instagram",
+          "connected": true,
+          "locked": false,
+          "eligible": null
+        }
+      ],
+      "browser": {
+        "provider": "connected Chrome",
+        "status": "originating_browser_context_required",
+        "writeAccess": false,
+        "blockerPreviouslyReported": true,
+        "paidTinyFishUsed": false
+      },
+      "actions": {
+        "applicationsSubmitted": [],
+        "trackingLinksCreated": [],
+        "sitesDeployed": [],
+        "postsPublished": [],
+        "paidActions": [],
+        "queueUpdated": true
+      },
+      "notification": {
+        "previouslyReported": true,
+        "notifyAgain": false
+      },
+      "campaignKeys": [
+        "awin:3060863:30859:refurbished-electronics:editorial-v1",
+        "awin:3060863:9837:tyre-compatibility:editorial-v1"
+      ]
     }
   ],
   "campaigns": [
