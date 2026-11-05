@@ -1,6 +1,6 @@
 // CarCare GR: pure, testable feed parsing and evidence-first matching.
 const fold=v=>String(v??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-const decode=v=>String(v??"").replace(/&amp;/gi,"&").replace(/&gt;/gi,">").replace(/&lt;/gi,"<").replace(/&#39;/gi,"'");
+const decode=v=>String(v??"").replace(/&amp;amp;/gi,"&").replace(/&amp;gt;/gi,">").replace(/&amp;/gi,"&").replace(/&gt;/gi,">").replace(/&lt;/gi,"<").replace(/&#39;/gi,"'");
 export const PROBLEMS={
 visibility:{label:"Ορατότητα & παρμπρίζ",keywords:["υαλοκαθαρισ","wiper","παρμπριζ","windshield","καθαριστικ τζαμ","glass cleaner"],category:["υαλοκαθαρισ","παρμπριζ","αυτοκιν"]},
 lighting:{label:"Φώτα & λάμπες",keywords:["λαμπ","h7","h4","h11","led","φωτισ","headlight","xenon"],category:["λαμπ","φωτισ","ηλεκτρικ"]},
@@ -40,7 +40,7 @@ export function normalizeFeed(doc,{now=new Date()}={}){
   const id=String(p.lw_product_id||p.product_id||i);
   if(seen.has(id))continue;seen.add(id);
   const image_url=imageUrl(p.image_url)||imageUrl(p.thumb_url);
-  items.push({id,title,brand:decode(p.brand_name||""),category,merchant:decode(p.program_name||""),price,full_price:parsePrice(p.full_price),tracking_url:link,image_url,description:decode(String(p.description||"").replace(/<[^>]*>/g," ")).slice(0,480),valid_to:p.valid_to||null});
+  items.push({id,title,brand:decode(p.brand_name||""),category,merchant:decode(p.program_name||p.program||""),price,full_price:parsePrice(p.full_price),tracking_url:link,image_url,description:decode(String(p.description||"").replace(/<[^>]*>/g," ")).slice(0,480),valid_to:p.valid_to||null});
  }
  return items;
 }
