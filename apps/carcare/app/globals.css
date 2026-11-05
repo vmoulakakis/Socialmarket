@@ -84,3 +84,11 @@
 @media(max-width:1040px){.intelligenceStage{grid-template-columns:1fr;gap:30px;padding:36px 34px}.intelligenceIntro h2{max-width:760px}.intelligenceIntro>p{max-width:750px}.intelligenceFlow{grid-template-columns:repeat(3,minmax(0,1fr));border-left:0;max-width:none;gap:10px}.intelligenceFlow>div{border-left:1px solid #668969;padding-left:15px}.intelligenceFlow>div:before{left:-4px}}
 @media(max-width:600px){.intelligenceStage{margin:35px 0 58px;padding:25px 16px;gap:25px;border-radius:20px}.intelligenceIntro h2{font-size:clamp(31px,9vw,44px);letter-spacing:-1.3px;margin:18px 0 14px}.intelligenceIntro>p{font-size:13px}.intelligenceFlow{grid-template-columns:1fr}.intelligenceFlow>div{padding:9px 0 9px 17px}.intelligenceFlow>div:before{top:16px}.consoleTop,.consoleBottom{padding:14px}.consoleContent{padding:17px 13px;max-height:430px}.consoleType{display:none}.promptChips button{flex:1 1 45%;font-size:10px}.plateInspector{padding:13px}.plateRow input{max-width:150px}.chatOffer img{width:65px;height:65px;flex-basis:65px}}
 @media(prefers-reduced-motion:reduce){.consoleIndicator,.dotPulse,.chatTurn{animation:none}.promptChips button{transition:none}}
+
+.marketPulse{margin:30px 0 86px;padding:34px;border-radius:22px;background:#152820;border:1px solid #3c614b}
+.marketPulse h2{font-size:clamp(24px,3vw,38px);letter-spacing:-1px;margin:0 0 7px}.marketPulse>p{font-size:12px;color:#adc4af;margin:0 0 26px}
+.pulseGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.pulseItem{display:flex;flex-direction:column;gap:13px;padding:19px;border:1px solid #486a4e;border-radius:14px;background:#1d3726;min-height:137px;transition:transform .18s,background .18s}
+.pulseItem:hover{background:#284a31;transform:translateY(-3px)}.pulseItem strong{font-size:13px;color:#dcefd5}.pulseItem>b{font-size:28px;color:#d5f797;letter-spacing:-1px}
+.pulseTrack{display:block;width:100%;height:7px;background:#10231a;border-radius:99px;overflow:hidden}.pulseTrack>span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#729e6c,#d2fc8b);transition:width .5s}
+@media(max-width:700px){.pulseGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.marketPulse{padding:20px}.pulseItem{min-height:122px;padding:13px}}
+@media(prefers-reduced-motion:reduce){.pulseItem,.pulseTrack>span{transition:none}}
