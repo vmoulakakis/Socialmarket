@@ -34,9 +34,16 @@ export async function POST(request){
   const dbUrl=process.env.NEXT_PUBLIC_CARCARE_SUPABASE_URL,anon=process.env.CARCARE_SUPABASE_ANON_KEY;
   if(dbUrl&&anon){
    const db=createClient(dbUrl,anon,{auth:{persistSession:false}});
+   const {data:hybrid,error:hybridError}=await db.rpc("carcare_ai_hybrid_search",{search_query:question,query_embedding:null,match_limit:6,problem_filter:problem});
+   if(!hybridError&&hybrid?.length){
+    products=hybrid.map(p=>({id:p.product_id,title:p.title,category:p.category,brand:p.brand,merchant:p.merchant,price:Number(p.price_eur),image_url:p.image_url,tracking_url:p.tracking_url}));
+    source="VMDB";
+   }
+   if(!products.length){
    const {data}=await db.from("carcare_ai_products").select("id,source_product_id,title,category,brand,merchant,price_eur,image_url,tracking_url,inferred_problems")
     .eq("is_published",true).eq("in_stock",true).contains("inferred_problems",[problem]).order("price_eur",{ascending:true}).limit(60);
    if(data?.length){products=data.map(p=>({id:p.source_product_id,title:p.title,category:p.category,brand:p.brand,merchant:p.merchant,price:p.price_eur,image_url:p.image_url,tracking_url:p.tracking_url}));source="VMDB"}
+   }
   }
   if(!products.length&&process.env.LINKWISE_CARCARE_FEED_URL){
    const resp=await fetch(process.env.LINKWISE_CARCARE_FEED_URL,{next:{revalidate:3600},signal:AbortSignal.timeout(38000)});
