@@ -1,7 +1,7 @@
 import {normalizeFeed,PROBLEMS,scoreMatch} from "../lib/catalog.mjs";
 // Server-only deployment feed audit. No URLs, IDs or credentials are logged.
-const url=process.env.LINKWISE_CARCARE_FEED_URL;
-if(!url){console.log("CARCARE_FEED_AUDIT: missing LINKWISE_CARCARE_FEED_URL");process.exit(0)}
+const url=process.env.LINKWISE_CARCARE_V2_FEED_URL;
+if(!url){console.log("CARCARE_V2_AUDIT: missing LINKWISE_CARCARE_FEED_URL");process.exit(0)}
 try{
  const u=new URL(url);
  if(u.protocol!=="https:"||u.hostname!=="affiliate.linkwi.se")throw Error("unexpected_feed_hostname");
@@ -16,7 +16,7 @@ try{
  console.log("CARCARE_FEED_AUDIT total",rows.length);
  const valid=normalizeFeed(doc);
  const groups=Object.fromEntries(Object.keys(PROBLEMS).map(k=>[k,valid.filter(p=>scoreMatch(p,k)>0).length]));
- console.log("CARCARE_LIVE_ELIGIBLE",valid.length,"solution_groups",JSON.stringify(groups));
+ console.log("CARCARE_V2_ELIGIBLE",valid.length,"solution_groups",JSON.stringify(groups));
  console.log("CARCARE_LIVE_ELIGIBLE_SAMPLE",JSON.stringify(valid.slice(0,10).map(p=>({title:p.title.slice(0,65),price:p.price,category:p.category.slice(0,55),merchant:p.merchant}))));
 
  const categories=new Map(),programs=new Map();
@@ -28,7 +28,7 @@ try{
  console.log("CARCARE_FEED_AUDIT media",withImage,"tracking",withTracking);
  const automotive=rows.filter(p=>/αυτοκιν|car accessories|vehicle|motor|οχημ|οχημ|υαλοκαθαρισ|ελαστικ|ζαντ|λάμπες|αξεσουάρ αυτοκιν|car care|car wash|φορτιστ.*αυτοκιν|gadgets αυτοκιν/i.test(String(p.category||"")));
  const autoCats=new Map();for(const p of automotive){const category=String(p.category||"").replace(/&(?:amp;)?gt;/g,">").replace(/&(?:amp;)?amp;/g,"&").slice(0,140);autoCats.set(category,(autoCats.get(category)||0)+1)}
- console.log("CARCARE_AUTO_AUDIT count",automotive.length,"categories",JSON.stringify([...autoCats.entries()].sort((a,b)=>b[1]-a[1]).slice(0,38)));
+ console.log("CARCARE_V2_AUTO_AUDIT count",automotive.length,"categories",JSON.stringify([...autoCats.entries()].sort((a,b)=>b[1]-a[1]).slice(0,38)));
  console.log("CARCARE_AUTO_AUDIT first_product_keys",JSON.stringify(Object.keys(rows[0]||{})));
  console.log("CARCARE_AUTO_AUDIT products_sample",JSON.stringify(automotive.slice(0,45).map(p=>({name:String(p.product_name||"").slice(0,95),category:String(p.category||"").slice(0,85),price:p.price,in_stock:p.in_stock,availability:p.availability,valid_to:p.valid_to,source:p.program_name}))));
  const textGroups={wipers:/υαλοκαθαρισ|wiper/i,bulbs:/λαμπ|λάμπ|led|headlight|h7|h4/i,cleaners:/καθαρισ|σφουγγ|πλυσ|γυαλισ|κερ|polish|wax|microfiber|μικροιν/i,electrical:/μπαταρ|φορτιστ|διακοπτ|ρελε|αισθητ|charger|switch|sensor/i,gadgets:/gadgets|κάμερα|camera|holder|gps|bluetooth|usb/i};
