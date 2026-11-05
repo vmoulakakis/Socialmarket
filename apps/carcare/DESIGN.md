@@ -76,3 +76,15 @@ Examples are audit snapshots, not claims of current availability, fit or recomme
 - The model/year and quick answers currently guide user data collection but DO NOT establish verified vehicle/part compatibility. Maintain explicit disclaimer.
 - Observed latest feed audit: 7,627 candidate automotive products passed base gates on a previous snapshot. Treat as dynamic, never display as fixed current volume.
 - Release verification gates: all 12 automated tests, optimized Next build, Vercel READY, verified production alias, no invented product images/tracking.
+
+## CarCare AI Intelligence v3 — 2026-11-05
+- User-supplied second Linkwise feed (selected categories 35,37,39,41,101,129) returned HTTP 200 with literal `[]` in a Vercel build, so **0** insurance/finance offers are available from that source. Preserve the earlier automotive source.
+- More recent automotive import attempt resulted in **0 eligible products**; a fail-closed check prevents catalog overwrite when empty. Do not claim a completed 7k-product import; historical counts were earlier audit snapshots.
+- VMDB project `gqpbskssrvpfjtujwezc`: new public tables with RLS `carcare_ai_products`, `carcare_ai_evidence`, `carcare_ai_ingestion_runs`, `carcare_ai_agent_runs`, `carcare_ai_sources`. Existing SocialMarket tables remain untouched.
+- `pgvector` 384-dimensional index and `carcare_ai_hybrid_search` RRF function combining keyword/trigram and optional semantic vectors. Semantic scoring is active only for records with actual embeddings; do not describe empty vector space as trained.
+- Authenticated ingest Edge Function `carcare-ai-sync` supports controlled, server-only batch imports and queueing embeddings. Actual ingested and embedded counts must be measured in DB.
+- Existing MyAgenticTeam agent profiles `requirements`, `research`, `strategy`, `engineering`, `cro`, `qa_security` should own intent, evidence, product matching, UX and claims review. The current API uses deterministic stages. Independent model-backed specialist agents are not yet proven.
+- UI: premium dark-petrol design, Greek conversational advisor, feed provenance, native CSS motion with reduced-motion handling, data-backed infographic and a format-only local Greek plate validator. Plate value is never sent to affiliate URLs or persisted.
+- Public AI assistant is currently retrieval-guided and rules-based. It is not a verified generative LLM or fully populated vector RAG; do not mislabel.
+- No false price comparisons, countdowns, ratings or conversion performance claims. No verified insurer quotes or insurance price calculations until real data provider and regulatory review.
+- WCAG AAA, Playwright E2E, actual mobile load under 1.5 seconds, and source-to-sale conversions require independent test evidence.
