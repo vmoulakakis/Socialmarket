@@ -40,7 +40,7 @@ export function normalizeFeed(doc,{now=new Date()}={}){
   const id=String(p.lw_product_id||p.product_id||i);
   if(seen.has(id))continue;seen.add(id);
   const image_url=imageUrl(p.image_url)||imageUrl(p.thumb_url);
-  items.push({id,title,brand:decode(p.brand_name||""),category,merchant:decode(p.program_name||p.program?.name||p.program?.program_name||p.program?.title||""),price,full_price:parsePrice(p.full_price),tracking_url:link,image_url,description:decode(String(p.description||"").replace(/<[^>]*>/g," ")).slice(0,480),valid_to:p.valid_to||null});
+  items.push({id,title,brand:decode(p.brand_name||""),category,merchant:decode(p.program_name||(typeof p.program==="string"?p.program:p.program?.name||p.program?.program_name||p.program?.title)||""),price,full_price:parsePrice(p.full_price),tracking_url:link,image_url,description:decode(String(p.description||"").replace(/<[^>]*>/g," ")).slice(0,480),valid_to:p.valid_to||null});
  }
  return items;
 }
