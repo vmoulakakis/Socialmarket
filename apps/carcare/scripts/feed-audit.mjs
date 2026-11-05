@@ -20,5 +20,12 @@ try{
  console.log("CARCARE_FEED_AUDIT categories",JSON.stringify(top(categories)));
  console.log("CARCARE_FEED_AUDIT programs",JSON.stringify(top(programs)));
  console.log("CARCARE_FEED_AUDIT media",withImage,"tracking",withTracking);
+ const automotive=rows.filter(p=>/αυτοκιν|car accessories|vehicle|motor|οχημ|οχημ|υαλοκαθαρισ|ελαστικ|ζαντ|λάμπες|αξεσουάρ αυτοκιν|car care|car wash|φορτιστ.*αυτοκιν|gadgets αυτοκιν/i.test(String(p.category||"")));
+ const autoCats=new Map();for(const p of automotive){const category=String(p.category||"").replace(/&(?:amp;)?gt;/g,">").replace(/&(?:amp;)?amp;/g,"&").slice(0,140);autoCats.set(category,(autoCats.get(category)||0)+1)}
+ console.log("CARCARE_AUTO_AUDIT count",automotive.length,"categories",JSON.stringify([...autoCats.entries()].sort((a,b)=>b[1]-a[1]).slice(0,38)));
+ console.log("CARCARE_AUTO_AUDIT first_product_keys",JSON.stringify(Object.keys(rows[0]||{})));
+ console.log("CARCARE_AUTO_AUDIT products_sample",JSON.stringify(automotive.slice(0,45).map(p=>({name:String(p.product_name||"").slice(0,95),category:String(p.category||"").slice(0,85),price:p.price,in_stock:p.in_stock,availability:p.availability,valid_to:p.valid_to,source:p.program_name}))));
+ const textGroups={wipers:/υαλοκαθαρισ|wiper/i,bulbs:/λαμπ|λάμπ|led|headlight|h7|h4/i,cleaners:/καθαρισ|σφουγγ|πλυσ|γυαλισ|κερ|polish|wax|microfiber|μικροιν/i,electrical:/μπαταρ|φορτιστ|διακοπτ|ρελε|αισθητ|charger|switch|sensor/i,gadgets:/gadgets|κάμερα|camera|holder|gps|bluetooth|usb/i};
+ for(const [group,re] of Object.entries(textGroups)){const hits=automotive.filter(p=>re.test(String(p.product_name||"")+" "+String(p.category||"")));console.log("CARCARE_AUTO_AUDIT group",group,hits.length,JSON.stringify(hits.slice(0,6).map(p=>({title:String(p.product_name||"").slice(0,85),price:p.price,category:String(p.category||"").slice(0,75)}))))}
  console.log("CARCARE_FEED_AUDIT samples",JSON.stringify(rows.slice(0,12).map(p=>({title:String(p.product_name||p.model_name||"").slice(0,100),category:String(p.category||"").slice(0,70),price:p.price,program:p.program_name}))));
 }catch(e){console.log("CARCARE_FEED_AUDIT error",e?.name||"Error",String(e?.message||"").slice(0,120))}
