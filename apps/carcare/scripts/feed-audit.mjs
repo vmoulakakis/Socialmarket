@@ -1,6 +1,6 @@
 import {normalizeFeed,PROBLEMS,scoreMatch} from "../lib/catalog.mjs";
 // Server-only deployment feed audit. No URLs, IDs or credentials are logged.
-const url=process.env.LINKWISE_CARCARE_FEED_URL;
+const url=process.env.LINKWISE_CARCARE_V2_FEED_URL;
 if(!url){console.log("CARCARE_FEED_AUDIT: missing LINKWISE_CARCARE_FEED_URL");process.exit(0)}
 try{
  const u=new URL(url);
