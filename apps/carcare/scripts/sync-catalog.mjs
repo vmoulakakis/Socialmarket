@@ -14,3 +14,15 @@ async function request(payload){
  if(!response.ok)throw Error("CarCare VMDB sync "+response.status);
  return response.json();
 }
+
+if(!syncKey)throw Error("Missing private sync credentials");
+const started=await request({action:"start",input_count:products.length});
+let imported=0;
+for(let i=0;i<products.length;i+=80){
+ const output=await request({action:"batch",products:products.slice(i,i+80)});
+ imported+=Number(output.upserted||0);
+ if(i%1600===0)console.log("CarCare VMDB imported",imported);
+}
+if(imported!==products.length)throw Error("Partial import");
+await request({action:"finish",run_id:started.run_id,valid_count:products.length,upsert_count:imported});
+console.log("CarCare VMDB import verified",imported);
