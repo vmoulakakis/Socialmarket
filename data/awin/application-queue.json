@@ -1,8 +1,8 @@
 {
   "project": "Awin Publisher Autopilot",
   "publisherId": 3060863,
-  "checkedAt": "2026-11-04",
-  "source": "Awin MCP 2026-11-04 account verified; joined/pending/rejected/suspended; programme details 25829/9837/19725; Chrome origin blocked; no paid browser",
+  "checkedAt": "2026-11-05",
+  "source": "Awin MCP 2026-11-05: verified publisher, memberships, 3 advertiser details and performance 2026-10-06..2026-11-05 UTC; Buffer channel states; Chrome originating context unavailable; no paid browser.",
   "policy": {
     "minimumEstimatedCommissionEUR": 10,
     "applicationNoteMaxCharacters": 150,
@@ -25,7 +25,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-04"
+      "lastVerified": "2026-11-05"
     },
     {
       "id": 107764,
@@ -41,7 +41,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-04"
+      "lastVerified": "2026-11-05"
     },
     {
       "id": 25829,
@@ -57,7 +57,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-04",
+      "lastVerified": "2026-11-05",
       "publicAdvertisedCommission": {
         "standardPercent": 9,
         "voucherPercent": 5,
@@ -85,7 +85,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-04",
+      "lastVerified": "2026-11-05",
       "approvalPercent": 78.3,
       "validationDays": 29
     },
@@ -103,7 +103,7 @@
       "termsReviewed": false,
       "commissionConfirmed": false,
       "trackingVerified": false,
-      "lastVerified": "2026-11-04",
+      "lastVerified": "2026-11-05",
       "publicAdvertisedCommission": {
         "standardPercent": 3,
         "cookieDays": 60,
@@ -261,7 +261,7 @@
     }
   ],
   "lastRun": {
-    "date": "2026-11-03",
+    "date": "2026-11-05",
     "publisherId": 3060863,
     "membershipCounts": {
       "joined": 0,
@@ -270,9 +270,9 @@
       "suspended": 0
     },
     "performance": {
-      "window": "2026-10-04/2026-11-03",
+      "window": "2026-10-06/2026-11-05",
       "reportRows": 0,
-      "meaning": "Awin advertiser report empty; no commission-status breakdown; unavailable != zero"
+      "meaning": "Awin advertiser report empty; pending/approved/reversed commission unavailable, not zero"
     },
     "candidateIdsReviewed": [
       25829,
@@ -285,7 +285,6 @@
     "paidServicesUsed": false,
     "publicationState": "HOLD: no Joined advertisers",
     "browser": "Chrome originating browser context required; already reported",
-    "notification": "No new user-action blocker; do not notify",
-    "ci": "not yet checked"
+    "notification": "No new user-action blocker; do not notify"
   }
 }
