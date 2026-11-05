@@ -36,3 +36,51 @@
 .showMore{display:block;width:100%;min-height:48px;border:1px solid #80aa75;border-radius:11px;background:#274331;color:#e2f7d2;font-weight:800;padding:12px 16px;margin-top:17px}
 .showMore:hover{background:#34523b}
 @media(prefers-reduced-motion:reduce){.calcPick{transition:none}}
+
+/* CARCARE INTELLIGENCE — art direction v3 / AI advisor */
+.intelligenceStage{scroll-margin-top:90px;position:relative;margin:54px 0 92px;padding:56px 44px 56px 50px;display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);gap:42px;align-items:center;border:1px solid #3c5b4d;border-radius:28px;overflow:hidden;background:radial-gradient(ellipse at 9% 2%,#597e4a4d,transparent 36%),radial-gradient(ellipse at 98% 85%,#164a624b,transparent 41%),linear-gradient(145deg,#122821,#0a1a1a 65%);box-shadow:inset 0 1px 0 #c4f48e13,0 25px 90px #00000030}
+.intelligenceStage:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.17;background-image:linear-gradient(#a5cbbd1b 1px,transparent 1px),linear-gradient(90deg,#a5cbbd1b 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(90deg,#000,transparent 58%)}
+.intelligenceIntro,.intelligenceConsole{position:relative;z-index:1;min-width:0}
+.intelligenceEyebrow{color:#d2fb9e;font-size:11px;letter-spacing:1.6px;font-weight:800;display:inline-flex;align-items:center;gap:12px}
+.intelligencePing{width:9px;height:9px;border-radius:50%;background:#c7ff82;box-shadow:0 0 0 6px #c7ff8223}
+.intelligenceIntro h2{font-size:clamp(35px,4.25vw,62px);line-height:1.09;letter-spacing:-2.2px;font-weight:800;max-width:540px;margin:28px 0 20px}
+.intelligenceIntro h2 em{font-style:normal;color:#d0fb91}
+.intelligenceIntro>p{font-size:15px;line-height:1.8;color:#b7cfbb;max-width:470px}
+.intelligenceFlow{display:grid;gap:0;margin-top:32px;max-width:410px;border-left:1px solid #6c9568}
+.intelligenceFlow>div{display:flex;align-items:flex-start;gap:20px;padding:13px 0 13px 24px;position:relative}
+.intelligenceFlow>div:before{content:"";position:absolute;width:7px;height:7px;border-radius:50%;top:19px;left:-4px;background:#bde989}
+.intelligenceFlow b{color:#b9e881;font-size:11px;letter-spacing:1px}
+.intelligenceFlow span{color:#e3f1dc;font-size:13px}
+.aiSignals{display:flex;gap:7px;flex-wrap:wrap;margin:23px 0 0}
+.aiSignals span{font-size:10px;color:#c9e8c7;border:1px solid #4c7151;border-radius:99px;padding:7px 9px;background:#25402b70}
+.aiSignals i{display:inline-block;margin-right:6px;width:5px;height:5px;border-radius:50%;background:#b0ed85;vertical-align:middle}
+.intelligenceConsole{border:1px solid #537365;border-radius:22px;overflow:hidden;background:#101f1c;box-shadow:0 30px 80px #0006,0 2px 0 #b9ea9a20}
+.consoleTop{padding:17px 21px;display:flex;align-items:center;justify-content:space-between;gap:15px;background:linear-gradient(90deg,#263f32,#162b26);border-bottom:1px solid #44614d}
+.consoleTop>div{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:1.1px;font-size:11px;color:#e0f2d7}
+.consoleIndicator{width:9px;height:9px;border-radius:50%;background:#b1f77e;box-shadow:0 0 0 4px #b1f77e16;animation:signalBreathe 3.2s infinite}
+.consoleType{font-size:9px;letter-spacing:.8px;color:#9db8a5}
+.consoleContent{max-height:395px;overflow-y:auto;padding:22px 21px 16px;scrollbar-width:thin;scrollbar-color:#637960 transparent;display:flex;flex-direction:column;gap:15px;min-height:188px}
+.aiWelcome{display:flex;gap:14px;align-items:flex-start}.aiAvatar{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:13px;background:#c2ee7e;color:#1a3122;font-size:22px;font-weight:900;box-shadow:0 0 0 5px #c2ee7e14}
+.aiWelcome strong{font-size:14px;color:#f1ffec}.aiWelcome p{font-size:12px;color:#b4cbbb;line-height:1.75;margin:7px 0 0}
+.chatTurn{padding:14px 17px;border-radius:14px;max-width:95%;animation:turnReveal .3s ease both}.chatTurn p{font-size:12px;line-height:1.8;margin:8px 0;white-space:pre-wrap}.chatRole{font-size:9px;font-weight:800;letter-spacing:1.4px}
+.chatUser{align-self:flex-end;background:#345239;color:#effde9;border:1px solid #6b9967;border-bottom-right-radius:4px}.chatUser .chatRole{color:#d4efb6}
+.chatAssistant{align-self:flex-start;background:#20342b;color:#eff9ed;border:1px solid #3f5d49;border-bottom-left-radius:4px}.chatAssistant .chatRole{color:#bef081}
+.chatEvidence{display:block;margin-top:13px;color:#9ebba4;font-size:10px;line-height:1.5}
+.chatOffers{display:grid;gap:10px;margin:15px 0}.chatOffer{display:flex;align-items:center;gap:12px;background:#142720;border:1px solid #385640;padding:8px;border-radius:12px}
+.chatOffer img{width:78px;height:78px;border-radius:9px;background:#fff;object-fit:contain;flex:0 0 78px}
+.chatOffer>div{min-width:0;display:grid;gap:5px}.chatOffer strong{font-size:11px;line-height:1.35;font-weight:700;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.chatOffer span{font-weight:800;font-size:14px;color:#d4f69b}.chatOffer a{font-size:11px;color:#b7ec78;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+.chatThinking{display:flex;align-items:center;gap:10px;color:#b9d49f;font-size:12px}.dotPulse{width:8px;height:8px;background:#b9e68a;border-radius:50%;animation:signalBreathe 1s infinite}
+.chatError{font-size:12px;color:#ffe0ba;background:#6b40304f;padding:11px;border:1px solid #b87e65;border-radius:9px}.chatError button{background:none;color:#ffe0ba;border:0;text-decoration:underline}
+.consoleBottom{padding:15px 19px 19px;background:#172821;border-top:1px solid #395344}.promptChips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:15px}
+.promptChips button{border-radius:99px;background:#223a2c;color:#d8ebd0;padding:9px 11px;font-size:10px;border:1px solid #58765c;min-height:39px;text-align:left;transition:transform .18s,background .18s}.promptChips button:hover{transform:translateY(-2px);background:#315239}.promptChips button span{margin-right:6px}
+.chatComposer{display:flex;align-items:center;gap:8px;padding:7px;background:#0d211a;border:1px solid #6a8d68;border-radius:14px}.chatComposer:focus-within{border-color:#c3f587;box-shadow:0 0 0 3px #c3f58715}.chatComposer input{background:transparent;border:0;outline:0;min-width:0;flex:1;color:#f3fff0;font-size:12px;padding:11px 9px}.chatComposer input::placeholder{color:#91aa9d}.chatComposer button{flex:0 0 43px;height:43px;border:0;border-radius:10px;color:#17311e;background:#c7f386;font-weight:900;font-size:23px;display:grid;place-items:center}.chatComposer button:disabled{opacity:.4;cursor:not-allowed}
+.consoleDisclosure{color:#819b88;font-size:10px;line-height:1.55;margin:13px 0 0}
+.plateInspector{margin-top:29px;border:1px solid #52715c;border-radius:15px;background:#132d256e;padding:18px;max-width:440px}.plateInspector strong{font-size:13px}.plateInspector p{font-size:11px;color:#aac2aa;line-height:1.65;margin:7px 0 12px}
+.plateRow{display:flex;gap:8px}.plateRow input{min-width:0;flex:1;max-width:150px;border:1px solid #52785b;border-radius:9px;min-height:45px;background:#0d211a;padding:10px 12px;color:#e9fce3;letter-spacing:1px;text-transform:uppercase;font-weight:800}
+.plateRow button{min-height:45px;border:0;border-radius:9px;background:#d1f8a2;color:#1a341f;padding:9px 14px;font-size:11px;font-weight:800}.plateInspector .plateFeedback{color:#def3d9;font-size:11px;line-height:1.5}
+.srOnly{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+@keyframes signalBreathe{0%,100%{opacity:.6;box-shadow:0 0 0 4px #b1f77e16}50%{opacity:1;box-shadow:0 0 0 8px #b1f77e09}}
+@keyframes turnReveal{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1040px){.intelligenceStage{grid-template-columns:1fr;gap:30px;padding:36px 34px}.intelligenceIntro h2{max-width:760px}.intelligenceIntro>p{max-width:750px}.intelligenceFlow{grid-template-columns:repeat(3,minmax(0,1fr));border-left:0;max-width:none;gap:10px}.intelligenceFlow>div{border-left:1px solid #668969;padding-left:15px}.intelligenceFlow>div:before{left:-4px}}
+@media(max-width:600px){.intelligenceStage{margin:35px 0 58px;padding:25px 16px;gap:25px;border-radius:20px}.intelligenceIntro h2{font-size:clamp(31px,9vw,44px);letter-spacing:-1.3px;margin:18px 0 14px}.intelligenceIntro>p{font-size:13px}.intelligenceFlow{grid-template-columns:1fr}.intelligenceFlow>div{padding:9px 0 9px 17px}.intelligenceFlow>div:before{top:16px}.consoleTop,.consoleBottom{padding:14px}.consoleContent{padding:17px 13px;max-height:430px}.consoleType{display:none}.promptChips button{flex:1 1 45%;font-size:10px}.plateInspector{padding:13px}.plateRow input{max-width:150px}.chatOffer img{width:65px;height:65px;flex-basis:65px}}
+@media(prefers-reduced-motion:reduce){.consoleIndicator,.dotPulse,.chatTurn{animation:none}.promptChips button{transition:none}}
