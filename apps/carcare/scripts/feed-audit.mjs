@@ -1,3 +1,4 @@
+import {normalizeFeed,PROBLEMS,scoreMatch} from "../lib/catalog.mjs";
 // Server-only deployment feed audit. No URLs, IDs or credentials are logged.
 const url=process.env.LINKWISE_CARCARE_FEED_URL;
 if(!url){console.log("CARCARE_FEED_AUDIT: missing LINKWISE_CARCARE_FEED_URL");process.exit(0)}
@@ -13,6 +14,11 @@ try{
  const rows=Array.isArray(doc)?doc:Array.isArray(doc.products)?doc.products:Array.isArray(doc.items)?doc.items:Array.isArray(doc.data)?doc.data:Array.isArray(doc.product)?doc.product:[];
  console.log("CARCARE_FEED_AUDIT keys",Array.isArray(doc)?"array":Object.keys(doc).slice(0,16).join(","));
  console.log("CARCARE_FEED_AUDIT total",rows.length);
+ const valid=normalizeFeed(doc);
+ const groups=Object.fromEntries(Object.keys(PROBLEMS).map(k=>[k,valid.filter(p=>scoreMatch(p,k)>0).length]));
+ console.log("CARCARE_LIVE_ELIGIBLE",valid.length,"solution_groups",JSON.stringify(groups));
+ console.log("CARCARE_LIVE_ELIGIBLE_SAMPLE",JSON.stringify(valid.slice(0,10).map(p=>({title:p.title.slice(0,65),price:p.price,category:p.category.slice(0,55),merchant:p.merchant}))));
+
  const categories=new Map(),programs=new Map();
  let withImage=0,withTracking=0;
  for(const p of rows){const cat=String(p.category||"(missing)").slice(0,90),program=String(p.program_name||"(missing)").slice(0,90);categories.set(cat,(categories.get(cat)||0)+1);programs.set(program,(programs.get(program)||0)+1);if(p.image_url||p.thumb_url)withImage++;if(p.tracking_url)withTracking++}
