@@ -7,7 +7,7 @@ lighting:{label:"Φώτα & λάμπες",keywords:["λαμπ","h7","h4","h11","
 cleaning:{label:"Καθαρισμός & περιποίηση",keywords:["καθαρισ","πλυσ","σφουγγ","γυαλισ","κερι","wax","polish","microfiber","μικροιν","σαμπουαν","detail"],category:["καθαρισμ","περιποιησ"]},
 electrical:{label:"Ηλεκτρικά & μικροεπισκευές",keywords:["διακοπτ","ρελε","αισθητ","switch","sensor","παραθυρ","μοτερ","βαλβιδ"],category:["ηλεκτρικ","ανταλλακτικ"]},
 gadgets:{label:"Gadgets & πρακτικότητα",keywords:["φορτιστ","charger","holder","βαση","camera","καμερα","usb","bluetooth","gps","organizer"],category:["gadgets","αξεσουαρ","ηλεκτρονικ"]},
-maintenance:{label:"Αναλώσιμα & συντήρηση",keywords:["φιλτρ","filter","μπουζ","spark","λιπαντ","λαδι","oil","ανταλλακτικ","φρενο","τακακ","brake"],category:["ανταλλακτικ","αναλωσιμ"]}
+maintenance:{label:"Αναλώσιμα & συντήρηση",keywords:["φιλτρ","filter","μπουζ","spark","λιπαντ","λαδι","oil","μπαταρ","φρενο","τακακ","brake"],category:["ανταλλακτικ","αναλωσιμ"]}
 };
 export function parsePrice(value){
  if(typeof value==="number")return Number.isFinite(value)?value:NaN;
@@ -40,7 +40,7 @@ export function normalizeFeed(doc,{now=new Date()}={}){
   const id=String(p.lw_product_id||p.product_id||i);
   if(seen.has(id))continue;seen.add(id);
   const image_url=imageUrl(p.image_url)||imageUrl(p.thumb_url);
-  items.push({id,title,brand:decode(p.brand_name||""),category,merchant:decode(p.program_name||p.program||""),price,full_price:parsePrice(p.full_price),tracking_url:link,image_url,description:decode(String(p.description||"").replace(/<[^>]*>/g," ")).slice(0,480),valid_to:p.valid_to||null});
+  items.push({id,title,brand:decode(p.brand_name||""),category,merchant:decode(p.program_name||p.program?.name||p.program?.program_name||p.program?.title||""),price,full_price:parsePrice(p.full_price),tracking_url:link,image_url,description:decode(String(p.description||"").replace(/<[^>]*>/g," ")).slice(0,480),valid_to:p.valid_to||null});
  }
  return items;
 }
@@ -49,6 +49,7 @@ export function scoreMatch(p,key){
  const title=fold(p.title),category=fold(p.category),desc=fold(p.description);
  const strong=spec.keywords.reduce((score,word)=>{const w=fold(word);return score+(title.includes(w)?6:0)+(category.includes(w)?2:0)+(desc.includes(w)?1:0)},0);
  if(strong===0)return 0;
+ if(key==="cleaning"&&/αρωματικ|air freshener|aromatic/.test(category+" "+title)&&!/καθαρισ|πλυσ|προστασια|cleaner|polish|shampoo/.test(title))return 0;
  return strong+spec.category.reduce((n,w)=>n+(category.includes(fold(w))?1:0),0);
 }
 export function selectProducts(products,{problem="visibility",q="",maxPrice=null,limit=36}={}){
