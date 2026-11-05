@@ -8,14 +8,15 @@ Scope: Existing Vercel project `carcare-gr-lab` in `vmoulakakis/Socialmarket/app
 3. External Greek market interest is contextual; claims of actual search volumes, competitiveness or conversions are NOT established by these two data sources.
 
 ## Feed audit — before filtering
-- 24,394 raw feed products; 25,355,693 bytes.
+- First observed snapshot: 24,394 raw products; subsequent refresh: 23,900 raw products; 24,777,850 bytes. The feed is dynamic, so counts are snapshots, not constants.
 - About 10,359 entries have automotive-related categories by a broad keyword filter. THIS IS NOT THE NUMBER OF VALID LIVE OFFERS.
 - Examples: 1,369 in `Ανταλλακτικά Αυτοκινήτων`; 859 in automotive lamps; 607 automotive gadgets; 537 automotive cleaning/utility; 466 window switches; 378 wiper category.
 - Significant additional automotive categories: floor mats, key shells, oils, car batteries, trunk struts, car covers, car window regulators, parking systems.
 - Non-auto products are present (hotels, jewellery, household products) and MUST NOT appear on CarCare.
 - All raw entries had an image URL and tracking URL field, but functioning links and image HTTP responses are not implied.
-- Actual fields include `program` rather than `program_name`; price is decimal comma, e.g. `44,99`; `in_stock` uses Y/N; availability includes human-readable Greek strings.
+- Actual fields include `program` (sometimes object-shaped, not `program_name`); price is decimal comma, e.g. `44,99`; `in_stock` uses Y/N; availability includes human-readable Greek strings.
 - Feed category names include HTML entities encoded more than once.
+- Later audit: 7,627 automotive products passed base checks (price, stock, link, date, category), before refined pain-fit deduplication and suitability checks. Initial loose problem matches were 448 visibility, 917 lighting, 1,173 cleaning, 996 electrical, 340 gadgets, 2,895 maintenance; there may be overlap and were subsequently tightened to reduce false positives.
 - Source URLs should be used **unchanged** for affiliate destination and image (no mock images, QR tracking substitutions or direct merchant URLs).
 
 ## Real products observed
@@ -59,3 +60,7 @@ Examples are audit snapshots, not claims of current availability, fit or recomme
 - Vercel preview is READY and feed endpoint is tested if accessible. SSO-protected previews may require authenticated browser testing.
 - Responsive and actual click-through QA required before production release.
 - Production alias `carcare-gr-lab.vercel.app` stays untouched until verified.
+
+## Greek market background (external evidence, not causal conversion proof)
+- 2026 reporting of ACEA 2024 estimates puts the Greek passenger car fleet mean age at 17.8 years (EU 12.7), around 4.53 million of 5.7 million cars over ten years old. Source: eKathimerini, 2026-08-12, https://www.ekathimerini.com/economy/1312230/car-sales-rise-but-fleet-remains-aged/.
+- Greek passenger-car replacement parts market value grew at estimated ~7% average annual rate over 2023-2025, according to an ICAP CRIF study reported by Kathimerini in 2026. This supports aftermarket opportunity, but does NOT establish search demand, gaps in competition or conversion by SKU. Source: https://www.kathimerini.gr/society/564224713/aytokinita-i-ereyna-gia-tis-poliseis-antallaktikon-kai-ta-meridia-gia-gnisia-kai-after-market/.
