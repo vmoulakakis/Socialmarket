@@ -64,3 +64,15 @@ Examples are audit snapshots, not claims of current availability, fit or recomme
 ## Greek market background (external evidence, not causal conversion proof)
 - 2026 reporting of ACEA 2024 estimates puts the Greek passenger car fleet mean age at 17.8 years (EU 12.7), around 4.53 million of 5.7 million cars over ten years old. Source: eKathimerini, 2026-08-12, https://www.ekathimerini.com/economy/1312230/car-sales-rise-but-fleet-remains-aged/.
 - Greek passenger-car replacement parts market value grew at estimated ~7% average annual rate over 2023-2025, according to an ICAP CRIF study reported by Kathimerini in 2026. This supports aftermarket opportunity, but does NOT establish search demand, gaps in competition or conversion by SKU. Source: https://www.kathimerini.gr/society/564224713/aytokinita-i-ereyna-gia-tis-poliseis-antallaktikon-kai-ta-meridia-gia-gnisia-kai-after-market/.
+
+## UI/UX Pro Max polish — 2026-11-05
+- Preserve the same Vercel project/domain and all existing relevant routes.
+- Selected category, selected product and budget scenario have separate explicit states.
+- Search and budget filters debounce by 380ms before expensive remote retrieval.
+- Fetch failures use same-category retry; no silent category switching.
+- Product-specific price reference updates the cost calculator and scrolls to it.
+- Progressive offer reveal uses a real show-more control rather than an inert product cap.
+- Touch controls and visible focus; responsive layout from existing styles; motion reduced when requested.
+- The model/year and quick answers currently guide user data collection but DO NOT establish verified vehicle/part compatibility. Maintain explicit disclaimer.
+- Observed latest feed audit: 7,627 candidate automotive products passed base gates on a previous snapshot. Treat as dynamic, never display as fixed current volume.
+- Release verification gates: all 12 automated tests, optimized Next build, Vercel READY, verified production alias, no invented product images/tracking.
