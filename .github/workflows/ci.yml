@@ -25,6 +25,8 @@ jobs:
         run: pip install -r workers/product_intelligence/requirements.txt
       - name: Verify buyer agent evidence gates
         run: npm run test:shopper-agent
+      - name: Verify program identity and supervised MyAgenticTeam crew
+        run: npm run test:shopper-crew
       - run: npm run test:design-v2
       - run: npm run test:demand-v3
       - name: Validate canonical workspace wiring
