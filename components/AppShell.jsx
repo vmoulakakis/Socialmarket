@@ -29,6 +29,7 @@ const groups=[
 
 function activePath(pathname,href){
  if(href==='/')return pathname==='/';
+ if(href==='/admin')return pathname==='/admin';
  return pathname===href||pathname.startsWith(`${href}/`);
 }
 
