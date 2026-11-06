@@ -1,5 +1,5 @@
 'use client';
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import styles from './shop-experience.module.css';
 
@@ -71,7 +71,7 @@ export default function ShopExperience({initialChat=false}){
  const [draft,setDraft]=useState(''),[asking,setAsking]=useState(false);
  const [history,setHistory]=useState([{role:'assistant',text:'Γεια! Περιέγραψέ μου τι χρειάζεσαι και το budget σου. Θα ερευνήσω πραγματικά προϊόντα και θα ξεχωρίσω τι γνωρίζουμε από όσα χρειάζονται έλεγχο.',items:[],ai:false}]);
  const listAnchor=useRef(null),chatEnd=useRef(null);
- const relevant=useMemo(()=>products.filter(p=>compare.includes(p.id)),[products,compare]);
+ const relevant=compare;
  const load=useCallback(async(q,cat,max,order,current,append=false)=>{
   setLoading(true);setError('');
   try{
@@ -93,7 +93,7 @@ export default function ShopExperience({initialChat=false}){
  useEffect(()=>{if(chatOpen)chatEnd.current?.scrollIntoView({behavior:'smooth',block:'nearest'});},[history,chatOpen]);
  function pickExample(text){setSearch(text);setDraft(text);setChatOpen(true);listAnchor.current?.scrollIntoView({behavior:'smooth'});}
  function toggleSave(id){setSaved(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);}
- function toggleCompare(id){setCompare(v=>v.includes(id)?v.filter(x=>x!==id):v.length>=3?v:[...v,id]);setCompareOpen(true);}
+ function toggleCompare(id){const found=products.find(p=>p.id===id);if(!found)return;setCompare(v=>v.some(x=>x.id===id)?v.filter(x=>x.id!==id):v.length>=3?v:[...v,found]);setCompareOpen(true);}
  async function ask(raw){
   const message=String(raw||'').trim();if(message.length<3||asking)return;
   setDraft('');setChatOpen(true);setHistory(v=>[...v,{role:'user',text:message}]);
@@ -147,7 +147,7 @@ export default function ShopExperience({initialChat=false}){
     {error&&<div className={styles.error} role="alert"><strong>Πρόβλημα φόρτωσης.</strong> {error}<button type="button" onClick={()=>load(search,category,budget,sort,page)}>Επανάληψη</button></div>}
     {loading&&products.length===0?<div className={styles.loading} role="status">Ανάκτηση πραγματικών προϊόντων…</div>:null}
     {!loading&&products.length===0&&!error?<div className={styles.empty}><span>⌕</span><h3>Δεν βρέθηκαν σχετικά προϊόντα.</h3><p>Δοκίμασε άλλη περιγραφή ή αφαίρεσε το όριο τιμής. Δεν συμπληρώνουμε τα αποτελέσματα με ανύπαρκτες προσφορές.</p><button onClick={()=>{setSearch('');setBudget('');setCategory('Όλα');}}>Επαναφορά φίλτρων</button></div>:null}
-    <div className={styles.productGrid}>{products.map((item,index)=><ProductCard key={item.id} item={item} index={index} saved={saved.includes(item.id)} onSave={toggleSave} compared={compare.includes(item.id)} onCompare={toggleCompare}/>)}</div>
+    <div className={styles.productGrid}>{products.map((item,index)=><ProductCard key={item.id} item={item} index={index} saved={saved.includes(item.id)} onSave={toggleSave} compared={compare.some(p=>p.id===item.id)} onCompare={toggleCompare}/>)}</div>
     {hasMore&&<div className={styles.moreWrap}><button className={styles.more} type="button" disabled={loading} onClick={next}>{loading?'Φόρτωση…':'Περισσότερες επιλογές'} <span aria-hidden="true">↗</span></button></div>}
     <div className={styles.dataCaveat}><span aria-hidden="true">ⓘ</span><p>Οι τιμές, η διαθεσιμότητα και οι χρόνοι παράδοσης μπορεί να αλλάξουν. Οι σύνδεσμοι είναι affiliate και ενδέχεται να αποφέρουν προμήθεια χωρίς επιπλέον χρέωση για σένα. Έλεγξε τα στοιχεία στο κατάστημα.</p></div>
    </section>
@@ -166,6 +166,6 @@ export default function ShopExperience({initialChat=false}){
     <p className={styles.chatFinePrint}>Η AI ανάλυση ενεργοποιείται μόνο με διαθέσιμη υπηρεσία. Οι προσφορές απαιτούν επιβεβαίωση εμπόρου.</p>
   </aside>}
   {compare.length>0&&<button type="button" className={styles.compareFab} onClick={()=>setCompareOpen(v=>!v)}>Σύγκριση <b>{compare.length}/3</b> {compareOpen?'−':'+'}</button>}
-  {compareOpen&&<CompareBar items={relevant} onRemove={id=>setCompare(v=>v.filter(x=>x!==id))} onClose={()=>setCompareOpen(false)}/>}
+  {compareOpen&&<CompareBar items={relevant} onRemove={id=>setCompare(v=>v.filter(x=>x.id!==id))} onClose={()=>setCompareOpen(false)}/>}
  </div>;
 }
