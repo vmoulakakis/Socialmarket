@@ -26,7 +26,7 @@ export default function Catalog({products=[],error=false}){
    <small>ΠΡΟΪΟΝΤΑ ΜΕ ΣΑΦΕΙΣ ΠΛΗΡΟΦΟΡΙΕΣ</small>
    <h1>Επίλεξε με βάση <br/>την ανάγκη σου.</h1>
    <p>Σύγκρινε τις διαθέσιμες επιλογές με βάση την τιμή και την κατηγορία. Αυτή η συλλογή περιέχει κυρίως premium είδη σπιτιού· δεν αποτελεί σύγκριση ολόκληρης της αγοράς.</p>
-   <a className={styles.heroLink} href="#catalog-results">Δες τις επιλογές ↓</a>
+   <Link className={styles.heroLink} href="/marketplace/advisor">Ρώτησε τον Shopping Advisor →</Link><a className={styles.heroLink} href="#catalog-results">Δες τις επιλογές ↓</a>
   </section>
   <section className={styles.buyerGuide} aria-label="Πώς να αγοράσεις με σιγουριά">
    <span><b>01 · Ανάγκη</b> Επιβεβαίωσε διαστάσεις και χρήση.</span>
