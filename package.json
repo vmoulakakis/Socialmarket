@@ -11,7 +11,8 @@
     "test:affinity-page-engine": "node scripts/validate-affinity-page-engine.mjs",
     "test:orchestrator": "node --check lib/orchestrator/runtime.js && node --check app/api/orchestrator/route.js && node scripts/validate-orchestrator.mjs",
     "test:shopper-agent": "node scripts/validate-shopper-agent.mjs",
-    "test:shopper-crew": "node scripts/validate-linkwise-identity.mjs && node scripts/validate-shopper-crew.mjs"
+    "test:shopper-crew": "node scripts/validate-linkwise-identity.mjs && node scripts/validate-shopper-crew.mjs",
+    "test:shop-experience": "node scripts/validate-shop-search.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
