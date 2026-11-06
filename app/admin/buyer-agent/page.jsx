@@ -73,7 +73,7 @@ export default function BuyerAgentLab(){
      {p.missing_checks?.length>0&&<ul>{p.missing_checks.map(check=><li key={check}>{reasons[check]||check}</li>)}</ul>}
      {insights.has(p.id)&&<div className={styles.insight}><strong>Product Fit (μοντελοποιημένη υπόθεση)</strong><p>{insights.get(p.id).reason}</p></div>}
      {audits.has(p.id)&&<div className={styles.insight}><strong>Skeptic: {audits.get(p.id).final_verdict}</strong><p>{audits.get(p.id).critic_reason}</p></div>}
-     <Link href={'/marketplace/'+encodeURIComponent(p.id)}>Προβολή αρχικής προσφοράς ↗</Link>
+     <a href={p.tracking_url} target="_blank" rel="sponsored noopener noreferrer">Έλεγχος αρχικής προσφοράς ↗</a>
     </article>)}
    </section>:<div className={styles.panel}>Δεν βρέθηκαν υποψήφια προϊόντα στη διαθέσιμη συλλογή. Δεν θα δημιουργηθούν τεχνητές εγγραφές.</div>}
   </div>}
