@@ -1,9 +1,7 @@
-import BuyerAdvisor from '@/components/catalog/BuyerAdvisor';
-export const metadata = {
-  title: 'Έξυπνη διερεύνηση αγορών | SocialMarket AI',
-  description: 'Περιέγραψε την ανάγκη σου. Δες υποψήφιες αντιστοιχίσεις από πραγματικό affiliate feed, με σαφή έλεγχο της αξιοπιστίας των στοιχείων.',
-  robots: { index: false, follow: false },
+import ShopExperience from '@/components/shop/ShopExperience';
+export const metadata={
+ title:'AI Shopping Advisor | SocialMarket AI',
+ description:'Ο AI Shopping Advisor ερευνά πραγματικές καταχωρίσεις και ξεχωρίζει τα επαληθευμένα στοιχεία από όσα απαιτούν έλεγχο.',
+ robots:{index:false,follow:true}
 };
-export default function BuyerAdvisorPage() {
-  return <BuyerAdvisor />;
-}
+export default function BuyerAdvisorPage(){return <ShopExperience initialChat/>;}
