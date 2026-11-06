@@ -27,6 +27,8 @@ jobs:
         run: npm run test:shopper-agent
       - name: Verify program identity and supervised MyAgenticTeam crew
         run: npm run test:shopper-crew
+      - name: Verify Greek product discovery and UX data contracts
+        run: npm run test:shop-experience
       - run: npm run test:design-v2
       - run: npm run test:demand-v3
       - name: Validate canonical workspace wiring
@@ -56,6 +58,7 @@ jobs:
           deno check --node-modules-dir=auto supabase/functions/socialmarket-ai/index.ts
           deno check --node-modules-dir=auto supabase/functions/marketplace-social-funnel-gateway/index.ts
           deno check --node-modules-dir=auto supabase/functions/aliexpress-affiliate-gateway/index.ts
+          deno check --node-modules-dir=auto supabase/functions/shopper-ai-gateway/index.ts
       - run: npm run build
       - name: Package controlled Vercel deploy source
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
