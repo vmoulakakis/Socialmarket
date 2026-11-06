@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/admin-auth';
 import { agentCompletion } from '@/lib/model-router';
-import { getLuxeTop100 } from '@/lib/luxecorner';
+import { getShopCatalog,shopBuyerRows } from '@/lib/shop-catalog';
+import {searchShopCatalog,enrichTerms} from '@/lib/shop-search.mjs';
 import { evidencePacket, runBuyerCrew } from '@/lib/shopper-crew.mjs';
 
 export const maxDuration = 60;
@@ -37,20 +38,22 @@ export async function POST(req) {
   if (input?.run_model !== undefined && typeof input.run_model !== 'boolean')
     return reply({error:'run_model_must_be_boolean'},400);
   try {
-    const rows = await getLuxeTop100();
-    const context = {rows,question,budget};
+    const {products}=await getShopCatalog();
+    const matched=searchShopCatalog(products,{query:question,budget,perPage:30});
+    const rows=shopBuyerRows(matched.results);
+    const context={rows,question:question+' '+enrichTerms(question).join(' '),budget};
     if (!input.run_model || !enabled()) {
       const {result,products} = evidencePacket(context);
       return reply({
         ...result, products_considered:products.length,
         crew_status: input.run_model ? 'MODEL_DISABLED_BY_OWNER_POLICY' : 'DETERMINISTIC_PREFLIGHT',
         ai_model_executed:false, research:[],critic:[],publication_approved:false,
-        model_enabled:enabled(), source:'VMDB / luxecorner_top100_public_v',
-        note:'Πειραματική συλλογή premium home. Οι υποψήφιοι δεν έχουν ανεξάρτητη επιβεβαίωση.',
+        model_enabled:enabled(), source:'VMDB / ai_product_offers + Linkwise research',
+        note:'Πραγματικός πολυκατηγορικός κατάλογος. Η διαθεσιμότητα και ο εξωτερικός Skeptic παραμένουν προς επαλήθευση.',
       });
     }
     const result = await runBuyerCrew({...context,complete:agentCompletion,accessToken:auth.accessToken});
-    return reply({...result,model_enabled:true,source:'VMDB / luxecorner_top100_public_v'});
+    return reply({...result,model_enabled:true,source:'VMDB / ai_product_offers + Linkwise research'});
   } catch {
     return reply({error:'buyer_crew_unavailable',detail:'Δεν ήταν δυνατή η ανάκτηση των στοιχείων.'},503);
   }
