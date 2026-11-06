@@ -22,6 +22,7 @@ const groups=[
  ]},
  {label:'System',items:[
   {href:'/admin',label:'Admin Control',code:'AD'},
+  {href:'/admin/buyer-agent',label:'Buyer Agent Lab',code:'BA'},
   {href:'/configuration',label:'Product Policies',code:'CF'},
  ]},
 ];
