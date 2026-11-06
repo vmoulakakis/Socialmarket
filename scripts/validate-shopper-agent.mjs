@@ -43,6 +43,9 @@ assert.equal(auditOffer({ ...verified, calculated_commission_eur: 9.99 }, NOW).s
 assert.equal(auditOffer({ ...verified, tracking_url: 'https://shop.example/product' }, NOW).status, 'BLOCKED');
 assert.equal(auditOffer({ ...verified, image_url: 'ftp://example.com/photo.jpg' }, NOW).status, 'BLOCKED');
 assert.equal(auditOffer({ ...verified, program_name: '' }, NOW).status, 'BLOCKED');
+assert.equal(auditOffer({ ...verified, program_id: '999' }, NOW).status, 'BLOCKED', 'network program ID conflict blocks offer');
+assert.equal(auditOffer({ ...verified, program_id: '23' }, NOW).status, 'VERIFIED', 'matching network ID stays eligible');
+assert.equal(auditOffer({ ...verified, tracking_url: 'https://go.linkwi.se/z/23-0/CD104/?lnkurl=' }, NOW).status, 'BLOCKED', 'malformed Linkwise route blocks offer');
 assert.equal(auditOffer({ ...verified, last_seen_at: '2026-10-10T00:00:00Z' }, NOW).status, 'NEEDS_VERIFICATION');
 assert.equal(auditOffer({ ...verified, audit_status: 'PENDING' }, NOW).status, 'NEEDS_VERIFICATION');
 assert.equal(auditOffer(verified, NOW).status, 'VERIFIED');
