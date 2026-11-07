@@ -39,6 +39,46 @@ ALIASES = {
  "ergonomic": ["εργονομ", "ergonomic", "office"],
  "camera": ["καμερα", "camera", "visual"],
 }
+# Product-to-problem search expansions: hypotheses to VERIFY, not proof of efficacy.
+# Anchored to actual existing market_problem_clusters.problem_key values.
+PAIN_SOLUTIONS = {
+ "home_hidden_water_leak": "thermal infrared moisture meter leak water pipe inspection camera",
+ "airbnb_water_leaks": "water leak smart sensor moisture alarm detector zigbee",
+ "construction_moisture_detection": "moisture thermal infrared meter damp detector",
+ "home_mold_humidity": "humidity hygrometer dehumidifier moisture meter sensor",
+ "home_pipe_blockage": "drain sewer inspection camera endoscope pipe plumbing",
+ "workshop_electrical_hotspots": "thermal imager infrared electrical panel electrical heat",
+ "energy_solar_panel_faults": "pv solar photovoltaic panel thermal infrared inspection",
+ "car_ev_battery_health": "ev electric vehicle battery pack diagnostic obd scanner tesla byd",
+ "car_dpf_diagnostics": "dpf differential pressure obd scanner automotive exhaust diagnostic",
+ "car_ac_leak": "automotive car ac hvac leak detector refrigerant inspection",
+ "car_battery_drain": "battery current clamp multimeter tester car automotive",
+ "marine_engine_diagnostics": "marine boat engine obd diagnostic scanner",
+ "marine_battery_monitoring": "boat marine battery monitoring bluetooth voltmeter",
+ "marine_water_ingress": "boat bilge water leak sensor monitor alarm",
+ "sme_freezer_failure": "refrigerator freezer temperature alarm sensor monitoring",
+ "sme_cold_chain": "fridge cold chain temperature logger recorder alarm",
+ "agri_frost_alert": "frost temperature weather station agriculture alarm",
+ "agri_soil_variability": "soil moisture meter salinity sensor agriculture irrigation",
+ "agri_irrigation_leaks": "irrigation water flow leak pressure monitor sensor",
+ "construction_rebar_scan": "rebar wall scanner cable stud detector metal",
+ "construction_leveling": "laser level self leveling cross line",
+ "workshop_bearing_failure": "bearing vibration analyzer motor predictive maintenance",
+ "workshop_compressed_air_leaks": "ultrasonic acoustic compressor air leak detector",
+ "energy_circuit_monitoring": "power electricity energy circuit meter clamp monitoring",
+ "energy_backup_power": "ups power supply backup inverter",
+ "remote_tank_level": "tank water oil level sensor remote monitoring",
+ "airbnb_hvac_waste": "smart thermostat hvac air conditioner monitor",
+ "airbnb_key_handover": "smart lock keyless keypad rental hotel",
+ "airbnb_noise_monitoring": "decibel noise meter privacy non recording",
+ "home_noise_problem": "sound decibel acoustic measurement noise meter",
+ "pet_heat_risk": "pet temperature thermometer heat alarm",
+ "pet_location_tracking": "pet gps tracker collar location",
+ "elderly_fall_risk": "fall detector emergency sos elder sensor",
+ "elderly_medication_adherence": "pill dispenser medication reminder alarm smart",
+ "remote_property_security": "4g lte solar wireless offline remote monitoring",
+}
+
 def norm(s:Any)->str:
  s=html.unescape(str(s or "")).casefold()
  s="".join(c for c in unicodedata.normalize("NFKD",s) if not unicodedata.combining(c))
@@ -80,6 +120,8 @@ def build_pain_index(problems:list[dict])->tuple[dict[str,list[dict]],list[dict]
   words=tokens(str(p.get("problem_title") or "")+" "+str(p.get("problem_description") or ""))
   # Only specific tokens carry matching weight. Category labels alone don't.
   words.difference_update({"σπιτι","προιοντα","καλυτερη","καλυτερο","διαφορα","χρηση","χωρις","πρακτικες","λυσεις","προβλημα","τιμη"})
+  # Expand existing pains into observable product labels. This is not a demand claim.
+  words.update(tokens(PAIN_SOLUTIONS.get(str(p.get("problem_key") or ""), "")))
   for alias,alternates in ALIASES.items():
    if any(any(w.startswith(v) or v in w for v in alternates) for w in words):
     words.add(alias)
