@@ -59,6 +59,14 @@ jobs:
           deno check --node-modules-dir=auto supabase/functions/marketplace-social-funnel-gateway/index.ts
           deno check --node-modules-dir=auto supabase/functions/aliexpress-affiliate-gateway/index.ts
           deno check --node-modules-dir=auto supabase/functions/shopper-ai-gateway/index.ts
+          deno check --node-modules-dir=auto supabase/functions/socialmarket-e5-worker/index.ts
+          deno check --node-modules-dir=auto supabase/functions/linkwise-feed-ingest/index.ts
+      - name: Check real E5 worker Python and Linkwise import source syntax
+        run: |
+          python -m py_compile workers/sm_intel/e5_worker.py
+          python -m py_compile workers/product_intelligence/linkwise_product_bootstrap.py
+          python -m py_compile workers/product_intelligence/linkwise_top100_commission.py
+          python -m py_compile workers/product_intelligence/stream_feed.py
       - run: npm run build
       - name: Package controlled Vercel deploy source
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
