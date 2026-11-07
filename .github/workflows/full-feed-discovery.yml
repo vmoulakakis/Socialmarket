@@ -44,7 +44,10 @@ jobs:
           import os,requests
           from urllib.parse import urlparse
           columns="product_id,product_name,description,category,tracking_url,thumb_url,image_url,in_stock,availability,valid_from,valid_to,currency,price,full_price,discount,times_bought"
-          default="https://affiliate.linkwi.se/feeds/1.2/CD104/programs-all/columns-"+columns+"/catinc-0/catex-0/proginc-0/progex-0/feed.json"
+          # catinc-0 yielded a 200 OK but fewer than 10MB: not a full catalog.
+          # Probe the published taxonomy integer range without choosing a product niche.
+          all_known_category_ids=",".join(str(i) for i in range(1,154))
+          default="https://affiliate.linkwi.se/feeds/1.2/CD104/programs-all/columns-"+columns+"/catinc-"+all_known_category_ids+"/catex-0/proginc-0/progex-0/feed.json"
           u=os.environ.get("LINKWISE_FULL_FEED_URL") or default
           p=urlparse(u)
           if p.scheme!="https" or p.hostname!="affiliate.linkwi.se" or "/feeds/1.2/CD104/" not in p.path or p.query:
@@ -52,7 +55,7 @@ jobs:
           # This is intentionally programs-all with no explicit category list.
           # Its actual completeness is established by the scanned-count metric,
           # NOT assumed from a constructed URL.
-          if "/catinc-0/catex-0/proginc-0/progex-0/" not in p.path:
+          if "/catex-0/proginc-0/progex-0/" not in p.path or "/catinc-" not in p.path:
               raise SystemExit("source_has_exclusion_or_category_scope")
           s=requests.Session()
           s.headers.update({"Accept-Encoding":"gzip, deflate","User-Agent":"SocialMarket-FullFeed-Audit/1.0"})
@@ -70,6 +73,7 @@ jobs:
                       if chunk:
                           dst.write(chunk)
                           n+=len(chunk)
+          print("total_downloaded_bytes",n)
           if n<10000000:raise SystemExit("source_unexpectedly_small_not_3m_universe")
           print("live_linkwise_feed_bytes",n,"complete_scope_UNVERIFIED_until_scan")
           PY
