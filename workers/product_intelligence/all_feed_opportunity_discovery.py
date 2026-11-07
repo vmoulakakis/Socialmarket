@@ -25,7 +25,27 @@ from pathlib import Path
 HERE=Path(__file__).resolve().parent
 if str(HERE) not in sys.path:sys.path.insert(0,str(HERE))
 from stream_feed import iter_records, normalize, linkwise_route
-from vmdb_merchant_admission import _gateway_get
+import requests
+import uuid
+from urllib.parse import quote
+
+GATEWAY="https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/socialmarket-fullfeed-discovery"
+AUDIENCE="socialmarket-fullfeed-discovery"
+
+def gateway(action,payload):
+    auth=os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+    url=os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
+    if not auth or not url:raise RuntimeError("github_oidc_required_for_VMDb")
+    sep="&" if "?" in url else "?"
+    r=requests.get(url+sep+"audience="+quote(AUDIENCE),headers={"Authorization":"Bearer "+auth},timeout=30)
+    r.raise_for_status()
+    tok=r.json()["value"]
+    res=requests.post(GATEWAY,headers={"Authorization":"Bearer "+tok,
+      "Content-Type":"application/json"},json={"action":action,**payload},timeout=120)
+    res.raise_for_status()
+    data=res.json()
+    if not data.get("ok"):raise RuntimeError("gateway_"+action+"_failed")
+    return data
 
 FLOOR=15.0
 SHAPE=re.compile(r"^([1-9][0-9]*)-0/CD104$")
@@ -189,10 +209,7 @@ def scan(feed,rules,signals,top=DEF_TOP):
 def load_rules(path):
     if path == "vmdb":
         # Fetch ALL known network rules, not Merchant-360-approved subset.
-        rows=_gateway_get("linkwise_program_commissions",{
-          "select":"linkwise_program_id,program_name,flat_commission_eur,flat_commission_min_eur,percent_commission,percent_commission_min,source,imported_at",
-          "limit":"1000"})
-        return {str(r["linkwise_program_id"]):r for r in rows if r.get("linkwise_program_id")}
+        return gateway("commission_rules",{}).get("rules",{})
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 def main():
@@ -202,6 +219,7 @@ def main():
     ap.add_argument("--signals",default="")
     ap.add_argument("--top",type=int,default=500)
     ap.add_argument("--output",default="affiliate-opportunities.json")
+    ap.add_argument("--persist-research",action="store_true")
     args=ap.parse_args()
     if args.top<1 or args.top>2000:raise SystemExit("top must be 1..2000")
     rules=load_rules(args.commission_rules)
@@ -210,5 +228,15 @@ def main():
     result=scan(args.feed,rules,signals,args.top)
     path=Path(args.output);path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding="utf-8")
+    if args.persist_research and result["products"]:
+        run_key=os.environ.get("DISCOVERY_RUN_KEY") or str(uuid.uuid4())
+        stored=0
+        for offset in range(0,len(result["products"]),20):
+            chunk=result["products"][offset:offset+20]
+            response=gateway("store_research",{"run_key":run_key,"rows":chunk})
+            stored+=int(response.get("accepted",0))
+        if stored!=len(result["products"]):raise RuntimeError("research_write_incomplete")
+        result["research_rows_written"]=stored
+        result["run_key"]=run_key
     print(json.dumps({k:v for k,v in result.items() if k!="products"},ensure_ascii=False))
 if __name__=="__main__":main()
