@@ -64,6 +64,7 @@ jobs:
           deno check --node-modules-dir=auto supabase/functions/shopper-ai-gateway/index.ts
           deno check --node-modules-dir=auto supabase/functions/socialmarket-e5-worker/index.ts
           deno check --node-modules-dir=auto supabase/functions/linkwise-feed-ingest/index.ts
+          deno check --node-modules-dir=auto supabase/functions/socialmarket-fullfeed-discovery/index.ts
       - name: Test commission-only discovery and calibrated opportunity scoring
         working-directory: workers/product_intelligence
         run: python -m unittest -v test_commission15_discovery.py
