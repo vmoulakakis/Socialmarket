@@ -61,6 +61,11 @@ jobs:
           deno check --node-modules-dir=auto supabase/functions/shopper-ai-gateway/index.ts
           deno check --node-modules-dir=auto supabase/functions/socialmarket-e5-worker/index.ts
           deno check --node-modules-dir=auto supabase/functions/linkwise-feed-ingest/index.ts
+      - name: Test commission-only discovery and calibrated opportunity scoring
+        working-directory: workers/product_intelligence
+        run: python -m unittest -v test_commission15_discovery.py
+      - name: Typecheck source-only commission discovery OIDC gateway
+        run: deno check --node-modules-dir=auto supabase/functions/socialmarket-opportunity-gateway/index.ts
       - name: Check real E5 worker Python and Linkwise import source syntax
         run: |
           python -m py_compile workers/sm_intel/e5_worker.py
