@@ -1,5 +1,8 @@
 name: Full Linkwise Feed - EUR15 Pain Gap Discovery
 on:
+  push:
+    branches: [feat/agentic-shopper-evidence-gate-20261106]
+    paths: ['.github/workflows/full-feed-discovery.yml']
   workflow_dispatch:
     inputs:
       top:
@@ -24,8 +27,8 @@ jobs:
     timeout-minutes: 300
     env:
       LINKWISE_FULL_FEED_URL: "${{ secrets.LINKWISE_FULL_FEED_URL }}"
-      SOURCE: "${{ inputs.source }}"
-      TOP: "${{ inputs.top }}"
+      SOURCE: "${{ github.event_name == 'push' && 'drive_snapshot' || inputs.source }}"
+      TOP: "${{ github.event_name == 'push' && '500' || inputs.top }}"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -57,6 +60,7 @@ jobs:
           print("full_feed_bytes",n)
           PY
           else
+            echo "Historical full feed preflight: Drive file ID known, current connector unavailable. Trying authorized read from runner."
             gdown "1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT" -O full-feed.json
             test "$(stat -c%s full-feed.json)" -gt 10000000
             echo "Historical Drive snapshot, not verified fresh"
