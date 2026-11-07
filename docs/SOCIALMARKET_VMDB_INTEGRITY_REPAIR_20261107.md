@@ -26,10 +26,10 @@ Database migration IDs:
 IMPORTANT ACTIVE EDGE DRIFT: the live linkwise-feed-ingest v19 function implements a different auto-scheduler with a programs-all feed than the checked-in repository file. Do not overwrite it with checked-in version without scheduler compatibility and token rotation verification. The DB trigger handles current raw Linkwise program identity.
 
 ## D. Semantic GraphRAG — REAL WORKER PREPARED, OPERATIONAL POPULATION NOT ASSUMED
-4,360 sm_intel.search_documents records previously had 0 E5 vectors. The existing sm_intel.claim_embeddings and sm_intel.ack_embedding require exact doc hash and claimed worker. The new workers/sm_intel/e5_worker.py uses true intfloat/multilingual-e5-small normalized 384D passage embeddings and locally computed model, never synthetic vectors or substituted gte-small.
+4,360 sm_intel.search_documents records previously had 0 E5 vectors. The verified bounded live pilots have now stored 16 real normalized E5 vectors (384 dimensions; squared vector norms 1.00000); 4,344 remain pending as of the observed check. The existing sm_intel.claim_embeddings and sm_intel.ack_embedding require exact doc hash and claimed worker. The new workers/sm_intel/e5_worker.py uses true intfloat/multilingual-e5-small normalized 384D passage embeddings and locally computed model, never synthetic vectors or substituted gte-small.
 - Live-deployed OIDC-protected socialmarket-e5-worker Edge function, no public data-write access.
 - Bounded GitHub Actions .github/workflows/socialmarket-e5-backfill.yml, one-off 8-doc pilot when workflow is recognized, then manual workflow_dispatch only.
-- Confirm actual ready count and model benchmark before claiming GraphRAG is operational. Query encoder must use the same E5 model.
+- Live pilot verified through sm_intel.embedding_health_v3 and vector_dims/inner-product SQL. Real vectors now present, but this is only 16/4,360; complete backfill and same-model Greek query encoding/benchmark before claiming operational GraphRAG. Query encoder must use the same E5 model.
 
 ## E. Qualified offers and canonical selections — INTENTIONALLY ZERO
 sm_intel.qualified_offers=0, promotion_ready_offers=0, public.ai_marketplace_selected_v=0. The 28 previous active selections date from September and are not official currently verified. No flags or scores were falsified to create a marketing claim. Only independent, fresh verified membership/terms, inventory, evidence and skeptic gate may qualify.
