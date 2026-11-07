@@ -25,6 +25,7 @@ from pathlib import Path
 HERE=Path(__file__).resolve().parent
 if str(HERE) not in sys.path:sys.path.insert(0,str(HERE))
 from stream_feed import iter_records, normalize, linkwise_route
+from vmdb_merchant_admission import _gateway_get
 
 FLOOR=15.0
 SHAPE=re.compile(r"^([1-9][0-9]*)-0/CD104$")
@@ -185,6 +186,15 @@ def scan(feed,rules,signals,top=DEF_TOP):
             "market_demand_verified":False,"affiliate_conversions_verified":False,
             "products":selected}
 
+def load_rules(path):
+    if path == "vmdb":
+        # Fetch ALL known network rules, not Merchant-360-approved subset.
+        rows=_gateway_get("linkwise_program_commissions",{
+          "select":"linkwise_program_id,program_name,flat_commission_eur,flat_commission_min_eur,percent_commission,percent_commission_min,source,imported_at",
+          "limit":"1000"})
+        return {str(r["linkwise_program_id"]):r for r in rows if r.get("linkwise_program_id")}
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--feed",required=True)
@@ -194,7 +204,7 @@ def main():
     ap.add_argument("--output",default="affiliate-opportunities.json")
     args=ap.parse_args()
     if args.top<1 or args.top>2000:raise SystemExit("top must be 1..2000")
-    rules=json.loads(Path(args.commission_rules).read_text(encoding="utf-8"))
+    rules=load_rules(args.commission_rules)
     if not isinstance(rules,dict):raise SystemExit("expected program-ID -> commission rule map")
     signals=normalize_signals(json.loads(Path(args.signals).read_text(encoding="utf-8"))) if args.signals else {}
     result=scan(args.feed,rules,signals,args.top)
