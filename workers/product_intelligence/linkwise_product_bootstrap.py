@@ -237,6 +237,11 @@ def shortlist_record(raw: dict, merchant: dict, min_commission: float):
         return None, "commission_under_floor"
     score, components = bootstrap_score(n, commission, validity_score)
     route = sf.linkwise_route(tracking)
+    # Preserve the network advertiser ID from the original tracked URL.
+    # The merchant's legacy VMDB id is a different identifier.
+    network_id = (route or "").split("-0/", 1)[0] if route and "-0/CD104" in route else None
+    if not network_id or not network_id.isdigit() or network_id == "0":
+        return None, "unverified_linkwise_route"
     target_url = n.get("target_url")
     compact = {
         "product_id": product_id,
@@ -263,6 +268,7 @@ def shortlist_record(raw: dict, merchant: dict, min_commission: float):
         "merchant_name": merchant["merchant_name"],
         "merchant_domain": merchant["canonical_domain"],
         "legacy_merchant_id": merchant["legacy_merchant_id"],
+        "network_program_id": network_id,
     }
     compact["content_hash"] = content_hash(compact)
     return compact, None
@@ -392,7 +398,7 @@ def write_merchant(merchant: dict, rows: list[dict], stats: dict, categories: li
         candidates = []
         observed = now_iso()
         for row in rows:
-            program_key = merchant["legacy_merchant_id"]
+            program_key = row["network_program_id"]
             offers.append(
                 {
                     "source_key": SOURCE_KEY,
@@ -422,7 +428,7 @@ def write_merchant(merchant: dict, rows: list[dict], stats: dict, categories: li
                         "linkwise_route": row.get("linkwise_route"),
                         "score_components": row.get("score_components"),
                         "validity_days": row.get("validity_days"),
-                        "program_key_kind": "vmdb_legacy_merchant_id",
+                        "program_key_kind": "linkwise_cd104_advertiser_id",
                     },
                     "last_seen_at": observed,
                     "is_active": True,
