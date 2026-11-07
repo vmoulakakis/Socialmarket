@@ -1,0 +1,77 @@
+name: Full Linkwise Feed - EUR15 Pain Gap Discovery
+on:
+  workflow_dispatch:
+    inputs:
+      top:
+        description: Maximum shortlisted research products
+        type: choice
+        options: ["100", "250", "500", "1000"]
+        default: "500"
+      source:
+        description: Source of full initial feed
+        type: choice
+        options: [live_linkwise, drive_snapshot]
+        default: live_linkwise
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: socialmarket-full-feed-research
+  cancel-in-progress: false
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      LINKWISE_FULL_FEED_URL: "${{ secrets.LINKWISE_FULL_FEED_URL }}"
+      SOURCE: "${{ inputs.source }}"
+      TOP: "${{ inputs.top }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install streaming dependencies
+        run: python -m pip install "ijson==3.4.0" "requests==2.32.3" "gdown==5.2.0"
+      - name: Download the full unfiltered input
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE" = "live_linkwise" ]; then
+            test -n "$LINKWISE_FULL_FEED_URL" || { echo "Missing secret LINKWISE_FULL_FEED_URL; refusing a partial feed"; exit 1; }
+            python - <<'PY'
+          import os,requests
+          from urllib.parse import urlparse
+          u=os.environ["LINKWISE_FULL_FEED_URL"]
+          p=urlparse(u)
+          if p.scheme!="https" or p.hostname!="affiliate.linkwi.se" or "/feeds/1.2/CD104/" not in p.path:
+              raise SystemExit("full CD104 source URL required")
+          n=0
+          with requests.get(u,stream=True,timeout=(30,180),allow_redirects=False) as resp:
+              resp.raise_for_status()
+              with open("full-feed.json","wb") as dst:
+                  for chunk in resp.iter_content(1048576):
+                      if chunk:
+                          dst.write(chunk)
+                          n+=len(chunk)
+          if n < 10000000:raise SystemExit("source truncated")
+          print("full_feed_bytes",n)
+          PY
+          else
+            gdown "1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT" -O full-feed.json
+            test "$(stat -c%s full-feed.json)" -gt 10000000
+            echo "Historical Drive snapshot, not verified fresh"
+          fi
+      - name: Process ALL rows with single EUR15 hard commission gate
+        run: |
+          python workers/product_intelligence/all_feed_opportunity_discovery.py --feed full-feed.json --commission-rules vmdb --top "$TOP" --output affiliate-opportunities.json --persist-research
+      - name: Upload source-labelled research candidates only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-feed-eur15-research
+          retention-days: 10
+          if-no-files-found: warn
+          path: affiliate-opportunities.json
+      - name: Delete temporary raw feed
+        if: always()
+        run: rm -f full-feed.json
