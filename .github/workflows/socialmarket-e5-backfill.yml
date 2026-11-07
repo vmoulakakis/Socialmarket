@@ -1,7 +1,7 @@
 name: SocialMarket E5 semantic backfill (bounded CPU)
 
 # One feature-branch push smoke + eight-doc integration pilot.
-# Further runs are manual only.
+# Further runs are manual only. This one-off feature pilot can be retried by a workflow-file change.
 on:
   workflow_dispatch:
     inputs:
