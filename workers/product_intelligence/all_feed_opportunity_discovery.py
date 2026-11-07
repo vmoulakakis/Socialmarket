@@ -236,6 +236,8 @@ def main():
             response=gateway("store_research",{"run_key":run_key,"rows":chunk})
             stored+=int(response.get("accepted",0))
         if stored!=len(result["products"]):raise RuntimeError("research_write_incomplete")
+        finished=gateway("finish_research",{"run_key":run_key,"counts":result["counts"],"status":"completed"})
+        if finished.get("status")!="completed":raise RuntimeError("research_run_finalize_failed")
         result["research_rows_written"]=stored
         result["run_key"]=run_key
     print(json.dumps({k:v for k,v in result.items() if k!="products"},ensure_ascii=False))
