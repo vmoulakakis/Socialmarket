@@ -46,6 +46,29 @@ Deno.serve(async req=>{
    return respond({ok:true,rules:Object.fromEntries((data||[]).filter(x=>x.linkwise_program_id).map(x=>[x.linkwise_program_id,x])),
      rule_count:data?.length||0,rate_semantics:'historical_estimate_not_approved_payout'})
   }
+  if(body.action==='finish_research'){
+    const run=str(body.run_key,80)
+    if(!uuid.test(run))return respond({error:'invalid_run_key'},400)
+    const stats=body.counts&&typeof body.counts==='object'&&!Array.isArray(body.counts)?body.counts as Record<string,unknown>:{}
+    const scanned=Math.max(0,Math.trunc(numeric(stats.scanned)??0))
+    const eligible=Math.max(0,Math.trunc(numeric(stats.commission_eligible)??0))
+    const unknown=Math.max(0,Math.trunc(numeric(stats.commission_unknown)??0))
+    const below=Math.max(0,Math.trunc(numeric(stats.below_15)??0))
+    const completed=body.status==='completed'?'completed':'partial'
+    const {data:found,error:countError}=await db.from('ai_discovery_candidates_v2').select('id',{count:'exact',head:true}).eq('run_key',run)
+    if(countError)return respond({error:'run_count_failed'},503)
+    const count=found ? found.length : 0
+    // Count from Supabase count is returned separately, updated below.
+    const countResult=await db.from('ai_discovery_candidates_v2').select('id',{count:'exact',head:true}).eq('run_key',run)
+    if(countResult.error)return respond({error:'run_count_failed'},503)
+    const {error}=await db.from('ai_discovery_runs_v2').update({status:completed,scanned_count:scanned,
+      commission_eligible_count:eligible,unpriced_count:unknown,below_floor_count:below,
+      stored_candidates:countResult.count||0,finished_at:new Date().toISOString(),
+      metrics:{source_scope:'all_input_records',hard_filter_eur:15,commission_basis:'historical_source_estimate',
+      verified_demand:false,verified_conversion:false,auto_publish:false}}).eq('run_key',run)
+    if(error)return respond({error:'run_finalize_failed'},503)
+    return respond({ok:true,run_key:run,status:completed,persisted_count:countResult.count||0})
+  }
   if(body.action==='store_research'){
    const rows=body.rows
    const run=str(body.run_key,80)
@@ -81,6 +104,12 @@ Deno.serve(async req=>{
       stage:'research_candidate',feed_observed_at:r.feed_observed_at||null,
     })
    }
+   const {error:runError}=await db.from('ai_discovery_runs_v2').upsert({
+     run_key:run,source_key:'linkwise',status:'partial',
+     workflow_ref:str(payload.workflow_ref,300),
+     metrics:{stage:'shortlist_persisting',scope:'full_feed_scan',verified_demand:false,estimated_commission_only:true}
+   },{onConflict:'run_key',ignoreDuplicates:true})
+   if(runError)return respond({error:'research_run_insert_failed'},503)
    const {error}=await db.from('ai_discovery_candidates_v2').upsert(records,
      {onConflict:'run_key,source_key,source_product_id,problem_key'})
    if(error){console.error('research_write_failed',error.code);return respond({error:'research_write_failed'},503)}
