@@ -24,7 +24,7 @@ type Obj=Record<string,unknown>
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const digits=/^[1-9][0-9]*$/
 const n=(x:unknown)=>x===null||x===undefined||x===''?null:Number(x)
-const good=(x:unknown,min=0,max=100)=>x==null?null:(Number.isFinite(n(x))&&n(x)!>=min&&n(x)!<=max?Number(n(x)):null)
+const good=(x:unknown,min=0,max=100)=>{const v=n(x);return v!==null&&Number.isFinite(v)&&v>=min&&v<=max?v:null}
 function expectedCommission(price:number,p:Obj){
  const flat=n(p.flat_commission_min_eur)??n(p.flat_commission_eur)
  const pct=n(p.percent_commission_min)??n(p.percent_commission)
@@ -129,7 +129,7 @@ Deno.serve(async req=>{
    const byProblem=new Map<string,Obj[]>()
    for(const row of observations.data||[]){
     if(!row.source_url||!String(row.source_url).startsWith('https://')||
-       !Number.isFinite(n(row.confidence))||n(row.confidence)!<.75||Number(row.source_tier)>2)continue
+       n(row.confidence)===null||Number(row.confidence)<.75||Number(row.source_tier)>2)continue
     const k=String(row.problem_cluster_id)
     byProblem.set(k,[...(byProblem.get(k)||[]),row])
    }
@@ -170,7 +170,7 @@ Deno.serve(async req=>{
     sb.from('ai_discovery_runs_v2').select('run_key').eq('run_key',key).eq('status','partial').maybeSingle()
    ])
    if(source.error||run.error||!run.data)return reply({error:'missing_program_or_active_run'},409)
-   const prices=new Map((source.data||[]).map(x=>[String(x.linkwise_program_id),x]))
+   const prices=new Map<string,Obj>((source.data||[]).map(x=>[String(x.linkwise_program_id),x] as [string,Obj]))
    const records=[]
    for(const item of incomingRows){
     const raw=asObject(item),pid=String(raw.program_id||'')
