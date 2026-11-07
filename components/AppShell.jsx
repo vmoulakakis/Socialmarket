@@ -22,12 +22,14 @@ const groups=[
  ]},
  {label:'System',items:[
   {href:'/admin',label:'Admin Control',code:'AD'},
+  {href:'/admin/buyer-agent',label:'Buyer Agent Lab',code:'BA'},
   {href:'/configuration',label:'Product Policies',code:'CF'},
  ]},
 ];
 
 function activePath(pathname,href){
  if(href==='/')return pathname==='/';
+ if(href==='/admin')return pathname==='/admin';
  return pathname===href||pathname.startsWith(`${href}/`);
 }
 

@@ -180,9 +180,12 @@ def normalize(raw):
     stock=as_bool(raw.get('in_stock'))
     availability=clean(raw.get('availability'))
     if stock is None and availability:
+        # Human-readable delivery/availability copy is NOT verified stock.
+        # A strong explicit negative may mark out of stock, but never promote
+        # unknown to in_stock=True without the original boolean feed field.
         low=fold_text(availability)
-        if any(x in low for x in ('available','in stock','διαθε')):stock=True
-        elif any(x in low for x in ('unavailable','out of stock','μη διαθε')):stock=False
+        if any(x in low for x in ('unavailable','out of stock','not available','μη διαθε','εξαντλημ','χωρις αποθεμα')):
+            stock=False
 
     program=clean(raw.get('program_name'))
     category=clean(raw.get('category'))

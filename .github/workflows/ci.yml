@@ -23,6 +23,12 @@ jobs:
       - run: npm ci
       - name: Install product worker test dependencies
         run: pip install -r workers/product_intelligence/requirements.txt
+      - name: Verify buyer agent evidence gates
+        run: npm run test:shopper-agent
+      - name: Verify program identity and supervised MyAgenticTeam crew
+        run: npm run test:shopper-crew
+      - name: Verify Greek product discovery and UX data contracts
+        run: npm run test:shop-experience
       - run: npm run test:design-v2
       - run: npm run test:demand-v3
       - name: Validate canonical workspace wiring
@@ -52,6 +58,20 @@ jobs:
           deno check --node-modules-dir=auto supabase/functions/socialmarket-ai/index.ts
           deno check --node-modules-dir=auto supabase/functions/marketplace-social-funnel-gateway/index.ts
           deno check --node-modules-dir=auto supabase/functions/aliexpress-affiliate-gateway/index.ts
+          deno check --node-modules-dir=auto supabase/functions/shopper-ai-gateway/index.ts
+          deno check --node-modules-dir=auto supabase/functions/socialmarket-e5-worker/index.ts
+          deno check --node-modules-dir=auto supabase/functions/linkwise-feed-ingest/index.ts
+      - name: Test commission-only discovery and calibrated opportunity scoring
+        working-directory: workers/product_intelligence
+        run: python -m unittest -v test_commission15_discovery.py
+      - name: Typecheck source-only commission discovery OIDC gateway
+        run: deno check --node-modules-dir=auto supabase/functions/socialmarket-opportunity-gateway/index.ts
+      - name: Check real E5 worker Python and Linkwise import source syntax
+        run: |
+          python -m py_compile workers/sm_intel/e5_worker.py
+          python -m py_compile workers/product_intelligence/linkwise_product_bootstrap.py
+          python -m py_compile workers/product_intelligence/linkwise_top100_commission.py
+          python -m py_compile workers/product_intelligence/stream_feed.py
       - run: npm run build
       - name: Package controlled Vercel deploy source
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
