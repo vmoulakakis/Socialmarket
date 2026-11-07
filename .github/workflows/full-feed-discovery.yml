@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 300
     env:
       LINKWISE_FULL_FEED_URL: "${{ secrets.LINKWISE_FULL_FEED_URL }}"
-      SOURCE: "${{ github.event_name == 'push' && 'drive_snapshot' || inputs.source }}"
+      SOURCE: "${{ github.event_name == 'push' && 'live_linkwise' || inputs.source }}"
       TOP: "${{ github.event_name == 'push' && '500' || inputs.top }}"
     steps:
       - uses: actions/checkout@v4
@@ -40,24 +40,38 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$SOURCE" = "live_linkwise" ]; then
-            test -n "$LINKWISE_FULL_FEED_URL" || { echo "Missing secret LINKWISE_FULL_FEED_URL; refusing a partial feed"; exit 1; }
             python - <<'PY'
           import os,requests
           from urllib.parse import urlparse
-          u=os.environ["LINKWISE_FULL_FEED_URL"]
+          columns="product_id,product_name,description,category,tracking_url,thumb_url,image_url,in_stock,availability,valid_from,valid_to,currency,price,full_price,discount,times_bought"
+          default="https://affiliate.linkwi.se/feeds/1.2/CD104/programs-all/columns-"+columns+"/catinc-0/catex-0/proginc-0/progex-0/feed.json"
+          u=os.environ.get("LINKWISE_FULL_FEED_URL") or default
           p=urlparse(u)
-          if p.scheme!="https" or p.hostname!="affiliate.linkwi.se" or "/feeds/1.2/CD104/" not in p.path:
-              raise SystemExit("full CD104 source URL required")
-          n=0
-          with requests.get(u,stream=True,timeout=(30,180),allow_redirects=False) as resp:
+          if p.scheme!="https" or p.hostname!="affiliate.linkwi.se" or "/feeds/1.2/CD104/" not in p.path or p.query:
+              raise SystemExit("invalid_full_cd104_source_url")
+          # This is intentionally programs-all with no explicit category list.
+          # Its actual completeness is established by the scanned-count metric,
+          # NOT assumed from a constructed URL.
+          if "/catinc-0/catex-0/proginc-0/progex-0/" not in p.path:
+              raise SystemExit("source_has_exclusion_or_category_scope")
+          s=requests.Session()
+          s.headers.update({"Accept-Encoding":"gzip, deflate","User-Agent":"SocialMarket-FullFeed-Audit/1.0"})
+          with s.get(u,stream=True,timeout=(30,180),allow_redirects=False) as resp:
+              print("network_http",resp.status_code,"content_type",resp.headers.get("content-type"),"length_header",resp.headers.get("content-length"))
               resp.raise_for_status()
+              chunks=resp.iter_content(1048576)
+              first=next(chunks,b"")
+              if first.lstrip()[:1]!=b"[":
+                  raise SystemExit("not_json_array_feed_or_invalid_source_contract")
+              n=len(first)
               with open("full-feed.json","wb") as dst:
-                  for chunk in resp.iter_content(1048576):
+                  dst.write(first)
+                  for chunk in chunks:
                       if chunk:
                           dst.write(chunk)
                           n+=len(chunk)
-          if n < 10000000:raise SystemExit("source truncated")
-          print("full_feed_bytes",n)
+          if n<10000000:raise SystemExit("source_unexpectedly_small_not_3m_universe")
+          print("live_linkwise_feed_bytes",n,"complete_scope_UNVERIFIED_until_scan")
           PY
           else
             echo "Historical full feed preflight: Drive file ID known, current connector unavailable. Trying authorized read from runner."
