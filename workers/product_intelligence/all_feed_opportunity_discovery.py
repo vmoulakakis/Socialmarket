@@ -25,6 +25,19 @@ from pathlib import Path
 HERE=Path(__file__).resolve().parent
 if str(HERE) not in sys.path:sys.path.insert(0,str(HERE))
 from stream_feed import iter_records, normalize, linkwise_route
+import ijson
+
+def source_records(feed,counts):
+    """Retain completed records if a historical multi-GB JSON file has a truncated tail."""
+    try:
+        yield from iter_records(feed)
+        counts["source_integrity"] = "complete_json"
+    except (ijson.common.IncompleteJSONError, ValueError) as exc:
+        counts["source_integrity"] = "truncated_json"
+        counts["source_parse_error_type"] = type(exc).__name__
+    except Exception:
+        counts["source_integrity"] = "unreadable_error"
+        raise
 import requests
 import uuid
 from urllib.parse import quote
@@ -137,7 +150,7 @@ def scan(feed,rules,signals,top=DEF_TOP):
     counts=Counter()
     heap=[]
     best={}
-    for raw in iter_records(feed):
+    for raw in source_records(feed,counts):
         counts["scanned"]+=1
         try:
             p=normalize(raw)
@@ -201,7 +214,7 @@ def scan(feed,rules,signals,top=DEF_TOP):
         if len(selected)>=top:break
     if len(selected)<top:selected.extend(overflow[:top-len(selected)])
     return {"version":"full_feed_opportunity_v1","hard_filter":{"calculated_commission_eur_gte":FLOOR},
-            "ranking_weights":WEIGHTS,"scope":"all_feed_input_records","counts":dict(counts),
+            "ranking_weights":WEIGHTS,"scope":"all_feed_input_records","source_integrity":counts.get("source_integrity","unknown"),"counts":dict(counts),
             "selected_count":len(selected),"only_research_candidates":True,
             "market_demand_verified":False,"affiliate_conversions_verified":False,
             "products":selected}
@@ -236,8 +249,8 @@ def main():
             response=gateway("store_research",{"run_key":run_key,"rows":chunk})
             stored+=int(response.get("accepted",0))
         if stored!=len(result["products"]):raise RuntimeError("research_write_incomplete")
-        finished=gateway("finish_research",{"run_key":run_key,"counts":result["counts"],"status":"completed"})
-        if finished.get("status")!="completed":raise RuntimeError("research_run_finalize_failed")
+        finished=gateway("finish_research",{"run_key":run_key,"counts":result["counts"],"status":"completed" if result.get("source_integrity")=="complete_json" else "partial"})
+        if finished.get("status") not in ("completed","partial"):raise RuntimeError("research_run_finalize_failed")
         result["research_rows_written"]=stored
         result["run_key"]=run_key
     print(json.dumps({k:v for k,v in result.items() if k!="products"},ensure_ascii=False))
