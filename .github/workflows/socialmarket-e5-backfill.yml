@@ -1,0 +1,69 @@
+name: SocialMarket E5 semantic backfill (bounded CPU)
+
+# One feature-branch push smoke + eight-doc integration pilot.
+# Further runs are manual only.
+on:
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Documents per batch (1-16)'
+        required: true
+        default: '8'
+        type: choice
+        options: ['4','8','16']
+      max_batches:
+        description: 'Number of batches this manual run processes (1-16)'
+        required: true
+        default: '1'
+        type: choice
+        options: ['1','2','4','8','16']
+      smoke_only:
+        description: 'Run E5 model only, without DB writes'
+        required: true
+        default: true
+        type: boolean
+  push:
+    branches: [feat/agentic-shopper-evidence-gate-20261106]
+    paths:
+      - '.github/workflows/socialmarket-e5-backfill.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: socialmarket-e5-backfill
+  cancel-in-progress: false
+
+jobs:
+  e5-embed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '2'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install local CPU E5 model dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            "sentence-transformers==3.4.1" "requests==2.32.3"
+      - name: Check genuine E5 document and query embedding dimensions
+        run: |
+          python workers/sm_intel/e5_worker.py --smoke-only
+      - name: Run feature-branch 8-document DB pilot
+        if: github.event_name == 'push'
+        run: |
+          python workers/sm_intel/e5_worker.py --batch-size 8 --max-batches 1
+      - name: Run explicitly requested manual batch
+        if: github.event_name == 'workflow_dispatch' && !inputs.smoke_only
+        env:
+          BATCH_SIZE: "${{ inputs.batch_size }}"
+          MAX_BATCHES: "${{ inputs.max_batches }}"
+        run: |
+          python workers/sm_intel/e5_worker.py --batch-size "$BATCH_SIZE" --max-batches "$MAX_BATCHES"
