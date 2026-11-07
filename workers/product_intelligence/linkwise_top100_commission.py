@@ -38,8 +38,8 @@ def load_commissions():
         pcts=[n(r.get(k)) for k in ("percent_commission","percent_commission_min","percent_commission_max")]
         out[pid]={
             "program_name":r.get("program_name"),
-            "flat":max([x for x in flats if x is not None], default=None),
-            "pct":max([x for x in pcts if x is not None], default=None),
+            "flat":min([x for x in flats if x is not None and x > 0], default=None),
+            "pct":min([x for x in pcts if x is not None and x > 0], default=None),
         }
     return out
 
@@ -49,7 +49,7 @@ def expected(price, rule):
         vals.append((float(rule["flat"]),"flat"))
     if rule.get("pct") is not None and price is not None:
         vals.append((price*float(rule["pct"])/100.0,f"percent:{rule['pct']}"))
-    return max(vals,key=lambda x:x[0]) if vals else (None,"unknown")
+    return min(vals,key=lambda x:x[0]) if vals else (None,"unknown")
 
 def feed_url(category):
     return BASE.format(client=CLIENT,columns=",".join(COLUMNS),category=category)
@@ -68,16 +68,23 @@ def scan():
             for p in ijson.items(r.raw,"item"):
                 scanned+=1
                 pid=str(p.get("program_id") or "").strip()
+                if not pid:
+                    from urllib.parse import urlparse
+                    import re
+                    u=urlparse(str(p.get("tracking_url") or ""))
+                    m=re.fullmatch(r"/z/([1-9][0-9]*)-0/CD104/?",u.path)
+                    if u.scheme=="https" and u.hostname=="go.linkwi.se" and m:
+                        pid=m.group(1)
                 rule=commissions.get(pid)
                 if not rule:
                     no_rule+=1; continue
                 price=n(p.get("price"))
                 if not p.get("product_id") or not p.get("product_name") or not p.get("tracking_url") or price is None or price<=0:
                     invalid+=1; continue
-                if p.get("in_stock") is not None and not b(p.get("in_stock")):
+                if not b(p.get("in_stock")):
                     outstock+=1; continue
                 commission,basis=expected(price,rule)
-                if commission is None or commission<=0:
+                if commission is None or commission<10:
                     continue
                 eligible+=1
                 row={
