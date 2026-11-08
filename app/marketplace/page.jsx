@@ -1,8 +1,7 @@
-import Catalog from '@/components/catalog/Catalog';
-import {getLuxeTop100} from '@/lib/luxecorner';
-export const metadata={title:'SocialMarket | Προϊόντα για το σπίτι'};
-export default async function Page(){
- let products=[],error=false;
- try{products=await getLuxeTop100();}catch{error=true;}
- return <Catalog products={products.map(({source_product_id,product_name,price_eur,program_name,image_url,tracking_url,category_raw})=>({source_product_id,product_name,price_eur,program_name,image_url,tracking_url,category_raw}))} error={error}/>;
-}
+import ShopExperience from '@/components/shop/ShopExperience';
+export const metadata={
+ title:'SocialMarket AI | Έξυπνες αγορές με πραγματικά προϊόντα',
+ description:'Πες τι χρειάζεσαι. Δες πραγματικές προσφορές, φίλτρα, συγκρίσεις και τεκμηριωμένες επιλογές από Linkwise και AliExpress.',
+ robots:{index:true,follow:true}
+};
+export default function MarketplacePage(){return <ShopExperience/>;}
