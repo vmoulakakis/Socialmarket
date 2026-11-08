@@ -227,14 +227,26 @@ def load_rules(path):
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("--feed",required=True)
+    sources=ap.add_mutually_exclusive_group(required=True)
+    sources.add_argument("--feed")
+    sources.add_argument("--feed-url")
     ap.add_argument("--commission-rules",required=True)
     ap.add_argument("--signals",default="")
     ap.add_argument("--top",type=int,default=500)
     ap.add_argument("--output",default="affiliate-opportunities.json")
     ap.add_argument("--persist-research",action="store_true")
+    ap.add_argument("--streaming",action="store_true",help="Persist every EUR15+ row with durable progress, not only a shortlist")
+    ap.add_argument("--checkpoint",default="full-feed-stage.sqlite3")
+    ap.add_argument("--resume",action="store_true")
+    ap.add_argument("--progress-every",type=int,default=10000)
+    ap.add_argument("--expected-records",type=int,default=3500000)
     args=ap.parse_args()
     if args.top<1 or args.top>2000:raise SystemExit("top must be 1..2000")
+    if args.progress_every<1 or args.expected_records<1:raise SystemExit("progress/expected records must be positive")
+    if args.streaming:
+        from full_feed_streaming import run
+        raise SystemExit(run(args))
+    if args.feed_url:raise SystemExit("HTTP source requires --streaming")
     rules=load_rules(args.commission_rules)
     if not isinstance(rules,dict):raise SystemExit("expected program-ID -> commission rule map")
     signals=normalize_signals(json.loads(Path(args.signals).read_text(encoding="utf-8"))) if args.signals else {}

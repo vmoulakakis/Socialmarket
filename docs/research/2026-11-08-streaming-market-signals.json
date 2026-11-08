@@ -1,0 +1,74 @@
+{
+  "countertop dishwasher tank portable πλυντηριο παγκου": {
+    "pain_fit": null,
+    "demand": null,
+    "competition": null,
+    "conversion": null,
+    "source_kind": "hypothesis",
+    "evidence_refs": [
+      "https://havalab.com/pages/faq",
+      "https://www.kotsovolos.gr/household-appliances/washing-machines/dish-washing-machines/201242-delonghi-ddw2po19"
+    ],
+    "observed_on": "2026-11-08",
+    "market": "GR",
+    "finding": "Greek supply exists; no verified high-demand/low-competition winner",
+    "numeric_scores_unavailable": true
+  },
+  "retrofit water shutoff valve διαρροη βανα": {
+    "pain_fit": null,
+    "demand": null,
+    "competition": null,
+    "conversion": null,
+    "source_kind": "hypothesis",
+    "evidence_refs": [
+      "https://eu.aqara.com/en-eu/products/aqara-valve-controller-t1",
+      "https://www.istorm.gr/products/aqara-valve-controller-t1"
+    ],
+    "observed_on": "2026-11-08",
+    "market": "GR",
+    "finding": "Greek supply exists; no verified high-demand/low-competition winner",
+    "numeric_scores_unavailable": true
+  },
+  "window robot frameless glass ρομποτ τζαμιων": {
+    "pain_fit": null,
+    "demand": null,
+    "competition": null,
+    "conversion": null,
+    "source_kind": "hypothesis",
+    "evidence_refs": [
+      "https://www.skroutz.gr/c/2394/Hlektrikoi-Katharistes-Tzamion/f/1403035/rompot.html"
+    ],
+    "observed_on": "2026-11-08",
+    "market": "GR",
+    "finding": "Greek supply exists; no verified high-demand/low-competition winner",
+    "numeric_scores_unavailable": true
+  },
+  "automatic litter cat petkit catlink αυτοκαθαριζομενη": {
+    "pain_fit": null,
+    "demand": null,
+    "competition": null,
+    "conversion": null,
+    "source_kind": "hypothesis",
+    "evidence_refs": [
+      "https://www.bestprice.gr/cat/8746/toyaletes-gatas.html?q=γατας+αυτοματη"
+    ],
+    "observed_on": "2026-11-08",
+    "market": "GR",
+    "finding": "Greek supply exists; no verified high-demand/low-competition winner",
+    "numeric_scores_unavailable": true
+  },
+  "portable power station ecoflow bluetti σταθμος ενεργειας": {
+    "pain_fit": null,
+    "demand": null,
+    "competition": null,
+    "conversion": null,
+    "source_kind": "hypothesis",
+    "evidence_refs": [
+      "https://www.skroutz.gr/c/5048/power-stations.html"
+    ],
+    "observed_on": "2026-11-08",
+    "market": "GR",
+    "finding": "Greek supply exists; no verified high-demand/low-competition winner",
+    "numeric_scores_unavailable": true
+  }
+}

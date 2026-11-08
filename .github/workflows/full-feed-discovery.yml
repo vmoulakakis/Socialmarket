@@ -1,4 +1,4 @@
-name: Full Linkwise Feed - EUR15 Pain Gap Discovery
+name: Full Linkwise Feed - EUR15 Streaming Ingestion
 on:
   push:
     branches: [feat/agentic-shopper-evidence-gate-20261106]
@@ -6,15 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       top:
-        description: Maximum shortlisted research products
+        description: Ranked research shortlist (all qualifying rows are persisted)
         type: choice
         options: ["100", "250", "500", "1000"]
         default: "500"
-      source:
-        description: Source of full initial feed
-        type: choice
-        options: [live_linkwise, drive_snapshot]
-        default: live_linkwise
+      expected_records:
+        description: Minimum expected input count; smaller sources remain PARTIAL
+        type: string
+        default: "3500000"
 permissions:
   contents: read
   id-token: write
@@ -24,76 +23,48 @@ concurrency:
 jobs:
   discovery:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 330
     env:
+      PYTHONUNBUFFERED: '1'
       LINKWISE_FULL_FEED_URL: "${{ secrets.LINKWISE_FULL_FEED_URL }}"
-      SOURCE: "${{ github.event_name == 'push' && 'live_linkwise' || inputs.source }}"
       TOP: "${{ github.event_name == 'push' && '500' || inputs.top }}"
+      EXPECTED_RECORDS: "${{ github.event_name == 'push' && '3500000' || inputs.expected_records }}"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install streaming dependencies
-        run: python -m pip install "ijson==3.4.0" "requests==2.32.3" "gdown==5.2.0"
-      - name: Download the full unfiltered input
+      - name: Install pinned streaming dependencies
+        run: python -m pip install "ijson==3.4.0" "requests==2.32.3"
+      - name: Verify EUR15 admission, streaming and recovery contracts
+        run: python -m unittest discover -s workers/product_intelligence -p 'test_full_feed_streaming.py' -v
+      - name: Stream every source row, persist every calculated EUR15+ candidate
         run: |
           set -euo pipefail
-          if [ "$SOURCE" = "live_linkwise" ]; then
-            python - <<'PY'
-          import os,requests
-          from urllib.parse import urlparse
+          python - <<'PYCODE'
+          import os, subprocess, sys
           columns="product_id,product_name,description,category,tracking_url,thumb_url,image_url,in_stock,availability,valid_from,valid_to,currency,price,full_price,discount,times_bought"
-          # catinc-0 yielded a 200 OK but fewer than 10MB: not a full catalog.
-          # Probe the published taxonomy integer range without choosing a product niche.
-          all_known_category_ids=",".join(str(i) for i in range(1,154))
-          default="https://affiliate.linkwi.se/feeds/1.2/CD104/programs-all/columns-"+columns+"/catinc-"+all_known_category_ids+"/catex-0/proginc-0/progex-0/feed.json"
-          u=os.environ.get("LINKWISE_FULL_FEED_URL") or default
-          p=urlparse(u)
-          if p.scheme!="https" or p.hostname!="affiliate.linkwi.se" or "/feeds/1.2/CD104/" not in p.path or p.query:
-              raise SystemExit("invalid_full_cd104_source_url")
-          # This is intentionally programs-all with no explicit category list.
-          # Its actual completeness is established by the scanned-count metric,
-          # NOT assumed from a constructed URL.
-          if "/catex-0/proginc-0/progex-0/" not in p.path or "/catinc-" not in p.path:
-              raise SystemExit("source_has_exclusion_or_category_scope")
-          s=requests.Session()
-          s.headers.update({"Accept-Encoding":"gzip, deflate","User-Agent":"SocialMarket-FullFeed-Audit/1.0"})
-          with s.get(u,stream=True,timeout=(30,180),allow_redirects=False) as resp:
-              print("network_http",resp.status_code,"content_type",resp.headers.get("content-type"),"length_header",resp.headers.get("content-length"))
-              resp.raise_for_status()
-              chunks=resp.iter_content(1048576)
-              first=next(chunks,b"")
-              if first.lstrip()[:1]!=b"[":
-                  raise SystemExit("not_json_array_feed_or_invalid_source_contract")
-              n=len(first)
-              with open("full-feed.json","wb") as dst:
-                  dst.write(first)
-                  for chunk in chunks:
-                      if chunk:
-                          dst.write(chunk)
-                          n+=len(chunk)
-          print("total_downloaded_bytes",n)
-          if n<10000000:raise SystemExit("source_unexpectedly_small_not_3m_universe")
-          print("live_linkwise_feed_bytes",n,"complete_scope_UNVERIFIED_until_scan")
-          PY
-          else
-            echo "Historical full feed preflight: Drive file ID known, current connector unavailable. Trying authorized read from runner."
-            gdown "1oGnQr4uz3dxfHhydEYkYsrXeZJjR65HT" -O full-feed.json
-            test "$(stat -c%s full-feed.json)" -gt 10000000
-            echo "Historical Drive snapshot, not verified fresh"
-          fi
-      - name: Process ALL rows with single EUR15 hard commission gate
-        run: |
-          python workers/product_intelligence/all_feed_opportunity_discovery.py --feed full-feed.json --commission-rules vmdb --top "$TOP" --output affiliate-opportunities.json --persist-research
-      - name: Upload source-labelled research candidates only
+          # Known taxonomy scope, not a claim of publisher-confirmed completeness.
+          categories=",".join(str(i) for i in range(1,154))
+          default="https://affiliate.linkwi.se/feeds/1.2/CD104/programs-all/columns-"+columns+"/catinc-"+categories+"/catex-0/proginc-0/progex-0/feed.json"
+          source=os.environ.get("LINKWISE_FULL_FEED_URL") or default
+          command=[sys.executable,"workers/product_intelligence/all_feed_opportunity_discovery.py",
+            "--streaming","--feed-url",source,"--commission-rules","vmdb",
+            "--signals","docs/research/2026-11-08-streaming-market-signals.json",
+            "--top",os.environ["TOP"],"--expected-records",os.environ["EXPECTED_RECORDS"],
+            "--checkpoint","full-feed-stage.sqlite3","--output","affiliate-opportunities.json",
+            "--persist-research"]
+          raise SystemExit(subprocess.call(command))
+          PYCODE
+      - name: Retain counts, research shortlist and durable eligible inventory checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: full-feed-eur15-research
-          retention-days: 10
+          retention-days: 14
           if-no-files-found: warn
-          path: affiliate-opportunities.json
-      - name: Delete temporary raw feed
-        if: always()
-        run: rm -f full-feed.json
+          path: |
+            affiliate-opportunities.json
+            full-feed-stage.sqlite3
+            full-feed-stage.sqlite3-wal
+            full-feed-stage.sqlite3-shm

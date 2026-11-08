@@ -18,6 +18,64 @@ const cap=(x:unknown)=>Math.max(0,Math.min(100,numeric(x)??0))
 const str=(v:unknown,n=400)=>String(v??'').slice(0,n)
 const RE=/^https:\/\/go\.linkwi\.se\/z\/([1-9][0-9]*)-0\/CD104\/\?lnkurl=/
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)
+// Only aggregate telemetry crosses this boundary. URLs, headers, tokens and raw
+// transport errors are deliberately absent from the source metadata contract.
+function sourceMetadata(value:unknown){
+ if(value===undefined)return {}
+ if(!object(value))return null
+ const clean:Record<string,unknown>={}
+ const textKeys=['source_kind','source_scope','scope','source_integrity','source_fingerprint','content_type','error_code','error_type','source_parse_error_type','error_class']
+ const numberKeys=['source_bytes','source_size_bytes','bytes_read','elapsed_seconds','record_offset','checkpoint_offset','expected_min_records','expected_records','http_status','content_length']
+ for(const k of textKeys){
+  if(value[k]!=null){
+   if(typeof value[k]!=='string'||!/^[-A-Za-z0-9_ .:;+/=]{0,180}$/.test(value[k] as string))return null
+   if(k==='error_class'&&!/^[A-Za-z0-9_:.-]{1,180}$/.test(value[k] as string))return null
+   clean[k]=value[k]
+  }
+ }
+ for(const k of ['source_sha256','source_uri_hash','rule_revision_hash','signal_revision_hash']){
+  if(value[k]!=null){if(typeof value[k]!=='string'||!/^[a-f0-9]{64}$/i.test(value[k] as string))return null;clean[k]=value[k]}
+ }
+ for(const k of ['source_etag','source_signature']){
+  if(value[k]!=null){
+   const v=value[k]
+   if(typeof v!=='string'||!(/^(?:W\/)?"[A-Za-z0-9._:+/=-]{1,150}"$/.test(v)||(k==='source_signature'&&/^local:[0-9]+:[0-9]+$/.test(v))))return null
+   if(k==='source_signature'&&v.startsWith('W/'))return null
+   clean[k]=v
+  }
+ }
+ if(value.source_last_modified!=null){
+  if(typeof value.source_last_modified!=='string'||!/^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT$/.test(value.source_last_modified))return null
+  clean.source_last_modified=value.source_last_modified
+ }
+ for(const k of numberKeys){
+  if(value[k]!=null){const n=numeric(value[k]);if(n===null||n<0||n>Number.MAX_SAFE_INTEGER||(k==='expected_records'&&!Number.isSafeInteger(n)))return null;clean[k]=n}
+ }
+ if(value.eof_reached!==undefined){if(typeof value.eof_reached!=='boolean')return null;clean.eof_reached=value.eof_reached}
+ if(value.scope_verified_by_publisher!==undefined&&value.scope_verified_by_publisher!==false)return null
+ clean.scope_verified_by_publisher=false
+ return clean
+}
+function observedCounts(value:unknown){
+ if(!object(value))return null
+ const counts:Record<string,number|string>={}
+ if(Object.keys(value).length>64)return null
+ for(const [k,v] of Object.entries(value)){
+  if(!/^[a-z][a-z0-9_]{0,63}$/.test(k))return null
+  if(k==='source_integrity'||k==='source_parse_error_type'){
+   if(typeof v!=='string'||!/^[A-Za-z0-9_]{1,64}$/.test(v))return null
+   counts[k]=v
+  }else{
+   if(typeof v!=='number'||!Number.isSafeInteger(v)||v<0)return null
+   counts[k]=v
+  }
+ }
+ const scanned=Number(counts.scanned??0)
+ if(['commission_eligible','commission_unknown','below_15'].reduce((sum,k)=>sum+Number(counts[k]??0),0)>scanned)return null
+ return counts
+}
+const baseMetrics={source_scope:'configured_feed_unknown_scope',scope_verified_by_publisher:false,hard_filter_eur:15,commission_basis:'historical_source_estimate',verified_demand:false,verified_conversion:false,auto_publish:false}
 
 Deno.serve(async req=>{
  if(req.method==='GET')return respond({service:'socialmarket-fullfeed-discovery',private:true,status:'research_only'})
@@ -31,43 +89,70 @@ Deno.serve(async req=>{
     !['refs/heads/main','refs/heads/feat/agentic-shopper-evidence-gate-20261106'].includes(String(payload.ref)))
     return respond({error:'workflow_not_authorized'},403)
   const raw=await req.text()
-  if(raw.length>140000)return respond({error:'payload_too_large'},413)
+  if(new TextEncoder().encode(raw).byteLength>140000)return respond({error:'payload_too_large'},413)
   let body:Record<string,unknown>
-  try{body=JSON.parse(raw)}catch{return respond({error:'invalid_json'},400)}
+  try{const parsed=JSON.parse(raw);if(!object(parsed))return respond({error:'invalid_body'},400);body=parsed}catch{return respond({error:'invalid_json'},400)}
   const url=Deno.env.get('SUPABASE_URL'),key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if(!url||!key)return respond({error:'private_db_unavailable'},503)
   const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})
   if(body.action==='commission_rules'){
    // Read real network-program-rate map; no Merchant-360 admission hard gate.
    const {data,error}=await db.from('linkwise_program_commissions')
-    .select('linkwise_program_id,program_name,flat_commission_eur,flat_commission_min_eur,percent_commission,percent_commission_min,source,imported_at')
+    .select('linkwise_program_id,program_name,actual_http_site,flat_commission_eur,flat_commission_min_eur,flat_commission_max_eur,percent_commission,percent_commission_min,percent_commission_max,source,imported_at')
     .limit(1000)
    if(error)return respond({error:'rate_query_failed'},503)
-   return respond({ok:true,rules:Object.fromEntries((data||[]).filter(x=>x.linkwise_program_id).map(x=>[x.linkwise_program_id,x])),
-     rule_count:data?.length||0,rate_semantics:'historical_estimate_not_approved_payout'})
+   const programs=data||[],mapped=programs.filter(x=>x.linkwise_program_id)
+   return respond({ok:true,rules:Object.fromEntries(mapped.map(x=>[x.linkwise_program_id,x])),programs,
+     rule_count:programs.length,mapped_rule_count:mapped.length,rate_semantics:'historical_estimate_not_approved_payout'})
   }
-  if(body.action==='finish_research'){
+  if(body.action==='begin_research'){
+    const run=str(body.run_key,80),metadata=sourceMetadata(body.source_metadata)
+    if(!uuid.test(run))return respond({error:'invalid_run_key'},400)
+    if(metadata===null)return respond({error:'invalid_source_metadata'},400)
+    const {error}=await db.from('ai_discovery_runs_v2').upsert({
+      run_key:run,source_key:'linkwise',status:'partial',workflow_ref:str(payload.workflow_ref,300),
+      metrics:{...baseMetrics,stage:'streaming',source_metadata:metadata}
+    },{onConflict:'run_key',ignoreDuplicates:true})
+    if(error)return respond({error:'research_run_insert_failed'},503)
+    const current=await db.from('ai_discovery_runs_v2').select('status').eq('run_key',run).maybeSingle()
+    if(current.error||!current.data)return respond({error:'research_run_read_failed'},503)
+    return respond({ok:true,run_key:run,status:current.data.status})
+  }
+  if(body.action==='checkpoint_research'||body.action==='finish_research'){
     const run=str(body.run_key,80)
     if(!uuid.test(run))return respond({error:'invalid_run_key'},400)
-    const stats=body.counts&&typeof body.counts==='object'&&!Array.isArray(body.counts)?body.counts as Record<string,unknown>:{}
-    const scanned=Math.max(0,Math.trunc(numeric(stats.scanned)??0))
-    const eligible=Math.max(0,Math.trunc(numeric(stats.commission_eligible)??0))
-    const unknown=Math.max(0,Math.trunc(numeric(stats.commission_unknown)??0))
-    const below=Math.max(0,Math.trunc(numeric(stats.below_15)??0))
-    const completed=body.status==='completed'?'completed':'partial'
-    const {data:found,error:countError}=await db.from('ai_discovery_candidates_v2').select('id',{count:'exact',head:true}).eq('run_key',run)
-    if(countError)return respond({error:'run_count_failed'},503)
-    const count=found ? found.length : 0
-    // Count from Supabase count is returned separately, updated below.
+    const stats=observedCounts(body.counts),metadata=sourceMetadata(body.source_metadata)
+    if(stats===null)return respond({error:'invalid_counts'},400)
+    if(metadata===null)return respond({error:'invalid_source_metadata'},400)
+    const finishing=body.action==='finish_research'
+    if(finishing&&!['completed','partial','failed'].includes(String(body.status)))return respond({error:'invalid_run_status'},400)
+    const errorCode=body.error_code
+    if(errorCode!==undefined&&(typeof errorCode!=='string'||!/^[A-Za-z0-9_]{1,100}$/.test(errorCode)))return respond({error:'invalid_error_code'},400)
+    const current=await db.from('ai_discovery_runs_v2').select('status,metrics,scanned_count').eq('run_key',run).maybeSingle()
+    if(current.error)return respond({error:'research_run_read_failed'},503)
+    if(!current.data)return respond({error:'research_run_not_started'},404)
+    const scanned=Number(stats.scanned??0)
+    if(scanned<Number(current.data.scanned_count||0))return respond({error:'checkpoint_counter_regression'},409)
+    const previous=object(current.data.metrics)?current.data.metrics:{}
+    const previousMetadata=object(previous.source_metadata)?previous.source_metadata:{}
+    const expectedRecords=Math.max(Number(previousMetadata.expected_records||0),Number(metadata.expected_records||0))
+    const mergedMetadata={...previousMetadata,...metadata,expected_records:expectedRecords}
+    const coverageMet=expectedRecords===0||scanned>=expectedRecords
+    const completed=finishing&&body.status==='completed'&&stats.source_integrity==='complete_json'&&coverageMet
+    if(current.data.status==='completed'&&!completed)return respond({error:'research_run_already_completed'},409)
     const countResult=await db.from('ai_discovery_candidates_v2').select('id',{count:'exact',head:true}).eq('run_key',run)
     if(countResult.error)return respond({error:'run_count_failed'},503)
-    const {error}=await db.from('ai_discovery_runs_v2').update({status:completed,scanned_count:scanned,
-      commission_eligible_count:eligible,unpriced_count:unknown,below_floor_count:below,
-      stored_candidates:countResult.count||0,finished_at:new Date().toISOString(),
-      metrics:{source_scope:'all_input_records',hard_filter_eur:15,commission_basis:'historical_source_estimate',
-      verified_demand:false,verified_conversion:false,auto_publish:false}}).eq('run_key',run)
+    const update:Record<string,unknown>={status:completed?'completed':'partial',scanned_count:scanned,
+      commission_eligible_count:Number(stats.commission_eligible??0),unpriced_count:Number(stats.commission_unknown??0),below_floor_count:Number(stats.below_15??0),
+      stored_candidates:countResult.count||0,
+      metrics:{...previous,...baseMetrics,stage:finishing?'finished':'streaming',counts:stats,
+      source_metadata:mergedMetadata,source_integrity:stats.source_integrity??'unknown',coverage_threshold_met:coverageMet,
+      ...(finishing?{requested_status:body.status,completion_verified:completed,
+        error_code:errorCode??(completed?null:!coverageMet?'source_smaller_than_requested_universe':body.status==='failed'?'worker_failed':body.status==='completed'?'source_incomplete':'partial_source')}:{})}}
+    if(finishing)update.finished_at=new Date().toISOString()
+    const {error}=await db.from('ai_discovery_runs_v2').update(update).eq('run_key',run)
     if(error)return respond({error:'run_finalize_failed'},503)
-    return respond({ok:true,run_key:run,status:completed,persisted_count:countResult.count||0})
+    return respond({ok:true,run_key:run,status:completed?'completed':'partial',persisted_count:countResult.count||0})
   }
   if(body.action==='store_research'){
    const rows=body.rows
@@ -104,12 +189,10 @@ Deno.serve(async req=>{
       stage:'research_candidate',feed_observed_at:r.feed_observed_at||null,
     })
    }
-   const {error:runError}=await db.from('ai_discovery_runs_v2').upsert({
-     run_key:run,source_key:'linkwise',status:'partial',
-     workflow_ref:str(payload.workflow_ref,300),
-     metrics:{stage:'shortlist_persisting',scope:'full_feed_scan',verified_demand:false,estimated_commission_only:true}
-   },{onConflict:'run_key',ignoreDuplicates:true})
-   if(runError)return respond({error:'research_run_insert_failed'},503)
+   const current=await db.from('ai_discovery_runs_v2').select('status').eq('run_key',run).maybeSingle()
+   if(current.error)return respond({error:'research_run_read_failed'},503)
+   if(!current.data)return respond({error:'research_run_not_started'},404)
+   if(current.data.status==='completed')return respond({error:'research_run_already_completed'},409)
    const {error}=await db.from('ai_discovery_candidates_v2').upsert(records,
      {onConflict:'run_key,source_key,source_product_id,problem_key'})
    if(error){console.error('research_write_failed',error.code);return respond({error:'research_write_failed'},503)}
