@@ -39,5 +39,26 @@ const checks=[
 for(const [text,needle,name] of checks){if(!text.includes(needle))errors.push(`Missing contract: ${name}`)}
 for(const dep of ['echarts','@tanstack/react-table','motion']){if(!pkg.dependencies?.[dep])errors.push(`Missing dependency: ${dep}`)}
 
+
+const workspaceCss=fs.readFileSync('components/CanonicalWorkspace.module.css','utf8');
+const workspaceUi=fs.readFileSync('components/CanonicalWorkspace.jsx','utf8');
+const appLayout=fs.readFileSync('app/layout.jsx','utf8');
+const designDoc=fs.readFileSync('DESIGN.md','utf8');
+for(const [value,name] of [
+  ['PREMIUM WORKSPACE SAFETY PASS','scoped premium CSS marker'],
+  [':focus-visible','visible keyboard focus'],
+  ['@media(max-width:700px)','compact mobile rules'],
+  ['@media(forced-colors:active)','forced-colors support'],
+  ['@media(prefers-reduced-motion:reduce)','reduced-motion support']
+])if(!workspaceCss.includes(value))errors.push('Missing workspace CSS contract: '+name);
+for(const [value,name] of [
+  ['workspace(section,{query,offset})','original canonical query and pagination'],
+  ['rel="sponsored noopener noreferrer"','affiliate tracking link disclosure'],
+  ['requestId.current','stale-request handling']
+])if(!workspaceUi.includes(value))errors.push('Missing canonical workspace behavior: '+name);
+if(!appLayout.includes("import './design-v2.css'"))errors.push('Canonical design tokens not loaded');
+if(!designDoc.includes('Evidence-First Command Center'))errors.push('Design context not documented');
+if(Array.from(workspaceCss).filter(c=>c==='{').length!==Array.from(workspaceCss).filter(c=>c==='}').length)errors.push('Workspace CSS braces are unbalanced');
+
 if(errors.length){for(const e of errors)console.error(e);process.exit(1)}
 console.log(`Design contract PASS: ${files.length} files and ${checks.length} V2/V3 presentation + truth contracts verified.`);
