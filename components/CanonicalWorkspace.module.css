@@ -41,3 +41,146 @@
 @media(prefers-reduced-motion:reduce){
   .page .item,.page .kpis article{transition:none}
 }
+
+
+/* EVIDENCE WORKSPACE VISUAL SYSTEM — 2026-11-08
+   Scoped visual treatment. Preserves all selectors bound to JS, data values, links and behavior.
+   An editorial command center rather than a generic SaaS card dashboard. */
+.page{
+  --cw-accent:var(--sm-cyan,#22d3ee);
+  --cw-quiet:#91a5bf;
+  --cw-edge:#35516f;
+  font-variant-numeric:tabular-nums;
+  padding-top:clamp(22px,3vw,42px);
+}
+.page .hero{
+  position:relative;
+  padding:18px 0 26px;
+  margin-bottom:26px;
+  border-bottom:1px solid var(--cw-edge);
+  isolation:isolate;
+  overflow:hidden;
+}
+.page .hero::before{
+  content:"";
+  position:absolute;inset:0 0 auto auto;
+  width:min(30vw,280px);height:100%;
+  background:repeating-linear-gradient(90deg,transparent 0,transparent 31px,rgba(34,211,238,.065) 32px),
+    repeating-linear-gradient(0deg,transparent 0,transparent 31px,rgba(34,211,238,.06) 32px);
+  mask-image:linear-gradient(90deg,transparent,#000);
+  pointer-events:none;z-index:-1;
+}
+.page .eyebrow{
+  color:#73dbe8;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:11px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.page .hero h1{
+  font-size:clamp(2rem,4vw,3.15rem);
+  line-height:1.09;
+  letter-spacing:-.055em;
+  font-weight:750;
+  max-width:22ch;
+}
+.page .hero p{line-height:1.7;max-width:74ch}
+.page .hero button{
+  flex-shrink:0;
+  background:rgba(34,211,238,.07);
+  border-color:#43627b;
+  color:#d9f7fa;
+  min-height:44px;
+  box-shadow:inset 0 1px rgba(255,255,255,.05);
+}
+.page .hero button:not(:disabled):hover{background:rgba(34,211,238,.15);border-color:#7be4ef}
+.page .kpis{gap:12px;margin-bottom:27px}
+.page .kpis article{
+  position:relative;overflow:hidden;
+  border-radius:9px;
+  border:1px solid #31485f;
+  background:linear-gradient(150deg,#14253a,#0c1829);
+  box-shadow:0 9px 28px rgba(0,0,0,.1);
+}
+.page .kpis article::before{
+  content:"";position:absolute;inset:0 auto 0 0;width:3px;
+  background:var(--cw-accent);
+}
+.page .kpis small{
+  color:#a4b5c9;
+  font-weight:650;
+  letter-spacing:.018em;
+}
+.page .kpis strong{
+  color:#f2fbff;
+  font-weight:740;
+  letter-spacing:-.045em;
+  font-size:clamp(1.6rem,2.7vw,2.25rem);
+}
+.page .notice{border-left:3px solid var(--sm-amber,#fbbf24);border-radius:8px}
+.page .filters{
+  margin:22px 0;
+  padding:12px;
+  border:1px solid rgba(133,166,196,.18);
+  border-radius:9px;
+  background:rgba(8,17,30,.52);
+}
+.page .filters input,.page .filters select{
+  min-height:44px;
+}
+.page .item{
+  border-radius:9px;
+  border:1px solid #30455e;
+  background:linear-gradient(120deg,#111d2f,#101a2a);
+  box-shadow:0 10px 24px rgba(0,0,0,.12);
+}
+.page .rowHead{gap:20px}
+.page .rowHead h2{
+  color:#f2f8ff;
+  font-size:clamp(1rem,1.6vw,1.25rem);
+  line-height:1.42;
+  font-weight:700;
+  letter-spacing:-.018em;
+}
+.page .badge{
+  border-radius:4px;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  background:#17253b;
+  color:#d5e4f5;
+  border-color:#385372;
+}
+.page .metrics{
+  flex-wrap:wrap;row-gap:10px;column-gap:22px;
+  padding:13px 0;
+  margin:16px 0 8px;
+  border-block:1px solid rgba(135,161,190,.17);
+}
+.page .metrics b{color:#a7e6ef;font-weight:750}
+.page .links a{
+  display:inline-flex;align-items:center;
+  min-height:42px;
+  font-weight:730;
+  text-underline-offset:4px;
+}
+.page .item details{
+  border-top:1px solid rgba(133,166,196,.18);
+  padding-top:11px;
+}
+.page .item summary{min-height:32px}
+.page .pagination{
+  padding:15px 0 10px;
+  border-top:1px solid rgba(133,166,196,.2);
+}
+@media(max-width:700px){
+  .page .hero{padding-top:4px}
+  .page .hero::before{display:none}
+  .page .hero button{margin-top:16px;min-width:150px}
+  .page .kpis article{padding:18px}
+  .page .filters{padding:10px}
+  .page .item{padding:17px}
+  .page .links a{min-height:44px}
+}
+@media(forced-colors:active){
+  .page .kpis article,.page .item,.page .filters{border:1px solid CanvasText}
+  .page .kpis article::before{display:none}
+}
