@@ -131,8 +131,8 @@ def github_model_patch(task):
     if not prefixes:raise TaskError('no bounded writable path resolved')
     call_rid=token_rid=None
     try:
-        call_rid=reserve('remote_llm_calls',1,task['run_id'],{'source':'verified-free-provider','task_id':task['id']},'verified-free-provider',MODEL)
-        token_rid=reserve('llm_output_tokens',2400,task['run_id'],{'source':'verified-free-provider','task_id':task['id']},'verified-free-provider',MODEL)
+        call_rid=reserve('remote_llm_calls',1,task['run_id'],{'source':'verified-free-provider','task_id':task['id']},provider['name'],provider['model'])
+        token_rid=reserve('llm_output_tokens',2400,task['run_id'],{'source':'verified-free-provider','task_id':task['id']},provider['name'],provider['model'])
         prompt={
           'task':{'capability':task['capability'],'prompt':payload.get('prompt'),'input':payload.get('input'),'targetSiteId':payload.get('targetSiteId')},
           'prior_outputs':payload.get('prior'),
