@@ -38,3 +38,5 @@ Any DeepSeek/OpenAI call must be allowed by `ops.ai_model_policy` and reserved t
 
 ## Free-tier activation (2026-11-09)
 GitHub Actions: add `GROQ_API_KEY` or `OPENROUTER_API_KEY` as encrypted repository secrets, and `GROQ_FREE_TIER_CONFIRMED=true` in repository variables after checking the account plan. To allow external free providers to process private repository source in the *code executor*, separately review privacy and set `FREE_CODE_EXTERNAL_ALLOWED=true`; default is BLOCKED. For Vercel, configure separate server-only environment variables. No API keys are created by a GitHub commit. Reference: https://github.blog/changelog/2026-07-30-github-models-is-now-retired/ .
+
+Privacy gate: `FREE_AGENT_EXTERNAL_ALLOWED`, `FREE_CODE_EXTERNAL_ALLOWED` and `FREE_MERCHANT_EXTERNAL_ALLOWED` are separate GitHub Actions variables and remain false by default. Never send private merchant conversion metrics, source code or confidential data to external free providers merely because an API key exists. Opt in only after data review. Local Ollama remains the preferred confidentiality-preserving route.

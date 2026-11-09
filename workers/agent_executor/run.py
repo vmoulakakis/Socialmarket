@@ -5,7 +5,6 @@ GATEWAY=os.getenv('SUPABASE_WORKER_GATEWAY','https://gqpbskssrvpfjtujwezc.supaba
 REPO=os.getenv('GITHUB_REPOSITORY','vmoulakakis/Socialmarket')
 GH_TOKEN=os.getenv('GITHUB_TOKEN','')
 WORKER_ID=f"github:{os.getenv('GITHUB_RUN_ID','local')}"
-MODEL='openai/gpt-oss-20b'  # Selected per official free API eligibility below
 MAX_TASKS=max(1,min(int(os.getenv('AGENT_MAX_TASKS_PER_RUN','2')),2))
 _token=None
 _token_at=0.0
@@ -121,7 +120,7 @@ def verified_free_provider():
         return {'name':'openrouter','model':'openrouter/free','key':openrouter,'url':'https://openrouter.ai/api/v1/chat/completions'}
     return None
 
-def github_model_patch(task):
+def free_model_patch(task):
     provider=verified_free_provider()
     if not provider:
         raise TaskError('verified_free_provider_not_configured',retry=True)
@@ -151,7 +150,7 @@ def github_model_patch(task):
 def apply_code_task(task):
     payload=task.get('payload') or {}
     if payload.get('targetRepo')!=REPO:raise TaskError(f"cross-repo write disabled: {payload.get('targetRepo')}")
-    generated,prefixes,used=github_model_patch(task);files=generated.get('files') or []
+    generated,prefixes,used=free_model_patch(task);files=generated.get('files') or []
     if not files or len(files)>8:raise TaskError('model returned invalid file count')
     total=0;changed=[]
     for item in files:

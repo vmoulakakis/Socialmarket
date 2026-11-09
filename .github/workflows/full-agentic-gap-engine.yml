@@ -31,7 +31,6 @@ concurrency:
 permissions:
   contents: read
   id-token: write
-  models: read
 
 jobs:
   pain-gap-intelligence:
@@ -48,6 +47,10 @@ jobs:
       MARKET_SCOPE_KEY: ${{ inputs.market_scope_key || 'eyewear' }}
       MAX_FREE_MODEL_CALLS: ${{ inputs.free_model_calls || '8' }}
       ENABLE_PAID_REMOTE: '0'
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_FREE_TIER_CONFIRMED: ${{ vars.GROQ_FREE_TIER_CONFIRMED || 'false' }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      FREE_AGENT_EXTERNAL_ALLOWED: ${{ vars.FREE_AGENT_EXTERNAL_ALLOWED || 'false' }}
       PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@v4

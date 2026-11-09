@@ -36,12 +36,16 @@ class ModelRoutingPolicyTests(unittest.TestCase):
             self.assertEqual(meta['status'], 'unavailable_or_cap')
 
     def test_only_confirmed_groq_free_tier_is_eligible(self):
-        self.assertIsNone(configured_free_provider({'GROQ_API_KEY': 'fake'}))
-        cfg = configured_free_provider({'GROQ_API_KEY': 'fake', 'GROQ_FREE_TIER_CONFIRMED': 'true'})
+        self.assertIsNone(configured_free_provider({'GROQ_API_KEY': 'fake', 'FREE_AGENT_EXTERNAL_ALLOWED': 'true'}))
+        cfg = configured_free_provider({'GROQ_API_KEY': 'fake', 'GROQ_FREE_TIER_CONFIRMED': 'true', 'FREE_AGENT_EXTERNAL_ALLOWED': 'true'})
         self.assertEqual(cfg['provider'], 'groq')
 
+    def test_sensitive_agent_context_requires_explicit_external_consent(self):
+        self.assertIsNone(configured_free_provider({'OPENROUTER_API_KEY': 'fake'}))
+
+
     def test_openrouter_is_forced_to_free_router(self):
-        cfg = configured_free_provider({'OPENROUTER_API_KEY': 'fake'})
+        cfg = configured_free_provider({'OPENROUTER_API_KEY': 'fake', 'FREE_AGENT_EXTERNAL_ALLOWED': 'true'})
         self.assertEqual(cfg['model'], 'openrouter/free')
 
 

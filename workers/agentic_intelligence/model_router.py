@@ -8,6 +8,8 @@ import requests
 # GitHub Models fully retired July 30, 2026.
 def configured_free_provider(env=None):
     values = os.environ if env is None else env
+    if str(values.get("FREE_AGENT_EXTERNAL_ALLOWED") or "").lower() != "true":
+        return None
     groq = str(values.get("GROQ_API_KEY") or "").strip()
     if groq and str(values.get("GROQ_FREE_TIER_CONFIRMED") or "").lower() == "true":
         return {"provider": "groq", "key": groq, "model": "openai/gpt-oss-20b", "base_url": "https://api.groq.com/openai/v1"}
