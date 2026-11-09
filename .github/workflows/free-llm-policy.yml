@@ -1,0 +1,26 @@
+name: Free LLM routing policy
+on:
+  pull_request:
+    paths:
+      - 'lib/model-router.js'
+      - 'lib/free-llm-policy.mjs'
+      - 'tests/free-llm-policy.test.mjs'
+      - '.github/workflows/free-llm-policy.yml'
+  push:
+    paths:
+      - 'lib/model-router.js'
+      - 'lib/free-llm-policy.mjs'
+      - 'tests/free-llm-policy.test.mjs'
+      - '.github/workflows/free-llm-policy.yml'
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check lib/model-router.js
+      - run: node --test tests/free-llm-policy.test.mjs
