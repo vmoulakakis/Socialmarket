@@ -1,4 +1,5 @@
 import {NextResponse} from 'next/server';
+import {freePolicy} from '@/lib/free-llm-policy.mjs';
 import {timingSafeEqual} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
 import {orchestrate,getSiteRegistry,resumeOrchestration} from '@/lib/orchestrator/runtime';
@@ -9,10 +10,14 @@ export const runtime='nodejs';
 export const maxDuration=30;
 const MAX_PROMPT_CHARS=Number(process.env.ORCHESTRATOR_MAX_PROMPT_CHARS||6000);
 
-function staticConfig(){return {
+function staticConfig(){const free=freePolicy(process.env);return {
   databaseServiceRole:Boolean(process.env.VMDB_SUPABASE_SERVICE_ROLE_KEY || (process.env.SUPABASE_URL===APPROVED_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)),
   adminJwtSupported:true,
-  llm:Boolean(process.env.DEEPSEEK_API_KEY||process.env.OPENROUTER_API_KEY),
+  llm:free.freeOnly?Boolean(free.groq||free.openrouter):Boolean(process.env.DEEPSEEK_API_KEY||process.env.OPENROUTER_API_KEY||free.groq),
+  freeLlmFirstEnabled:free.enabled,
+  freeLlmOnly:free.freeOnly,
+  groqFreeConfigured:free.groq,
+  openRouterFreeConfigured:free.openrouter,
   remoteLlmGateway:true,
   secretAuth:Boolean(process.env.ORCHESTRATOR_SECRET),
   toolQueue:true,
