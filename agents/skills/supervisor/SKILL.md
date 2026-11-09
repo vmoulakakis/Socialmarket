@@ -21,7 +21,7 @@ Complete the requested intelligence run by delegating bounded tasks to specialis
 ## Model policy
 - Prefer deterministic code/SQL first.
 - Then local open-weight models.
-- Then GitHub Models included/free quota.
+- Then verified Groq/OpenRouter free tier only, subject to configured keys and data-sharing approval.
 - DeepSeek/OpenAI are disabled by default and require a database reservation, complexity >=0.92, explicit escalation reason, and the shared 100-request monthly cap.
 - Never use an LLM for CRUD, SQL, scoring formulas, sorting, deduplication, scheduling, hashing or ordinary API calls.
 
