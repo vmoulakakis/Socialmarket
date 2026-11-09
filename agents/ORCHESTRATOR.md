@@ -79,7 +79,7 @@ Hard gates always execute before expensive model calls. Forecast numbers, price,
 - 2% Product Evidence Confidence
 
 ## Model routing
-The canonical order is deterministic/local, then GitHub Models included quota,
+The canonical order is deterministic/local, then verified Groq/OpenRouter free tiers,
 then DeepSeek V4, and finally OpenAI as the last resort. DeepSeek V4 Flash runs
 without thinking for routine bounded work, Flash/high for ambiguous audits, and
 V4 Pro/max only for hard skeptic, contradiction, forecast or recovery cases.

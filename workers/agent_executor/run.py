@@ -5,7 +5,6 @@ GATEWAY=os.getenv('SUPABASE_WORKER_GATEWAY','https://gqpbskssrvpfjtujwezc.supaba
 REPO=os.getenv('GITHUB_REPOSITORY','vmoulakakis/Socialmarket')
 GH_TOKEN=os.getenv('GITHUB_TOKEN','')
 WORKER_ID=f"github:{os.getenv('GITHUB_RUN_ID','local')}"
-MODEL=os.getenv('GITHUB_MODELS_MODEL','openai/gpt-4.1')
 MAX_TASKS=max(1,min(int(os.getenv('AGENT_MAX_TASKS_PER_RUN','2')),2))
 _token=None
 _token_at=0.0
@@ -112,13 +111,27 @@ def allowed_prefixes(payload):
     if site=='socialmarket':prefixes.extend(['app/','lib/orchestrator/'])
     return tuple(dict.fromkeys(prefixes))
 
-def github_model_patch(task):
+def verified_free_provider():
+    groq=os.getenv('GROQ_API_KEY','').strip()
+    if groq and os.getenv('GROQ_FREE_TIER_CONFIRMED','').lower()=='true':
+        return {'name':'groq','model':'openai/gpt-oss-20b','key':groq,'url':'https://api.groq.com/openai/v1/chat/completions'}
+    openrouter=os.getenv('OPENROUTER_API_KEY','').strip()
+    if openrouter:
+        return {'name':'openrouter','model':'openrouter/free','key':openrouter,'url':'https://openrouter.ai/api/v1/chat/completions'}
+    return None
+
+def free_model_patch(task):
+    provider=verified_free_provider()
+    if not provider:
+        raise TaskError('verified_free_provider_not_configured',retry=True)
+    if os.getenv('FREE_CODE_EXTERNAL_ALLOWED','false').lower()!='true':
+        raise TaskError('external_free_model_code_sharing_not_authorized',retry=True)
     payload=task.get('payload') or {};context=discover_context(payload);prefixes=allowed_prefixes(payload)
     if not prefixes:raise TaskError('no bounded writable path resolved')
     call_rid=token_rid=None
     try:
-        call_rid=reserve('remote_llm_calls',1,task['run_id'],{'source':'github-models','task_id':task['id']},'github-models',MODEL)
-        token_rid=reserve('llm_output_tokens',2400,task['run_id'],{'source':'github-models','task_id':task['id']},'github-models',MODEL)
+        call_rid=reserve('remote_llm_calls',1,task['run_id'],{'source':'verified-free-provider','task_id':task['id']},provider['name'],provider['model'])
+        token_rid=reserve('llm_output_tokens',2400,task['run_id'],{'source':'verified-free-provider','task_id':task['id']},provider['name'],provider['model'])
         prompt={
           'task':{'capability':task['capability'],'prompt':payload.get('prompt'),'input':payload.get('input'),'targetSiteId':payload.get('targetSiteId')},
           'prior_outputs':payload.get('prior'),
@@ -126,7 +139,7 @@ def github_model_patch(task):
           'repository_context':context
         }
         system='''You are a bounded coding agent. Return ONLY JSON {"summary":"...","files":[{"path":"...","content":"complete file text"}]}. Make the smallest production-quality change that satisfies the task. You may only write paths under writable_prefixes. Never modify workflows, secrets, migrations, lockfiles, package manifests, authentication, billing, or infrastructure. Preserve evidence/tracking truth; do not invent commercial facts. For existing files, only replace them if their current content is included in repository_context. Maximum 8 files.'''
-        res=http_json('https://models.github.ai/inference/chat/completions','POST',{'Authorization':f'Bearer {GH_TOKEN}','Content-Type':'application/json'},{'model':MODEL,'messages':[{'role':'system','content':system},{'role':'user','content':json.dumps(prompt,ensure_ascii=False)}],'temperature':0.1,'max_tokens':2400,'response_format':{'type':'json_object'}},120)
+        res=http_json(provider['url'],'POST',{'Authorization':f"Bearer {provider['key']}",'Content-Type':'application/json'},{'model':provider['model'],'messages':[{'role':'system','content':system},{'role':'user','content':json.dumps(prompt,ensure_ascii=False)}],'temperature':0.1,'max_tokens':2400,'response_format':{'type':'json_object'}},120)
         content=res.get('choices',[{}])[0].get('message',{}).get('content','{}');parsed=json.loads(content)
         used=int((res.get('usage') or {}).get('completion_tokens') or 0)
         finalize(call_rid,1,{'ok':True});finalize(token_rid,used,{'ok':True})
@@ -137,7 +150,7 @@ def github_model_patch(task):
 def apply_code_task(task):
     payload=task.get('payload') or {}
     if payload.get('targetRepo')!=REPO:raise TaskError(f"cross-repo write disabled: {payload.get('targetRepo')}")
-    generated,prefixes,used=github_model_patch(task);files=generated.get('files') or []
+    generated,prefixes,used=free_model_patch(task);files=generated.get('files') or []
     if not files or len(files)>8:raise TaskError('model returned invalid file count')
     total=0;changed=[]
     for item in files:
@@ -159,7 +172,7 @@ def apply_code_task(task):
     sha=sh(['git','rev-parse','HEAD']).stdout.strip()
     number=None
     m=re.search(r'/pull/(\d+)',pr or '');number=int(m.group(1)) if m else None
-    return {'summary':generated.get('summary'),'branch':branch,'commitSha':sha,'prUrl':pr,'prNumber':number,'files':changed,'build':'passed','model':MODEL,'modelOutputTokens':used}
+    return {'summary':generated.get('summary'),'branch':branch,'commitSha':sha,'prUrl':pr,'prNumber':number,'files':changed,'build':'passed','model':verified_free_provider()['model'],'modelOutputTokens':used}
 
 def recursive_find(obj,key):
     if isinstance(obj,dict):

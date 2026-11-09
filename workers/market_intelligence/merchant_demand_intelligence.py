@@ -15,8 +15,6 @@ import merchant_intelligence_v3 as legacy  # noqa: E402
 
 GATEWAY = os.getenv("VMDB_WORKER_GATEWAY", "https://gqpbskssrvpfjtujwezc.supabase.co/functions/v1/github-worker-gateway")
 AUDIENCE = "socialmarket-supabase-worker"
-MODEL_ENDPOINT = "https://models.github.ai/inference/chat/completions"
-MODEL = os.getenv("MERCHANT_AI_MODEL", "openai/gpt-4.1")
 LIMIT = max(1, min(int(os.getenv("MERCHANT_360_LIMIT", "24")), 60))
 
 _token = None
@@ -55,31 +53,49 @@ def db(method: str, resource: str, *, params=None, data=None, prefer=None):
     return body.get("result")
 
 
-def github_model_judge(payload: dict) -> dict:
-    token = os.getenv("GITHUB_TOKEN", "")
-    if not token:
-        return {"verdict": "needs_review", "confidence_delta": 0.0, "why_selected": None, "why_rejected": "github_model_token_missing"}
+def free_model_judge(payload: dict) -> dict:
+    """Optional AI check; fail closed on missing approval, provider, errors, or invalid claims."""
+    unavailable = {"verdict": "needs_review", "confidence_delta": 0.0, "why_selected": None,
+                   "why_rejected": "free_external_judge_unavailable"}
+    if os.getenv("FREE_MERCHANT_EXTERNAL_ALLOWED", "false").lower() != "true":
+        return {**unavailable, "why_rejected": "external_merchant_data_sharing_not_authorized"}
+    groq_key = os.getenv("GROQ_API_KEY", "").strip()
+    if groq_key and os.getenv("GROQ_FREE_TIER_CONFIRMED", "").lower() == "true":
+        provider = {"key": groq_key, "url": "https://api.groq.com/openai/v1/chat/completions",
+                    "model": "openai/gpt-oss-20b"}
+    elif os.getenv("OPENROUTER_API_KEY", "").strip():
+        provider = {"key": os.getenv("OPENROUTER_API_KEY").strip(),
+                    "url": "https://openrouter.ai/api/v1/chat/completions",
+                    "model": "openrouter/free"}
+    else:
+        return unavailable
     system = (
-        "You are a rigorous Greek affiliate-commerce investment committee. Use ONLY supplied evidence. "
+        "You are a rigorous Greek affiliate-commerce analyst. Use ONLY supplied evidence. "
         "Do not invent demand, competition, prices, warranties, shipping or merchant facts. "
-        "The system objective is to select merchants whose products can solve real consumer problems in Greece, with high demand and under-served/low competition. "
-        "Return JSON only with verdict (selected|needs_review|rejected), confidence_delta between -0.10 and 0.05, why_selected, why_rejected. "
+        "Return JSON with verdict (selected|needs_review|rejected), confidence_delta "
+        "between -0.10 and 0.05, why_selected and why_rejected. "
         "Do not alter numeric demand/competition metrics."
     )
-    r = requests.post(
-        MODEL_ENDPOINT,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        json={"model": MODEL, "temperature": 0.1, "max_tokens": 500, "response_format": {"type": "json_object"}, "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]},
-        timeout=45,
-    )
-    if not r.ok:
-        return {"verdict": "needs_review", "confidence_delta": -0.05, "why_selected": None, "why_rejected": f"model_http_{r.status_code}"}
     try:
+        r = requests.post(
+            provider["url"],
+            headers={"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json"},
+            json={"model": provider["model"], "temperature": 0.1, "max_tokens": 500,
+                  "response_format": {"type": "json_object"},
+                  "messages": [{"role": "system", "content": system},
+                               {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]},
+            timeout=45,
+        )
+        if not r.ok:
+            return {**unavailable, "why_rejected": f"free_provider_http_{r.status_code}"}
         out = json.loads(r.json()["choices"][0]["message"]["content"])
+        if not isinstance(out, dict) or out.get("verdict") not in ("selected", "needs_review", "rejected"):
+            return {**unavailable, "why_rejected": "invalid_free_judge_verdict"}
+        out["confidence_delta"] = max(-0.10, min(0.05, float(out.get("confidence_delta") or 0)))
+        return out
     except Exception:
-        return {"verdict": "needs_review", "confidence_delta": -0.05, "why_selected": None, "why_rejected": "invalid_model_json"}
-    out["confidence_delta"] = max(-0.10, min(0.05, float(out.get("confidence_delta") or 0)))
-    return out
+        return {**unavailable, "why_rejected": "free_provider_response_unavailable"}
+
 
 
 def get_policy():
@@ -167,7 +183,7 @@ def analyze(m: dict, policy: dict) -> dict:
         "pain_evidence_urls": evidence_urls(pain),
         "review_urls": evidence_urls(reviews + complaints),
     }
-    judge = github_model_judge(judge_payload)
+    judge = free_model_judge(judge_payload)
     confidence = clamp(confidence + float(judge.get("confidence_delta") or 0), 0, 1)
 
     demand_supply_gap = clamp(demand * 0.40 + gap * 0.35 + (100 - competition) * 0.25)

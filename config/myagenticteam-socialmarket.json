@@ -11,8 +11,18 @@
   "handoff_contract": {
     "max_items": 40,
     "max_summary_chars_per_item": 280,
-    "required": ["entity_id", "evidence_ids", "provenance_label", "confidence"],
-    "forbidden": ["full_page_text", "full_chat_history", "unverified_volume", "unverified_revenue"]
+    "required": [
+      "entity_id",
+      "evidence_ids",
+      "provenance_label",
+      "confidence"
+    ],
+    "forbidden": [
+      "full_page_text",
+      "full_chat_history",
+      "unverified_volume",
+      "unverified_revenue"
+    ]
   },
   "cost_policy": {
     "credit_limit": 0,
@@ -23,9 +33,16 @@
   },
   "model_routing": [
     "deterministic_or_local",
-    "github_models_included_quota",
+    "verified_groq_or_openrouter_free_tier",
     "deepseek-v4-flash_or_pro_adaptive_thinking_after_cost_approval",
     "gpt-5.6-luna_or_sol_last_resort_after_cost_approval"
   ],
-  "truth_labels": ["OBSERVED", "CALCULATED", "INFERRED", "MODELED", "WITHHELD", "UNAVAILABLE"]
+  "truth_labels": [
+    "OBSERVED",
+    "CALCULATED",
+    "INFERRED",
+    "MODELED",
+    "WITHHELD",
+    "UNAVAILABLE"
+  ]
 }

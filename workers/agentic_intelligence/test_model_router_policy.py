@@ -1,6 +1,7 @@
 import unittest
 
-from model_router import adaptive_reasoning_policy, routing_plan
+from unittest.mock import patch
+from model_router import adaptive_reasoning_policy, routing_plan, FreeModelRouter, configured_free_provider
 
 
 class ModelRoutingPolicyTests(unittest.TestCase):
@@ -16,7 +17,7 @@ class ModelRoutingPolicyTests(unittest.TestCase):
 
     def test_paid_routes_are_blocked_without_cost_approval(self):
         plan=routing_plan('audit',complexity=.8,paid_approved=False)
-        self.assertEqual([x['route'] for x in plan[:2]],['deterministic_or_local','github_models_included_quota'])
+        self.assertEqual([x['route'] for x in plan[:2]],['deterministic_or_local','verified_free_tier_provider'])
         self.assertEqual(plan[-1]['status'],'blocked_pending_cost_approval')
         self.assertNotIn('deepseek_official_api',[x['route'] for x in plan])
 
@@ -24,6 +25,28 @@ class ModelRoutingPolicyTests(unittest.TestCase):
         plan=routing_plan('audit',complexity=.9,paid_approved=True)
         self.assertEqual(plan[-2]['route'],'deepseek_official_api')
         self.assertEqual(plan[-1]['route'],'openai_api_last_resort')
+
+
+    def test_missing_free_keys_fails_closed(self):
+        with patch.dict('os.environ', {}, clear=True):
+            router = FreeModelRouter()
+            self.assertFalse(router.available)
+            result, meta = router.complete_json('test', {'ok': True})
+            self.assertIsNone(result)
+            self.assertEqual(meta['status'], 'unavailable_or_cap')
+
+    def test_only_confirmed_groq_free_tier_is_eligible(self):
+        self.assertIsNone(configured_free_provider({'GROQ_API_KEY': 'fake', 'FREE_AGENT_EXTERNAL_ALLOWED': 'true'}))
+        cfg = configured_free_provider({'GROQ_API_KEY': 'fake', 'GROQ_FREE_TIER_CONFIRMED': 'true', 'FREE_AGENT_EXTERNAL_ALLOWED': 'true'})
+        self.assertEqual(cfg['provider'], 'groq')
+
+    def test_sensitive_agent_context_requires_explicit_external_consent(self):
+        self.assertIsNone(configured_free_provider({'OPENROUTER_API_KEY': 'fake'}))
+
+
+    def test_openrouter_is_forced_to_free_router(self):
+        cfg = configured_free_provider({'OPENROUTER_API_KEY': 'fake', 'FREE_AGENT_EXTERNAL_ALLOWED': 'true'})
+        self.assertEqual(cfg['model'], 'openrouter/free')
 
 
 if __name__=='__main__':

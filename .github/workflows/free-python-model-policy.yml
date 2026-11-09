@@ -1,0 +1,52 @@
+name: Free model Python workers - policy tests
+on:
+  pull_request:
+    paths:
+      - 'workers/agentic_intelligence/model_router.py'
+      - 'workers/agentic_intelligence/agent_runtime.py'
+      - 'workers/agentic_intelligence/test_model_router_policy.py'
+      - 'workers/agent_executor/run.py'
+      - 'workers/agent_executor/test_free_provider.py'
+      - 'workers/market_intelligence/merchant_demand_intelligence.py'
+      - '.github/workflows/free-python-model-policy.yml'
+  push:
+    paths:
+      - 'workers/agentic_intelligence/model_router.py'
+      - 'workers/agentic_intelligence/agent_runtime.py'
+      - 'workers/agent_executor/run.py'
+      - 'workers/agent_executor/test_free_provider.py'
+      - '.github/workflows/free-python-model-policy.yml'
+permissions:
+  contents: read
+jobs:
+  free-tier-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check requests
+      - name: Compile worker files
+        run: |
+          python -m py_compile workers/agentic_intelligence/model_router.py workers/agentic_intelligence/agent_runtime.py workers/agentic_intelligence/run_pipeline.py
+          python -m py_compile workers/agent_executor/run.py workers/agent_executor/run_v2.py workers/market_intelligence/merchant_demand_intelligence.py
+      - name: Test no paid automatic provider routing
+        run: |
+          (cd workers/agentic_intelligence && python -m unittest -v test_model_router_policy.py)
+          (cd workers/agent_executor && python -m unittest -v test_free_provider.py)
+      - name: Retired endpoint quarantine
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          active = [
+              'workers/agentic_intelligence/model_router.py',
+              'workers/agentic_intelligence/agent_runtime.py',
+              'workers/agent_executor/run.py',
+              'workers/market_intelligence/merchant_demand_intelligence.py'
+          ]
+          for f in active:
+              assert 'https://models.github.ai/' not in Path(f).read_text(), f
+          print('No retired GitHub Models endpoint remains in the checked worker paths')
+          PY

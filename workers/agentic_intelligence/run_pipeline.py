@@ -116,8 +116,8 @@ def log_model_usage(run_id, telemetry, task_type):
     if not telemetry:
         return
     post_one("model_usage_events", {
-        "route": telemetry.get("route", "github_models_free"),
-        "provider": "github",
+        "route": telemetry.get("route", "verified_free_provider"),
+        "provider": telemetry.get("provider", "none"),
         "model_name": telemetry.get("model"),
         "input_tokens": int(telemetry.get("input_tokens") or 0),
         "output_tokens": int(telemetry.get("output_tokens") or 0),
@@ -558,14 +558,14 @@ def main():
                      metrics={"queries": len(queries), "documents": len(docs), "evidence": len(evidence), "paid_tokens": 0})
         audit(run_id, "market_research_completed", {"queries": len(queries), "documents": len(docs), "pain_evidence": len(evidence)}, actor="source-research")
 
-        stage = start_stage(run_id, "competitor_intelligence", "competitor-intelligence", "github_models_free" if router.available else "deterministic")
+        stage = start_stage(run_id, "competitor_intelligence", "competitor-intelligence", "verified_free_provider" if router.available else "deterministic")
         cc = competitor_candidates(all_results, products, agents, run_id)
         competitors = [x for x in (get_or_create_competitor(c) for c in cc) if x]
         totals["competitors"] = len(competitors)
         finish_stage(stage, output_count=len(competitors), confidence=0.65 if competitors else 0.2,
                      metrics={"candidate_domains": len({r['domain'] for r in all_results}), "free_model_calls_used": router.calls})
 
-        stage = start_stage(run_id, "pain_mining", "pain-miner", "github_models_free" if router.available else "deterministic")
+        stage = start_stage(run_id, "pain_mining", "pain-miner", "verified_free_provider" if router.available else "deterministic")
         groups = group_pains(evidence, agents, run_id) if evidence else []
         pains = [create_pain(run_id, g) for g in groups]
         totals["pains"] = len(pains)
