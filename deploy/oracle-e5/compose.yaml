@@ -1,0 +1,45 @@
+# Host-only CPU model endpoint. Never publish on 0.0.0.0 outside the container.
+# Set SOCIALMARKET_EMBED_QUERY_TOKEN in /etc/socialmarket-e5/secure.env
+services:
+  e5-query:
+    build:
+      context: ../..
+      dockerfile: deploy/oracle-e5/Dockerfile
+    image: local/socialmarket-e5:0.1
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:8091:8091"
+    env_file:
+      - /etc/socialmarket-e5/secure.env
+    environment:
+      HF_HOME: /data/hf
+      SOCIALMARKET_EMBED_BIND: "0.0.0.0"
+      PORT: "8091"
+      OMP_NUM_THREADS: "2"
+      TOKENIZERS_PARALLELISM: "false"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    volumes:
+      - e5_hf_cache:/data/hf
+    mem_limit: 8g
+    cpus: 1.8
+    pids_limit: 100
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; urlopen('http://127.0.0.1:8091/health',timeout=4).read()"
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+
+volumes:
+  e5_hf_cache:
